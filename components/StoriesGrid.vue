@@ -1,5 +1,5 @@
 <template>
-  <div :class="`${colorMode.value === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900'}`">
+  <div :class="`${colorMode.value === 'dark' ? 'bg-gray-800 text-gray-100' : 'bg-gray-100 text-gray-900'}`">
     <div class="max-w-7xl mx-auto px-4 py-8">
       <div v-if="error" class="text-center mt-20">
         <h1 class="text-3xl font-bold mb-4">Error</h1>

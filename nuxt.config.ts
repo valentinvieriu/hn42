@@ -24,11 +24,27 @@ export default defineNuxtConfig({
     },
   },
 
-  css: ['~/assets/css/main.css'],
+  css: [
+    '~/assets/css/main.css',
+    // ... other global CSS files
+  ],
+
+  buildModules: [
+    '@nuxtjs/tailwindcss',
+    // ... other build modules
+  ],
 
   tailwindcss: {
     config: {
       darkMode: 'class',
+      content: [
+        './components/**/*.{vue,js,ts}',
+        './layouts/**/*.vue',
+        './pages/**/*.vue',
+        './composables/**/*.{js,ts}',
+        './plugins/**/*.{js,ts}',
+        './app.vue',
+      ],
       theme: {
         extend: {
           colors: {
@@ -48,15 +64,17 @@ export default defineNuxtConfig({
             'orange-500': '#f97316',
             'orange-600': '#ea580c',
           },
+          backgroundImage: {
+            'radial-gradient-custom': 'radial-gradient(circle at center, var(--gradient-from) 0%, var(--gradient-to) 100%)',
+          },
+          // ... other extensions if needed
         },
       },
-      content: [
-        './pages/**/*.{vue,js,ts,jsx,tsx}',
-        './components/**/*.{vue,js,ts,jsx,tsx}',
-        './layouts/**/*.{vue,js,ts,jsx,tsx}',
-        './composables/**/*.{js,ts}',
-        './plugins/**/*.{js,ts}',
-        './app.vue',
+      safelist: [
+        {
+          pattern: /(from|to|bg|text|border)-(red|rose|pink|fuchsia|purple|violet|indigo|blue|sky|cyan|teal|emerald|green|lime|yellow|amber|orange)-(50|100|800|900)/,
+          variants: ['hover', 'dark'],
+        },
       ],
     },
   },
@@ -86,14 +104,12 @@ export default defineNuxtConfig({
     presets: {
       detail: {
         modifiers: {
-          // fit=scale-down,width=400,trim.height=2060,sharpen=2,format=webp
           format:"webp",
           fit: 'scale-down'
         }
       },      
       thumbnail: {
         modifiers: {
-          // fit=scale-down,width=400,trim.height=2060,sharpen=2,format=webp
           format:"webp",
           sharpen: 2,
           fit: 'scale-down',
