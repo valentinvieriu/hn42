@@ -1,13 +1,15 @@
 <template>
-  <div :class="`min-h-screen font-inter ${colorMode.value === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900'}`">
-    <NuxtLayout>
-      <NuxtPage />
-    </NuxtLayout>
-  </div>
+  <ColorScheme>
+    <div class="min-h-screen font-inter bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+      <NuxtLayout>
+        <NuxtPage />
+      </NuxtLayout>
+    </div>
+  </ColorScheme>
 </template>
 
 <script setup lang="ts">
-const colorMode = useColorMode();
+// Optional: Use ColorScheme for better initialization
 </script>
 
 <style>

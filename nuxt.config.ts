@@ -65,6 +65,8 @@ export default defineNuxtConfig({
     classSuffix: '',
     preference: 'system', // Uses system preference
     fallback: 'light', // Fallback theme
+    storageKey: 'nuxt-color-mode', // Ensure consistent storage key
+    storage: 'localStorage', // Persist user preference
   },
   image: {
     format: ['webp'],
