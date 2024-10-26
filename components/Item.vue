@@ -1,5 +1,5 @@
 <template>
-  <div class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" :class="`${colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white'}`" :style="gradientStyle">
+  <div class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" :class="colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white'" :style="gradientStyle">
     <div class="relative aspect-[4/4] overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
@@ -23,31 +23,30 @@
         </div>
       </NuxtLink>
     </div>
-    <div class="p-4 border-t-4" :style="{ 'border-top-color': 'hsla(var(--card-hue), 55%, 65%, var(--gradient-opacity-to))' }">
+    <div class="p-4 border-t-4" :style="{ 'border-top-color': 'hsla(var(--card-hue), 65%, 65%, var(--gradient-opacity-to))' }">
       <div class="flex items-center justify-between mb-2">
         <NuxtLink
           :to="story.url"
           target="_blank"
           rel="noopener noreferrer"
-          class="text-xs font-medium px-2 py-1 rounded-full"
-          :class="['opacity-75']"
-          :style="{ backgroundColor: 'hsla(var(--card-hue), 55%, 75%, var(--gradient-opacity-to))' }"
+          class="text-xs font-medium px-2 py-1 rounded-full opacity-75"
+          :style="{ backgroundColor: 'hsla(var(--card-hue), 65%, 65%, var(--gradient-opacity-to))' }"
         >
           {{ getDomainFromUrl(story.url) }}
         </NuxtLink>
-        <a
-          :href="story.url"
+        <NuxtLink
+          :to="story.url"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open external link"
           tabindex="0"
-          @keydown.enter="() => window.open(story.url, '_blank')"
+          class="flex items-center"
         >
           <LucideExternalLink class="w-4 h-4" />
-        </a>
+        </NuxtLink>
       </div>
       <NuxtLink :to="`/item/${story.objectID}`">
-        <h2 :class="['text-lg font-semibold mb-2 line-clamp-2']">
+        <h2 class="text-lg font-semibold mb-2 line-clamp-2">
           {{ story.title }}
         </h2>
       </NuxtLink>
@@ -56,11 +55,11 @@
           :href="`https://news.ycombinator.com/user?id=${story.author}`" 
           target="_blank" 
           rel="noopener noreferrer"
-          :class="['opacity-75']"
+          class="opacity-75"
         >
           {{ story.author }}
         </a>
-        <span :class="['opacity-75']">
+        <span class="opacity-75">
           {{ formatDistanceToNow(new Date(story.created_at), { addSuffix: true }) }} ago
         </span>
       </div>
@@ -99,7 +98,6 @@ const props = defineProps<{
   }
 }>()
 
-
 const getDomainFromUrl = (url: string): string => {
   try {
     return new URL(url).hostname
@@ -112,9 +110,9 @@ const getDomainFromUrl = (url: string): string => {
 const radialGradientStyle = computed(() => ({
   background: `radial-gradient(
     circle at center,
-    hsla(var(--card-hue), 65%, 70%, 0) 0%,
-    hsla(var(--card-hue), 65%, 70%, var(--gradient-opacity-from)) 70%,
-    hsla(var(--card-hue), 65%, 70%, var(--gradient-opacity-to)) 100%
+    hsla(var(--card-hue), 0%, 100%, 0) 0%,
+    hsla(var(--card-hue), 35%, 75%, var(--gradient-opacity-from)) 35%,
+    hsla(var(--card-hue), 45%, 35%, var(--gradient-opacity-to)) 100%
   )`
 }))
 
@@ -132,7 +130,7 @@ const hue = computed(() => computeHue(props.story.objectID))
 const gradientStyle = computed(() => ({
   '--card-hue': `${hue.value}`,
   '--gradient-opacity-from': '0.1', // Adjusted from 0.4 to 0.2
-  '--gradient-opacity-to': '0.35', // Adjusted from 0.7 to 0.5
+  '--gradient-opacity-to': '0.2', // Adjusted from 0.7 to 0.5
 }))
 </script>
 

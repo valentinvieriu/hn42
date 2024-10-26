@@ -120,6 +120,18 @@ const sanitizedText = computed(() => {
   clean = clean.replace(/<a /g, '<a rel="noopener noreferrer" ')
   return clean
 })
+
+// Set SEO metadata
+const title = computed(() => story.value ? story.value.title : 'Loading...');
+const ogImage = computed(() => story.value ? story.screenshotUrl : 'https://example.com/default-image.png'); // Default image if not available
+useSeoMeta({
+  title,
+  description: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
+  ogTitle: title,
+  ogDescription: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
+  ogImage,
+  twitterCard: ogImage,
+});
 </script>
 
 <style scoped>

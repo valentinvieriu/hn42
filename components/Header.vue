@@ -38,3 +38,9 @@ const toggleDarkMode = () => {
   colorMode.preference = colorMode.preference === 'dark' ? 'light' : 'dark';
 };
 </script>
+
+<style>
+.router-link-exact-active {
+  font-weight: 600;
+}
+</style>

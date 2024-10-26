@@ -32,7 +32,21 @@
 <script setup lang="ts">
 import { useStories } from '~/composables/useStories';
 import Item from '~/components/Item.vue';
+
+// Define props for the component
 const props = defineProps<{ endpoint: 'new' | 'show' | 'top' }>();
 const { stories, hoveredStory, isLoading, error } = useStories(props.endpoint);
 const colorMode = useColorMode();
+
+// Set SEO metadata
+const title = ref(`${props.endpoint.charAt(0).toUpperCase() + props.endpoint.slice(1)} Stories`);
+const firstStoryImage = computed(() => stories.value.length > 0 ? stories.value[0].screenshotUrl : 'https://example.com/default-image.png'); // Default image if no stories
+useSeoMeta({
+  title,
+  description: () => `Explore the latest ${props.endpoint} stories on our platform.`,
+  ogTitle: title,
+  ogDescription: () => `Explore the latest ${props.endpoint} stories on our platform.`,
+  ogImage: firstStoryImage,
+  twitterCard: firstStoryImage,
+});
 </script>
