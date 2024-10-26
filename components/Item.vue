@@ -1,9 +1,14 @@
 <template>
-  <div class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" :class="colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white'" :style="gradientStyle">
+  <div class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
+     :class="[
+       colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
+       { 'pointer-events-none': isScrolling }
+     ]" 
+     :style="gradientStyle">
     <div class="relative aspect-[4/4] overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
-          <div class="relative w-full h-full transform transition-transform duration-500 group-hover:translate-y-[-50%]">
+          <div class="relative w-full h-full transform transition-transform duration-500 will-change-transform" :class="isScrolling ? '' : 'group-hover:translate-y-[-50%] opacity-75'">
             <NuxtImg 
               :alt="story.title"
               provider="cloudflare" 
@@ -83,7 +88,7 @@
 import { defineProps, computed } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink } from 'lucide-vue-next'
 import { formatDistanceToNow } from 'date-fns'
-const colorMode = useColorMode();
+import { useScroll } from '~/composables/useScroll' // Import the useScroll composable
 
 const props = defineProps<{
   story: {
@@ -95,8 +100,11 @@ const props = defineProps<{
     num_comments: number
     url: string
     screenshotUrl: string
+    hue: number
   }
 }>()
+
+const { isScrolling } = useScroll(); // Use the scroll detection
 
 const getDomainFromUrl = (url: string): string => {
   try {
@@ -132,8 +140,11 @@ const gradientStyle = computed(() => ({
   '--gradient-opacity-from': '0.1', // Adjusted from 0.4 to 0.2
   '--gradient-opacity-to': '0.2', // Adjusted from 0.7 to 0.5
 }))
+
+const colorMode = useColorMode();
 </script>
 
 <style scoped>
 /* Add any component-specific styles here */
 </style>
+
