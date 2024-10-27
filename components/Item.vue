@@ -1,11 +1,10 @@
 <template>
-  <div 
-    class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
-    :class="[
-      colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
-      { 'pointer-events-none': isScrolling }
-    ]" 
-    :style="gradientStyle">
+  <div class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
+     :class="[
+       colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
+       { 'pointer-events-none': isScrolling }
+     ]" 
+     :style="gradientStyle">
     <div class="relative aspect-[4/4] overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
@@ -71,13 +70,25 @@
         </span>
       </div>
       <div class="flex items-center justify-between text-sm">
-        <!-- Points -->
-        <span :class="`flex items-center gap-1 ${categoryColorUpvotes}`">
+        <span :class="`flex items-center gap-1 ${
+          story.points < 100 && story.num_comments < 50
+            ? 'text-gray-500'
+            : story.points >= 100 && story.num_comments < 50
+            ? 'text-yellow-600'
+            : story.points < 100 && story.num_comments >= 50
+            ? 'text-red-600'
+            : 'text-green-600'
+        }`">
           <LucideTrendingUp class="w-4 h-4" />
           {{ story.points }}
         </span>
-        <!-- Comments -->
-        <span :class="`flex items-center gap-1 ${categoryColorComments}`">
+        <span :class="`flex items-center gap-1 ${
+          story.num_comments < 50
+            ? 'text-gray-500'
+            : story.num_comments >= 50
+            ? 'text-red-600'
+            : 'text-green-600'
+        }`">
           <LucideMessageSquare class="w-4 h-4" />
           <NuxtLink :to="`/item/${story.objectID}`" class="cursor-pointer">
             {{ story.num_comments }}
@@ -131,9 +142,7 @@ const radialGradientStyle = computed(() => ({
 // Function to compute a hash from the objectID
 const computeHue = (id: string): number => {
   const goldenRatio = 0.618033988749895;
-  const numericId = parseInt(id, 10);
-  if (isNaN(numericId)) return 0; // Default hue
-  const hue = (numericId * goldenRatio * 360) % 360; // Convert id to a number
+  const hue = (parseInt(id, 10) * goldenRatio * 360) % 360; // Convert id to a number
   return Math.floor(hue);
 }
 
@@ -147,25 +156,17 @@ const gradientStyle = computed(() => ({
 
 const colorMode = useColorMode();
 
-// Categorization Computed Properties
+// Extract category color logic into computed properties
 const categoryColorUpvotes = computed(() => {
   if (props.story.points < 100 && props.story.num_comments < 50) return 'text-gray-500';
   if (props.story.points >= 100 && props.story.num_comments < 50) return 'text-yellow-600';
   if (props.story.points < 100 && props.story.num_comments >= 50) return 'text-red-600';
-  return 'text-green-600'; // Trending
+  return 'text-green-600';
 });
 
 const categoryColorComments = computed(() => {
-  return props.story.num_comments < 50 ? 'text-gray-500' : 'text-red-600';
+  return props.story.num_comments < 50 ? 'text-gray-500' : props.story.num_comments >= 50 ? 'text-red-600' : 'text-green-600';
 });
-
-// Optional: Method to get category labels
-const getCategoryLabel = (points: number, comments: number): string => {
-  if (points < 100 && comments < 50) return 'Low Interest';
-  if (points >= 100 && comments < 50) return 'Viral';
-  if (points < 100 && comments >= 50) return 'Controversial';
-  return 'Trending';
-};
 </script>
 
 <style scoped>
