@@ -1,10 +1,11 @@
 <template>
-  <div class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
-     :class="[
-       colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
-       { 'pointer-events-none': isScrolling }
-     ]" 
-     :style="gradientStyle">
+  <div 
+    class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
+    :class="[
+      colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
+      { 'pointer-events-none': isScrolling }
+    ]" 
+    :style="gradientStyle">
     <div class="relative aspect-[4/4] overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
@@ -70,11 +71,13 @@
         </span>
       </div>
       <div class="flex items-center justify-between text-sm">
-        <span class="flex items-center gap-1">
+        <!-- Points -->
+        <span :class="`flex items-center gap-1 ${categoryColorUpvotes}`">
           <LucideTrendingUp class="w-4 h-4" />
           {{ story.points }}
         </span>
-        <span class="flex items-center gap-1">
+        <!-- Comments -->
+        <span :class="`flex items-center gap-1 ${categoryColorComments}`">
           <LucideMessageSquare class="w-4 h-4" />
           <NuxtLink :to="`/item/${story.objectID}`" class="cursor-pointer">
             {{ story.num_comments }}
@@ -89,7 +92,7 @@
 import { defineProps, computed } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink } from 'lucide-vue-next'
 import { formatDistanceToNow } from 'date-fns'
-import { useScroll } from '~/composables/useScroll' // Import the useScroll composable
+import { useScroll } from '~/composables/useScroll'
 
 const props = defineProps<{
   story: {
@@ -128,7 +131,9 @@ const radialGradientStyle = computed(() => ({
 // Function to compute a hash from the objectID
 const computeHue = (id: string): number => {
   const goldenRatio = 0.618033988749895;
-  const hue = (parseInt(id, 10) * goldenRatio * 360) % 360; // Convert id to a number
+  const numericId = parseInt(id, 10);
+  if (isNaN(numericId)) return 0; // Default hue
+  const hue = (numericId * goldenRatio * 360) % 360; // Convert id to a number
   return Math.floor(hue);
 }
 
@@ -141,9 +146,28 @@ const gradientStyle = computed(() => ({
 }))
 
 const colorMode = useColorMode();
+
+// Categorization Computed Properties
+const categoryColorUpvotes = computed(() => {
+  if (props.story.points < 100 && props.story.num_comments < 50) return 'text-gray-500';
+  if (props.story.points >= 100 && props.story.num_comments < 50) return 'text-yellow-600';
+  if (props.story.points < 100 && props.story.num_comments >= 50) return 'text-red-600';
+  return 'text-green-600'; // Trending
+});
+
+const categoryColorComments = computed(() => {
+  return props.story.num_comments < 50 ? 'text-gray-500' : 'text-red-600';
+});
+
+// Optional: Method to get category labels
+const getCategoryLabel = (points: number, comments: number): string => {
+  if (points < 100 && comments < 50) return 'Low Interest';
+  if (points >= 100 && comments < 50) return 'Viral';
+  if (points < 100 && comments >= 50) return 'Controversial';
+  return 'Trending';
+};
 </script>
 
 <style scoped>
 /* Add any component-specific styles here */
 </style>
-

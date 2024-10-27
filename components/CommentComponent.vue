@@ -15,13 +15,13 @@
     ></p>
     <div class="flex items-center gap-2 mt-2">
       <span :class="`flex items-center gap-1 ${
-        comment.points >= 0
-          ? colorMode.value === 'dark'
-            ? 'text-green-400'
-            : 'text-green-600'
-          : colorMode.value === 'dark'
-          ? 'text-red-400'
-          : 'text-red-500'
+        comment.points < 100 && comment.children.length < 50
+          ? 'text-gray-500'
+          : comment.points >= 100 && comment.children.length < 50
+          ? 'text-yellow-600'
+          : comment.points < 100 && comment.children.length >= 50
+          ? 'text-red-600'
+          : 'text-green-600'
       }`">
         <LucideMessageSquare class="w-4 h-4" />
         {{ comment.points }}
