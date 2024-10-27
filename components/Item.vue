@@ -51,7 +51,7 @@
         </NuxtLink>
       </div>
       <NuxtLink :to="`/item/${story.objectID}`">
-        <h2 class="text-lg font-semibold mb-2 line-clamp-2 min-h-[4em]">
+        <h2 class="text-lg font-semibold mb-2 line-clamp-2 md:line-clamp-2 md:min-h-[5em] overflow-hidden">
           {{ story.title }}
         </h2>
       </NuxtLink>
