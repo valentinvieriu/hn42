@@ -112,7 +112,7 @@ const timeAgo = computed(() => {
 
 // Sanitize the story text
 const sanitizedText = computed(() => {
-  let clean = DOMPurify.sanitize(story.value?.text || 'No summary available.', {
+  let clean = DOMPurify.sanitize(story.value?.text || '', {
     ALLOWED_TAGS: ['a', 'p', 'strong', 'em', 'ul', 'li', 'br'],
     ALLOWED_ATTR: ['href', 'target', 'rel'],
   })

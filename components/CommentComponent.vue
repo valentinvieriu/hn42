@@ -13,7 +13,7 @@
       </span>
     </div>
     <p 
-      :class="`comment-text ${textColor}`" 
+      :class="`comment-text ${textColor} break-words overflow-hidden whitespace-normal`" 
       v-html="sanitizedText"
     ></p>
     <div class="comment-actions flex items-center gap-4 mt-2">
