@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  --card-luminosity: 90%;
+  --card-saturation: 70%;
+}
+html.dark {
+  --card-luminosity: 45%; 
+  --card-saturation: 40%; 
+}
+
 body {
   @apply bg-beige dark:bg-dark-bg text-gray-800 dark:text-gray-200;
 }

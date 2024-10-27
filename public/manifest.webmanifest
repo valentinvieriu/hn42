@@ -1,0 +1,80 @@
+{
+  "name": "HN42",
+  "short_name": "HN42",
+  "description": "A visual way to read Hacker News",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ff6600",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "purpose": "maskable",
+      "sizes": "48x48",
+      "src": "maskable_icon_x48.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "maskable",
+      "sizes": "72x72",
+      "src": "maskable_icon_x72.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "maskable",
+      "sizes": "96x96",
+      "src": "maskable_icon_x96.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "maskable",
+      "sizes": "128x128",
+      "src": "maskable_icon_x128.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "maskable",
+      "sizes": "192x192",
+      "src": "maskable_icon_x192.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "maskable",
+      "sizes": "384x384",
+      "src": "maskable_icon_x384.png",
+      "type": "image/png"
+    },
+    {
+      "purpose": "maskable",
+      "sizes": "512x512",
+      "src": "maskable_icon_x512.png",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["news", "technology", "entertainment"],
+  "lang": "en-US",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "shortcuts": [
+    {
+      "name": "Read Hacker News",
+      "short_name": "Hacker News",
+      "description": "Quick access to Hacker News",
+      "url": "/?action=read",
+      "icons": [{ "src": "/hn42_icon_x192.png", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "splash_pages": null,
+  "theme_color_dark": "#ff6600",
+  "color_scheme": "light dark",
+  "colors": {
+    "primary": "#ff6600",
+    "secondary": "#ffffff",
+    "tertiary": "#f6f6f6",
+    "background": "#ffffff",
+    "text": "#333333"
+  },
+  "display_override": ["window-controls-overlay"]
+}
