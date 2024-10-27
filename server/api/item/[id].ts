@@ -1,40 +1,5 @@
 import { defineEventHandler, getRouterParams, createError } from 'h3'
-
-// Define the expected structure of the Hacker News API response
-interface HNResponse {
-  id: number
-  created_at: string
-  author: string
-  title: string
-  url: string
-  text: string | null
-  points: number
-  parent_id: number | null
-  children: Comment[]
-}
-
-interface Comment {
-  id: number
-  created_at: string
-  author: string
-  text: string
-  points: number
-  parent_id: number | null
-  children: Comment[]
-}
-
-interface Story {
-  id: number
-  created_at: string
-  author: string
-  title: string
-  url: string
-  text: string | null
-  points: number
-  parent_id: number | null
-  children: Comment[]
-  screenshotUrl: string // Added screenshotUrl to the Story interface
-}
+import { HNResponse, Story, Comment } from '~/types'
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event) // Retrieve route parameters

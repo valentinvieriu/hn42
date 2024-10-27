@@ -1,4 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
+import { defineNuxtConfig } from 'nuxt/config'
+
 export default defineNuxtConfig({
   compatibilityDate: '2024-10-22',
   devtools: { enabled: false },
@@ -38,11 +40,15 @@ export default defineNuxtConfig({
     head: {
       title: 'HN42 - your favorite Hacker News reader',
       meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover' },
+        // Update viewport meta to support iOS safe areas and PWA
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover' },
         { name: 'mobile-web-app-capable', content: 'yes' },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        // Update status bar style for iOS
         { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
-        { name: 'theme-color', content: '#ffffff' },
+        // Add theme-color with media queries for light/dark modes
+        { name: 'theme-color', content: '#ffffff', media: '(prefers-color-scheme: light)' },
+        { name: 'theme-color', content: '#1a1a1a', media: '(prefers-color-scheme: dark)' },
       ],
       link: [
         { rel: 'manifest', href: '/manifest.webmanifest' },
@@ -65,48 +71,8 @@ export default defineNuxtConfig({
     }
   },
   tailwindcss: {
-    config: {
-      darkMode: 'class',
-      content: [
-        './components/**/*.{vue,js,ts}',
-        './layouts/**/*.vue',
-        './pages/**/*.vue',
-        './composables/**/*.{js,ts}',
-        './plugins/**/*.{js,ts}',
-        './app.vue',
-      ],
-      theme: {
-        extend: {
-          colors: {
-            beige: '#F5F5DC',
-            'light-gray': '#F0F0F0',
-            'natural-wood': '#DEB887',
-            'dark-bg': '#1a1a1a',
-            'dark-card': '#2a2a2a',
-            'gray-800': '#1F2937',
-            'gray-900': '#1a202c',
-            'gray-700': '#4a5568',
-            'gray-600': '#718096',
-            'gray-300': '#d2d6dc',
-            'gray-200': '#e2e8f0',
-            'green-400': '#4ade80',
-            'red-400': '#f87171',
-            'orange-500': '#f97316',
-            'orange-600': '#ea580c',
-          },
-          backgroundImage: {
-            'radial-gradient-custom': 'radial-gradient(circle at center, var(--gradient-from) 0%, var(--gradient-to) 100%)',
-          },
-          // ... other extensions if needed
-        },
-      },
-      safelist: [
-        {
-          pattern: /(from|to|bg|text|border)-(red|rose|pink|fuchsia|purple|violet|indigo|blue|sky|cyan|teal|emerald|green|lime|yellow|amber|orange)-(50|100|800|900)/,
-          variants: ['hover', 'dark'],
-        },
-      ],
-    },
+    configPath: '~/tailwind.config',
+    exposeConfig: true,
   },
 
   colorMode: {
@@ -162,6 +128,41 @@ export default defineNuxtConfig({
     transpile: ['vue-router'],
   },
   routeRules: {
-    '/': { redirect: '/top' }
+    '/': { redirect: '/top' },
+    '/top': { 
+      cache: {
+        maxAge: 120,
+        staleMaxAge: 120,
+        headersToKeep: ['Content-Type', 'Cache-Control']
+      }
+    },
+    '/new': { 
+      cache: {
+        maxAge: 120,
+        staleMaxAge: 120,
+        headersToKeep: ['Content-Type', 'Cache-Control']
+      }
+    },
+    '/show': { 
+      cache: {
+        maxAge: 120,
+        staleMaxAge: 120,
+        headersToKeep: ['Content-Type', 'Cache-Control']
+      }
+    },
+    '/item/**': { 
+      cache: {
+        maxAge: 120,
+        staleMaxAge: 120,
+        headersToKeep: ['Content-Type', 'Cache-Control']
+      }
+    },
+    '/api/**': {
+      cache: {
+        maxAge: 120,
+        staleMaxAge: 120,
+        headersToKeep: ['Content-Type', 'Cache-Control']
+      }
+    }
   }
 })

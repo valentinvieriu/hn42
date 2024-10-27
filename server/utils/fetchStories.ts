@@ -1,12 +1,4 @@
-interface HNHit {
-  objectID: string;
-  title: string;
-  author: string;
-  created_at: string;
-  points: number;
-  num_comments: number;
-  url: string;
-}
+import { HNHit } from '~/types'
 
 export const fetchStories = async (baseUrl: string, queryParams: Record<string, string>) => {
   try {

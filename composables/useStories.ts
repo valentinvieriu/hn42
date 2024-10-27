@@ -1,16 +1,6 @@
 import { ref, computed } from 'vue';
 import { useFetch } from 'nuxt/app';
-
-interface Story {
-  objectID: string;
-  title: string;
-  author: string;
-  created_at: string;
-  points: number;
-  num_comments: number;
-  url: string;
-  screenshotUrl: string;
-}
+import { Story } from '~/types';
 
 export const useStories = (endpoint: 'new' | 'show' | 'top') => {
   const hoveredStory = ref<string | null>(null);

@@ -1,5 +1,5 @@
 {
-  "name": "nuxt-app",
+  "name": "hn42",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,19 +13,21 @@
   },
   "dependencies": {
     "@nuxt/image": "^1.8.1",
-    "@nuxtjs/color-mode": "^3.5.1",
+    "@nuxtjs/color-mode": "^3.5.2",
     "@nuxtjs/google-fonts": "^3.2.0",
     "@nuxtjs/tailwindcss": "^6.12.2",
     "dompurify": "^3.1.7",
     "nuxt": "^3.13.2",
     "nuxt-lucide-icons": "^1.0.5",
     "vue": "latest",
-    "vue-router": "latest"
+    "vue-router": "latest",
+    "date-fns": "^4.1.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241022.0",
     "nitro-cloudflare-dev": "^0.2.1",
     "nitropack": "^2.9.7",
-    "wrangler": "^3.82.0"
+    "wrangler": "^3.83.0",
+    "typescript": "^5.6.3"
   }
 }

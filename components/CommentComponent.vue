@@ -113,7 +113,7 @@ const commentContainerClasses = computed(() => {
     'mb-4',
     {
       'relative pl-4 border-l-2 border-gray-300': currentDepth.value < MAX_DEPTH,
-      'relative pl-4 border-l-2 border-gray-300': currentDepth.value >= MAX_DEPTH, // Adjust styling for max depth
+      'relative pl-4 border-l-2 border-gray-200': currentDepth.value >= MAX_DEPTH, // Adjust styling for max depth
     }
   ]
 })

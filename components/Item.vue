@@ -104,20 +104,11 @@ import { defineProps, computed } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink } from 'lucide-vue-next'
 import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
+import { Story } from '~/types'
 
 const props = defineProps<{
-  story: {
-    objectID: string
-    title: string
-    author: string
-    created_at: string
-    points: number
-    num_comments: number
-    url: string
-    screenshotUrl: string
-    hue: number
-  }
-}>()
+  story: Story
+}>();
 
 const { isScrolling } = useScroll(); // Use the scroll detection
 
