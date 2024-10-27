@@ -32,11 +32,27 @@
 </template>
 
 <script setup lang="ts">
+import { useHead } from 'nuxt/app'; // Import useHead
+
 const colorMode = useColorMode();
 
 const toggleDarkMode = () => {
   colorMode.preference = colorMode.preference === 'dark' ? 'light' : 'dark';
+  updateThemeColorMeta(); // Update the theme color meta tag
 };
+
+// Function to update the theme color meta tag
+const updateThemeColorMeta = () => {
+  const themeColor = colorMode.preference === 'dark' ? '#1f2937' : '#f3f4f6'; // Set your colors here
+  useHead({
+    meta: [
+      { name: 'theme-color', content: themeColor }
+    ]
+  });
+};
+
+// Initial call to set the correct theme color on mount
+updateThemeColorMeta();
 </script>
 
 <style>
