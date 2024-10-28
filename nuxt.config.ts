@@ -10,6 +10,15 @@ export default defineNuxtConfig({
     cloudflare: {
       workerFormat: 'esm',
     },
+    routeRules: {
+      '/**': {
+        headers: {
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:;",
+          'X-Frame-Options': 'DENY',
+          'X-Content-Type-Options': 'nosniff'
+        }
+      }
+    }
   },
 
   modules: [

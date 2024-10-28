@@ -64,7 +64,7 @@
             No comments yet.
           </div>
           <div v-else>
-            <Comment
+            <CommentThread
               v-for="comment in story.children"
               :key="comment.id"
               :comment="comment"

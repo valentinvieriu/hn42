@@ -1,5 +1,5 @@
 <template>
-  <StoriesGrid endpoint="new" />
+  <StoryGrid endpoint="new" />
 </template>
 
 <script setup lang="ts">
