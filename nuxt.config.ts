@@ -51,12 +51,6 @@ export default defineNuxtConfig({
     '~/assets/css/main.css',
     // ... other global CSS files
   ],
-
-  buildModules: [
-    '@nuxtjs/tailwindcss',
-    // ... other build modules
-  ],
-  // Add the app configuration here
   app: {
     head: {
       title: 'HN42 - your favorite Hacker News reader',

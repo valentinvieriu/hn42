@@ -2,7 +2,7 @@
   <nav class="sticky top-0 z-50 backdrop-blur-lg bg-white/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <NuxtLink to="/top" class="flex items-center space-x-2">
-        <h1 class="text-2xl font-bold tracking-tight">
+        <h1 class="text-2xl font-bold tracking-tight mt-4">
           <span class="text-slate-900 dark:text-slate-100">HN</span>
           <span class="text-orange-500">42</span>
         </h1>

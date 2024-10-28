@@ -39,7 +39,7 @@
       </button>
     </div>
     <div v-if="shouldRenderChildren" class="mt-4">
-      <CommentComponent
+      <CommentThread
         v-for="child in comment.children"
         :key="child.id"
         :comment="child"
