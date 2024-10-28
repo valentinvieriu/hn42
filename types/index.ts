@@ -1,14 +1,15 @@
-export interface Story {
-  id?: number;
+export interface BaseStory {
   objectID: string;
   title: string;
   author: string;
   created_at: string;
   points: number;
-  num_comments: number;
   url: string;
+}
+
+export interface Story extends BaseStory {
+  num_comments: number;
   text?: string | null;
-  parent_id?: number | null;
   children?: Comment[];
   screenshotUrl: string;
 }

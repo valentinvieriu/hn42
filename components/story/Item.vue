@@ -1,5 +1,9 @@
 <template>
-  <div class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
+  <div 
+    role="article"
+    tabindex="0"
+    @keydown.enter="handleCardClick"
+    class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
      :class="[
        colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
        { 'pointer-events-none': isScrolling }
@@ -105,6 +109,7 @@ import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink } from 'lucid
 import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
 import { Story } from '~/types'
+import { useRouter } from 'vue-router'
 
 const props = defineProps<{
   story: Story
@@ -158,6 +163,12 @@ const categoryColorUpvotes = computed(() => {
 const categoryColorComments = computed(() => {
   return props.story.num_comments < 50 ? 'text-gray-500' : props.story.num_comments >= 50 ? 'text-red-600' : 'text-green-600';
 });
+
+const router = useRouter();
+
+const handleCardClick = () => {
+  router.push(`/item/${props.story.objectID}`);
+};
 </script>
 
 <style scoped>

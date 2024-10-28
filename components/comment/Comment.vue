@@ -54,6 +54,7 @@ import { defineProps, computed, ref } from 'vue'
 import { LucideMessageSquare, LucideClock } from 'lucide-vue-next'
 import DOMPurify from 'dompurify'
 import { formatDistanceToNow } from 'date-fns'
+import { useSanitizer } from '~/composables/useSanitizer'; // Import the sanitizer composable
 
 interface Comment {
   id: number
@@ -70,6 +71,9 @@ const props = defineProps<{
   currentDepth?: number
 }>()
 
+const { sanitize } = useSanitizer();
+const sanitizedText = computed(() => sanitize(props.comment.text));
+
 const MAX_DEPTH = 3
 const currentDepth = computed(() => props.currentDepth || 1)
 
@@ -77,15 +81,6 @@ const colorMode = useColorMode()
 
 const timeAgo = computed(() => {
   return formatDistanceToNow(new Date(props.comment.created_at), { addSuffix: true })
-})
-
-const sanitizedText = computed(() => {
-  let clean = DOMPurify.sanitize(props.comment.text, {
-    ALLOWED_TAGS: ['a', 'p', 'strong', 'em', 'ul', 'li', 'br'],
-    ALLOWED_ATTR: ['href', 'target', 'rel'],
-  })
-  clean = clean.replace(/<a /g, '<a rel="noopener noreferrer" ')
-  return clean
 })
 
 const categoryColor = computed(() => {

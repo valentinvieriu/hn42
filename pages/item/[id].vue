@@ -64,7 +64,7 @@
             No comments yet.
           </div>
           <div v-else>
-            <CommentComponent
+            <Comment
               v-for="comment in story.children"
               :key="comment.id"
               :comment="comment"
@@ -77,53 +77,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import CommentComponent from '~/components/CommentComponent.vue'
-import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock } from 'lucide-vue-next'
-import { formatDistanceToNow } from 'date-fns'
-import DOMPurify from 'dompurify'
+import { ref, onMounted, computed, watchEffect } from 'vue';
+import { useRoute } from 'vue-router';
+import { useStoryCategories } from '~/composables/useStoryCategories'; // Import the new composable
+import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock } from 'lucide-vue-next';
+import { formatDistanceToNow } from 'date-fns';
+import { useSanitizer } from '~/composables/useSanitizer'; // Import the sanitizer composable
 
-const route = useRoute()
-const colorMode = useColorMode()
-const story = ref(null)
-const error = ref(null)
-const isLoading = ref(true)
+const route = useRoute();
+const colorMode = useColorMode();
+const story = ref(null);
+const error = ref(null);
+const isLoading = ref(true);
 
-onMounted(async () => {
-  const id = route.params.id
-  try {
-    const response = await fetch(`/api/item/${id}`)
-    if (!response.ok) {
-      throw new Error('Network response was not ok')
-    }
-    story.value = await response.json()
-  } catch (err) {
-    error.value = err.message
-  } finally {
-    isLoading.value = false
+// Fetch story data
+const { data: storyData, pending, error: fetchError } = await useFetch(`/api/item/${route.params.id}`, {
+  immediate: true,
+});
+
+watchEffect(() => {
+  if (fetchError.value) {
+    error.value = fetchError.value.message;
   }
-})
+  if (storyData.value) {
+    story.value = storyData.value;
+  }
+  isLoading.value = pending.value;
+});
+
+// Use the new composable for category colors
+const { color } = useStoryCategories(story.value?.points || 0, story.value?.children.length || 0);
+
+// Use the sanitizer
+const { sanitize } = useSanitizer();
+const sanitizedText = computed(() => sanitize(story.value?.text || ''));
 
 const timeAgo = computed(() => {
-  if (!story.value) return ''
-  return formatDistanceToNow(new Date(story.value.created_at), { addSuffix: true })
-})
+  if (!story.value?.created_at) return '';
+  return formatDistanceToNow(new Date(story.value.created_at), { addSuffix: true });
+});
 
-// Sanitize the story text
-const sanitizedText = computed(() => {
-  let clean = DOMPurify.sanitize(story.value?.text || '', {
-    ALLOWED_TAGS: ['a', 'p', 'strong', 'em', 'ul', 'li', 'br'],
-    ALLOWED_ATTR: ['href', 'target', 'rel'],
-  })
-  // Add rel="noopener noreferrer" to all <a> tags
-  clean = clean.replace(/<a /g, '<a rel="noopener noreferrer" ')
-  return clean
-})
+// Update SEO metadata with null checks
+const title = computed(() => story.value?.title ?? 'Loading...')
+const ogImage = computed(() => story.value?.screenshotUrl ?? 'https://example.com/default-image.png')
 
 // Set SEO metadata
-const title = computed(() => story.value ? story.value.title : 'Loading...');
-const ogImage = computed(() => story.value ? story.screenshotUrl : 'https://example.com/default-image.png'); // Default image if not available
 useSeoMeta({
   title,
   description: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
