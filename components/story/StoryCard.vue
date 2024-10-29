@@ -25,7 +25,7 @@
               provider="cloudflare" 
               preset="thumbnail"
               width="400"
-              :src="story.screenshotUrl" 
+              :src="`/api/screenshot/${story.objectID}`" 
               loading="lazy"
               class="w-full object-cover"
             />

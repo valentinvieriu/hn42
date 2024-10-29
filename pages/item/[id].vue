@@ -53,7 +53,7 @@
                 provider="cloudflare" 
                 preset="detail"
                 width="600"
-                :src="story.screenshotUrl" 
+                :src="`/api/screenshot/${route.params.id}`" 
                 loading="lazy"
                 class="hidden md:block w-full h-auto rounded-lg shadow-md mb-4"
           />

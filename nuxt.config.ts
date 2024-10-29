@@ -17,6 +17,11 @@ export default defineNuxtConfig({
           'X-Frame-Options': 'DENY',
           'X-Content-Type-Options': 'nosniff'
         }
+      },
+      '/api/screenshot/**': {
+        cache: {
+          maxAge: 31536000 // 1 year in seconds
+        }
       }
     }
   },
@@ -174,8 +179,8 @@ export default defineNuxtConfig({
     },
     '/api/**': {
       cache: {
-        maxAge: 120,
-        staleMaxAge: 120,
+        maxAge: 31536000, // 1 year in seconds
+        staleMaxAge: 31536000,
         headersToKeep: ['Content-Type', 'Cache-Control']
       }
     }

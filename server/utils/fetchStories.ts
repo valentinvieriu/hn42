@@ -10,10 +10,6 @@ export const fetchStories = async (baseUrl: string, queryParams: Record<string, 
     const stories = response.hits
       .filter((hit: HNHit) => hit.url)
       .map((hit: HNHit) => {
-        const screenshotUrl = `https://backup15.terasp.net/api/screenshot?url=${encodeURIComponent(
-          hit.url
-        )}&resX=1080&resY=1600&outFormat=jpg&waitTime=100&isFullPage=true&dismissModals=true`;
-
         return {
           title: hit.title || 'Untitled',
           url: hit.url,
@@ -22,7 +18,6 @@ export const fetchStories = async (baseUrl: string, queryParams: Record<string, 
           num_comments: hit.num_comments || 0,
           created_at: hit.created_at || '',
           objectID: hit.objectID,
-          screenshotUrl,
         };
       });
 
