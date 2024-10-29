@@ -16,7 +16,10 @@
           <div 
             ref="imageContainerRef"
             class="relative w-full h-full transform transition-transform duration-500 will-change-transform" 
-            :class="isTouchDevice && isInView ? 'scrolling' : 'group-hover:translate-y-[-50%]'">
+            :class="{
+              scrolling: isTouchDevice && isInView,
+              'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
+            }">
             <NuxtImg 
               :alt="story.title"
               provider="cloudflare" 
@@ -114,7 +117,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
 import { Story } from '~/types'
 import { useRouter } from 'vue-router'
-import { useColorMode } from '@vueuse/core'
+import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
 
 const props = defineProps<{
   story: Story
@@ -196,25 +199,29 @@ let animationFrameId: number | null = null
 // Scroll handling
 const scrollProgress = ref(0)
 
+let windowHeight = window.innerHeight || document.documentElement.clientHeight;
+
+const updateWindowHeight = useDebounce(() => {
+  windowHeight = window.innerHeight || document.documentElement.clientHeight;
+}, 150);
+
 const handleScroll = () => {
-  if (!isInView.value || !isTouchDevice.value || !imageContainerRef.value) return
+  if (!isInView.value || !isTouchDevice.value || !imageContainerRef.value) return;
 
-  const card = cardRef.value
-  if (!card) return
+  const card = cardRef.value;
+  if (!card) return;
 
-  const rect = card.getBoundingClientRect()
-  const windowHeight = window.innerHeight || document.documentElement.clientHeight
+  const rect = card.getBoundingClientRect();
 
   // Calculate how much of the card is visible (0 to 1)
-  const visibleRatio = Math.max(0, Math.min(1, (windowHeight - rect.top) / (rect.height + windowHeight)))
+  const visibleRatio = Math.max(0, Math.min(1, (windowHeight - rect.top) / (rect.height + windowHeight)));
 
   // Update scroll progress based on visibility
-  scrollProgress.value = visibleRatio
+  scrollProgress.value = visibleRatio;
 
-  // Apply transform to move in sync with scroll direction
-  // Start at 0 and move down to -50% as user scrolls
-  imageContainerRef.value.style.transform = `translateY(${-50 * scrollProgress.value}%)`
-}
+  // Apply transform using translate3d for better performance
+  imageContainerRef.value.style.transform = `translate3d(0, ${-50 * scrollProgress.value}%, 0)`;
+};
 
 const animate = () => {
   handleScroll()
@@ -226,34 +233,37 @@ onMounted(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
-          isInView.value = entry.isIntersecting
+          isInView.value = entry.isIntersecting;
           if (entry.isIntersecting) {
             // Reset transform when card comes into view
             if (imageContainerRef.value) {
-              imageContainerRef.value.style.transform = 'translateY(0%)'
+              imageContainerRef.value.style.transform = 'translate3d(0, 0%, 0)';
             }
             if (!animationFrameId) {
-              animate()
+              animate();
             }
           } else {
             if (animationFrameId) {
-              cancelAnimationFrame(animationFrameId)
-              animationFrameId = null
+              cancelAnimationFrame(animationFrameId);
+              animationFrameId = null;
             }
           }
-        })
+        });
       },
       {
-        threshold: [0, 0.5, 1]
+        threshold: [0, 0.5, 1],
+        rootMargin: '0px', // Adjust if necessary to preload images slightly before they enter the viewport
       }
-    )
+    );
 
     if (cardRef.value) {
-      observer.observe(cardRef.value)
+      observer.observe(cardRef.value);
     }
 
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('scroll', handleScroll, { passive: true });
   }
+
+  window.addEventListener('resize', updateWindowHeight);
 })
 
 onBeforeUnmount(() => {
@@ -261,11 +271,14 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(animationFrameId)
   }
   window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('resize', updateWindowHeight);
 })
 </script>
 
 <style scoped>
 .scrolling {
-  /* Additional styles if needed for scrolling state */
+  /* Define the transform within CSS for better performance */
+  transform: translate3d(0, -50%, 0);
+  transition: transform 0.5s ease-out;
 }
 </style>
