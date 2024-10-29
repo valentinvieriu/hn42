@@ -3,16 +3,20 @@
     role="article"
     tabindex="0"
     @keydown.enter="handleCardClick"
+    ref="cardRef"
     class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
-     :class="[
-       colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
-       { 'pointer-events-none': isScrolling }
-     ]" 
-     :style="gradientStyle">
+    :class="[
+      colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
+      { 'pointer-events-none': isScrolling }
+    ]" 
+    :style="gradientStyle">
     <div class="relative aspect-[4/4] overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
-          <div class="relative w-full h-full transform transition-transform duration-500 will-change-transform" :class="isScrolling ? '' : 'group-hover:translate-y-[-50%]'">
+          <div 
+            ref="imageContainerRef"
+            class="relative w-full h-full transform transition-transform duration-500 will-change-transform" 
+            :class="isTouchDevice && isInView ? 'scrolling' : 'group-hover:translate-y-[-50%]'">
             <NuxtImg 
               :alt="story.title"
               provider="cloudflare" 
@@ -104,18 +108,19 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, computed } from 'vue'
-import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink } from 'lucide-vue-next'
+import { defineProps, computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from 'lucide-vue-next'
 import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
 import { Story } from '~/types'
 import { useRouter } from 'vue-router'
+import { useColorMode } from '@vueuse/core'
 
 const props = defineProps<{
   story: Story
-}>();
+}>()
 
-const { isScrolling } = useScroll(); // Use the scroll detection
+const { isScrolling } = useScroll()
 
 const getDomainFromUrl = (url: string): string => {
   try {
@@ -137,9 +142,9 @@ const radialGradientStyle = computed(() => ({
 
 // Function to compute a hash from the objectID
 const computeHue = (id: string): number => {
-  const goldenRatio = 0.618033988749895;
-  const hue = (parseInt(id, 10) * goldenRatio * 360) % 360; // Convert id to a number
-  return Math.floor(hue);
+  const goldenRatio = 0.618033988749895
+  const hue = (parseInt(id, 10) * goldenRatio * 360) % 360 // Convert id to a number
+  return Math.floor(hue)
 }
 
 // Compute the hue for the current story
@@ -150,27 +155,117 @@ const gradientStyle = computed(() => ({
   '--card-hue': `${hue.value}`
 }))
 
-const colorMode = useColorMode();
+const colorMode = useColorMode()
 
 // Extract category color logic into computed properties
 const categoryColorUpvotes = computed(() => {
-  if (props.story.points < 100 && props.story.num_comments < 50) return 'text-gray-500';
-  if (props.story.points >= 100 && props.story.num_comments < 50) return 'text-yellow-600';
-  if (props.story.points < 100 && props.story.num_comments >= 50) return 'text-red-600';
-  return 'text-green-600';
-});
+  if (props.story.points < 100 && props.story.num_comments < 50) return 'text-gray-500'
+  if (props.story.points >= 100 && props.story.num_comments < 50) return 'text-yellow-600'
+  if (props.story.points < 100 && props.story.num_comments >= 50) return 'text-red-600'
+  return 'text-green-600'
+})
 
 const categoryColorComments = computed(() => {
-  return props.story.num_comments < 50 ? 'text-gray-500' : props.story.num_comments >= 50 ? 'text-red-600' : 'text-green-600';
-});
+  return props.story.num_comments < 50 ? 'text-gray-500' : props.story.num_comments >= 50 ? 'text-red-600' : 'text-green-600'
+})
 
-const router = useRouter();
+const router = useRouter()
 
 const handleCardClick = () => {
-  router.push(`/item/${props.story.objectID}`);
-};
+  router.push(`/item/${props.story.objectID}`)
+}
+
+// Touch device detection
+const isTouchDevice = computed(() => {
+  if (typeof window !== 'undefined') {
+    return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0)
+  }
+  return false
+})
+
+// Refs for DOM elements
+const cardRef = ref<HTMLElement | null>(null)
+const imageContainerRef = ref<HTMLElement | null>(null)
+
+// Visibility state
+const isInView = ref(false)
+
+// Animation frame ID
+let animationFrameId: number | null = null
+
+// Scroll handling
+const scrollProgress = ref(0)
+
+const handleScroll = () => {
+  if (!isInView.value || !isTouchDevice.value || !imageContainerRef.value) return
+
+  const card = cardRef.value
+  if (!card) return
+
+  const rect = card.getBoundingClientRect()
+  const windowHeight = window.innerHeight || document.documentElement.clientHeight
+
+  // Calculate how much of the card is visible (0 to 1)
+  const visibleRatio = Math.max(0, Math.min(1, (windowHeight - rect.top) / (rect.height + windowHeight)))
+
+  // Update scroll progress based on visibility
+  scrollProgress.value = visibleRatio
+
+  // Apply transform to move in sync with scroll direction
+  // Start at 0 and move down to -50% as user scrolls
+  imageContainerRef.value.style.transform = `translateY(${-50 * scrollProgress.value}%)`
+}
+
+const animate = () => {
+  handleScroll()
+  animationFrameId = requestAnimationFrame(animate)
+}
+
+onMounted(() => {
+  if (isTouchDevice.value) {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          isInView.value = entry.isIntersecting
+          if (entry.isIntersecting) {
+            // Reset transform when card comes into view
+            if (imageContainerRef.value) {
+              imageContainerRef.value.style.transform = 'translateY(0%)'
+            }
+            if (!animationFrameId) {
+              animate()
+            }
+          } else {
+            if (animationFrameId) {
+              cancelAnimationFrame(animationFrameId)
+              animationFrameId = null
+            }
+          }
+        })
+      },
+      {
+        threshold: [0, 0.5, 1]
+      }
+    )
+
+    if (cardRef.value) {
+      observer.observe(cardRef.value)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+  }
+})
+
+onBeforeUnmount(() => {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId)
+  }
+  window.removeEventListener('scroll', handleScroll)
+})
 </script>
 
 <style scoped>
-/* Add any component-specific styles here */
+.scrolling {
+  /* Additional styles if needed for scrolling state */
+}
 </style>
