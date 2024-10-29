@@ -1,11 +1,7 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "hn42"
-compatibility_date = "2024-10-22"
-main = "./dist/worker/index.js"
-assets = { directory = "./dist/public", binding = "ASSETS" }
+compatibility_date = "2024-10-23"
+pages_build_output_dir = "./dist"
 
-# Workers Logs
-# Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
-# Configuration: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
-[observability]
-enabled = true
+[placement]
+mode = "smart"

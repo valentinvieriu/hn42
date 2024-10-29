@@ -4,28 +4,9 @@ import { defineNuxtConfig } from 'nuxt/config'
 export default defineNuxtConfig({
   compatibilityDate: '2024-10-22',
   devtools: { enabled: false },
-
   nitro: {
-    preset: "./cloudflare-preset",
-    cloudflare: {
-      workerFormat: 'esm',
-    },
-    routeRules: {
-      '/**': {
-        headers: {
-          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:;",
-          'X-Frame-Options': 'DENY',
-          'X-Content-Type-Options': 'nosniff'
-        }
-      },
-      '/api/screenshot/**': {
-        cache: {
-          maxAge: 31536000 // 1 year in seconds
-        }
-      }
-    }
+    preset: "cloudflare-pages",
   },
-
   modules: [
     "nitro-cloudflare-dev",
     "@nuxtjs/tailwindcss",
@@ -137,52 +118,11 @@ export default defineNuxtConfig({
   // Enable SSR
   ssr: true,
 
-  // Optimize for performance
-  experimental: {
-    payloadExtraction: true,
-    renderJsonPayloads: true,
-  },
-
   // Add build optimizations
   build: {
     transpile: ['vue-router'],
   },
   routeRules: {
     '/': { redirect: '/top' },
-    '/top': { 
-      cache: {
-        maxAge: 120,
-        staleMaxAge: 120,
-        headersToKeep: ['Content-Type', 'Cache-Control']
-      }
-    },
-    '/new': { 
-      cache: {
-        maxAge: 120,
-        staleMaxAge: 120,
-        headersToKeep: ['Content-Type', 'Cache-Control']
-      }
-    },
-    '/show': { 
-      cache: {
-        maxAge: 120,
-        staleMaxAge: 120,
-        headersToKeep: ['Content-Type', 'Cache-Control']
-      }
-    },
-    '/item/**': { 
-      cache: {
-        maxAge: 120,
-        staleMaxAge: 120,
-        headersToKeep: ['Content-Type', 'Cache-Control']
-      }
-    },
-    '/api/**': {
-      cache: {
-        maxAge: 31536000, // 1 year in seconds
-        staleMaxAge: 31536000,
-        headersToKeep: ['Content-Type', 'Cache-Control']
-      }
-    }
   }
 })

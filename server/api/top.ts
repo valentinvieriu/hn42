@@ -3,13 +3,17 @@ import { fetchStories } from '../utils/fetchStories';
 
 export default defineEventHandler(async (event) => {
   try {
-    const stories = await fetchStories(
-      'http://hn.algolia.com/api/v1/search',
-      { tags: 'front_page,story', hitsPerPage: '30' }
-    );
+    const BASE_URL = 'http://hn.algolia.com/api/v1/search';
+    const QUERY_PARAMS = {
+      tags: 'front_page,story',
+      hitsPerPage: '30',
+    };
+
+    const stories = await fetchStories(BASE_URL, QUERY_PARAMS);
     
     // Set cache headers
-    event.node.res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
+    event.node.res.setHeader('Content-Type', 'application/json');
+    event.node.res.setHeader('Cache-Control', 'public, max-age=120, stale-while-revalidate');
     
     return stories;
   } catch (error) {

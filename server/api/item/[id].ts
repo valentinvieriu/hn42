@@ -1,5 +1,6 @@
 import { defineEventHandler, getRouterParams, createError } from 'h3'
 import { HNResponse, Story, Comment } from '~/types'
+import { getCacheHeaders } from '~/utils/cacheHeaders'
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event) // Retrieve route parameters
@@ -20,10 +21,6 @@ export default defineEventHandler(async (event) => {
       throw new Error('No data found')
     }
 
-    const screenshotUrl = `https://backup15.terasp.net/api/screenshot?resX=1080&resY=1600&outFormat=jpg&waitTime=100&isFullPage=true&dismissModals=true&url=${encodeURIComponent(
-      hnResponse.url || 'https://news.ycombinator.com'
-    )}`
-
     const story: Story = {
       id: hnResponse.id,
       created_at: hnResponse.created_at,
@@ -34,10 +31,16 @@ export default defineEventHandler(async (event) => {
       points: hnResponse.points || 0,
       parent_id: hnResponse.parent_id,
       children: hnResponse.children || [],
-      screenshotUrl,
     }
 
-    return story
+    const response = new Response(JSON.stringify(story), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'public, max-age=120, stale-while-revalidate',
+      },
+    })
+
+    return response
   } catch (error) {
     console.error('Error fetching story:', error)
     throw createError({

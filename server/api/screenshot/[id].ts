@@ -3,7 +3,6 @@ import { defineEventHandler, getRouterParams, createError } from '#imports'
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event)
   const id = params.id
-
   if (!id) {
     throw createError({
       statusCode: 400,
@@ -19,7 +18,6 @@ export default defineEventHandler(async (event) => {
         statusCode: 404,
       })
     }
-
     // Generate screenshot URL
     const screenshotUrl = `https://backup15.terasp.net/api/screenshot?url=${encodeURIComponent(
       story.url
@@ -41,8 +39,11 @@ export default defineEventHandler(async (event) => {
 
     // Set appropriate headers for image response
     event.node.res.setHeader('Content-Type', imageResponse.headers.get('Content-Type') || 'image/jpeg')
-    event.node.res.setHeader('Cache-Control', 'public, max-age=31536000, immutable') // Cache for 1 year
+    event.node.res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400') // Cache for 1 week, stale for 1 day
+    event.node.res.setHeader('CDN-Cache-Control', 'public, max-age=604800')
+    event.node.res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=604800')
     event.node.res.setHeader('Content-Length', buffer.length)
+    event.node.res.setHeader('Vary', 'Accept-Encoding')
     
     // Return the buffer directly
     return buffer
