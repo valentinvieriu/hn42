@@ -7,7 +7,6 @@ export default defineEventHandler(async (event) => {
   if (!id) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Story ID is required'
     })
   }
 
@@ -18,7 +17,6 @@ export default defineEventHandler(async (event) => {
     if (!story || !story.url) {
       throw createError({
         statusCode: 404,
-        statusMessage: 'Story not found or has no URL'
       })
     }
 
@@ -34,7 +32,6 @@ export default defineEventHandler(async (event) => {
     if (!imageResponse.ok || !imageResponse.body) {
       throw createError({
         statusCode: imageResponse.status,
-        statusMessage: 'Failed to fetch image'
       })
     }
 
@@ -53,7 +50,6 @@ export default defineEventHandler(async (event) => {
     console.error('Error fetching screenshot:', error)
     throw createError({
       statusCode: 500,
-      statusMessage: 'Failed to fetch screenshot'
     })
   }
 })
