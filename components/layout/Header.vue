@@ -9,7 +9,7 @@
       </NuxtLink>
       <div class="flex items-center gap-6">
         <NuxtLink 
-          v-for="link in ['Top', 'New', 'Show']" 
+          v-for="link in ['Top', 'Best', 'New', 'Show']" 
           :key="link"
           :to="`/${link.toLowerCase()}`"
           class="text-sm font-medium transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"

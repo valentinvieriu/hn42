@@ -1,28 +1,28 @@
 import { defineEventHandler, createError } from 'h3';
 import { fetchStories } from '../utils/fetchStories';
 
-const MAX_ITEMS = 100; // Configurable constant for the number of show stories to fetch
+const MAX_ITEMS = 100; // Configurable constant for the number of best stories to fetch
 
 export default defineEventHandler(async (event) => {
   try {
-    // First fetch show story IDs from Firebase
-    const showStoryIds = await $fetch('https://hacker-news.firebaseio.com/v0/showstories.json');
+    // First fetch best story IDs from Firebase
+    const bestStoryIds = await $fetch('https://hacker-news.firebaseio.com/v0/beststories.json');
     
     // Take the first MAX_ITEMS IDs and create an order map for sorting
-    const showItemsIds = showStoryIds.slice(0, MAX_ITEMS);
-    const orderMap = new Map(showItemsIds.map((id, index) => [id.toString(), index]));
+    const bestItemsIds = bestStoryIds.slice(0, MAX_ITEMS);
+    const orderMap = new Map(bestItemsIds.map((id, index) => [id.toString(), index]));
     
     // Construct Algolia query with these IDs
-    const filters = showItemsIds.map(id => `objectID:${id}`).join(' OR ');
+    const filters = bestItemsIds.map(id => `objectID:${id}`).join(' OR ');
     
     const ALGOLIA_URL = 'http://hn.algolia.com/api/v1/search';
     const QUERY_PARAMS = {
-      tags: 'show_hn,story',
+      tags: 'story',
       filters,
       hitsPerPage: MAX_ITEMS.toString(),
     };
 
-    let stories = await fetchStories(ALGOLIA_URL, QUERY_PARAMS, showItemsIds);
+    let stories = await fetchStories(ALGOLIA_URL, QUERY_PARAMS);
     
     // Sort stories based on the original Firebase order
     stories = stories.sort((a, b) => {

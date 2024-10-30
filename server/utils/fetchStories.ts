@@ -6,6 +6,7 @@ export const fetchStories = async (baseUrl: string, queryParams: Record<string, 
     if (!response.hits) {
       return [];
     }
+    console.log(`Fetching stories from URL: ${baseUrl}?${new URLSearchParams(queryParams)}`);
 
     const stories = response.hits
       .filter((hit: HNHit) => hit.url)
