@@ -1,7 +1,8 @@
 <template>
-  <div :class="commentContainerClasses">
-    <div :class="`comment-header text-sm ${headerTextColor} mb-1 flex items-center`">
-      <span class="font-medium">
+  <div :class="commentContainerClasses" :style="commentPaletteStyle" :data-author="comment.author">
+    <div :class="`comment-header text-sm ${headerTextColor} mb-2 flex items-center`">
+      <span class="author-chip font-medium">
+        <span class="author-dot" aria-hidden="true"></span>
         <a :href="`https://news.ycombinator.com/user?id=${comment.author}`" target="_blank" rel="noopener noreferrer" class="hover:underline">
           {{ comment.author }}
         </a>
@@ -37,7 +38,7 @@
         {{ showReplies ? 'Hide replies' : `View ${comment.children.length} repl${comment.children.length > 1 ? 'ies' : 'y'}` }}
       </button>
     </div>
-    <div v-if="shouldRenderChildren" class="mt-4">
+    <div v-if="shouldRenderChildren" class="comment-children">
       <CommentThread
         v-for="child in comment.children"
         :key="child.id"
@@ -53,6 +54,7 @@ import { defineProps, computed, ref } from 'vue'
 import { LucideMessageSquare, LucideClock } from '@lucide/vue'
 import { formatDistanceToNow } from 'date-fns'
 import { useSanitizer } from '~/composables/useSanitizer'
+import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
 interface Comment {
   id: number
@@ -70,12 +72,16 @@ const props = defineProps<{
 }>()
 
 const { sanitize } = useSanitizer()
-const sanitizedText = computed(() => sanitize(props.comment.text))
+const sanitizedText = computed(() => sanitize(props.comment.text || ''))
 
 const MAX_DEPTH = 3
 const currentDepth = computed(() => props.currentDepth || 1)
 
 const colorMode = useColorMode()
+
+const commentPaletteStyle = computed(() => ({
+  ...getSeedPaletteStyle(props.comment.author, colorMode.value === 'dark' ? 'dark' : 'light'),
+}))
 
 const timeAgo = computed(() => {
   return formatDistanceToNow(new Date(props.comment.created_at), { addSuffix: true })
@@ -103,11 +109,11 @@ const textColor = computed(() => {
 const commentContainerClasses = computed(() => {
   return [
     'comment-container',
-    'mb-4',
+    'mb-3',
+    `comment-depth-${Math.min(currentDepth.value, MAX_DEPTH)}`,
     {
-      'relative pl-4 border-l-2 border-gray-300': currentDepth.value < MAX_DEPTH,
-      'relative pl-4 border-l-2 border-gray-200': currentDepth.value >= MAX_DEPTH, // Adjust styling for max depth
-    }
+      'comment-max-depth': currentDepth.value >= MAX_DEPTH,
+    },
   ]
 })
 
@@ -132,14 +138,72 @@ const shouldRenderChildren = computed(() => {
 
 <style scoped>
 .comment-container {
-  background-color: var(--comment-bg, transparent);
-  padding: 1rem;
+  position: relative;
+  background:
+    linear-gradient(90deg, var(--seed-surface-strong) 0%, var(--seed-surface) 58%, transparent 100%);
+  border: 1px solid var(--seed-border);
+  border-left: 4px solid var(--seed-rail);
   border-radius: 0.5rem;
-  transition: background-color 0.3s ease;
+  padding: 0.875rem 1rem 1rem;
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.comment-container:nth-child(odd) {
-  --comment-bg: rgba(0, 0, 0, 0.05);
+.comment-container::before {
+  content: '';
+  position: absolute;
+  inset: 0.75rem auto 0.75rem -4px;
+  width: 4px;
+  border-radius: 999px;
+  background: var(--seed-accent);
+  box-shadow: 0 0 0 3px var(--seed-ring);
+}
+
+.comment-depth-2 {
+  border-left-width: 3px;
+}
+
+.comment-depth-3 {
+  border-left-width: 2px;
+}
+
+.comment-max-depth {
+  background:
+    linear-gradient(90deg, var(--seed-surface-strong) 0%, var(--seed-surface) 45%, transparent 100%);
+}
+
+.comment-header {
+  gap: 0.375rem;
+  flex-wrap: wrap;
+}
+
+.author-chip {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 0.375rem;
+  color: var(--seed-author-text);
+}
+
+.author-dot {
+  flex: 0 0 auto;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: var(--seed-accent);
+  box-shadow: 0 0 0 3px var(--seed-ring);
+}
+
+.author-chip a {
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.comment-children {
+  border-left: 1px dashed var(--seed-child-guide);
+  margin-top: 0.875rem;
+  padding-left: 1rem;
 }
 
 .comment-header a:hover {
@@ -152,7 +216,12 @@ const shouldRenderChildren = computed(() => {
 
 @media (max-width: 640px) {
   .comment-container {
-    padding: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .comment-children {
+    margin-top: 0.75rem;
+    padding-left: 0.625rem;
   }
 }
 </style>

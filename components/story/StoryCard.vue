@@ -9,7 +9,7 @@
       colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
       { 'pointer-events-none': isScrolling }
     ]" 
-    :style="gradientStyle">
+    :style="cardPaletteStyle">
     <div class="relative aspect-[4/4] overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
@@ -38,14 +38,18 @@
         </div>
       </NuxtLink>
     </div>
-    <div class="p-4 border-t-4" :style="{ 'border-top-color': 'hsla(var(--card-hue), var(--card-saturation), var(--card-luminosity), 100%)' }">
+    <div class="p-4 border-t-4" :style="{ 'border-top-color': 'var(--seed-accent)' }">
       <div class="flex items-center justify-between mb-2">
         <NuxtLink
           :to="story.url"
           target="_blank"
           rel="noopener noreferrer"
-          class="text-xs font-medium px-2 py-1 rounded-full opacity-75"
-          :style="{ backgroundColor: 'hsla(var(--card-hue), var(--card-saturation), var(--card-luminosity), 100%)' }"
+          class="text-xs font-medium px-2 py-1 rounded-full border"
+          :style="{
+            backgroundColor: 'var(--seed-accent-soft)',
+            borderColor: 'var(--seed-border)',
+            color: 'var(--seed-author-text)'
+          }"
         >
           {{ getDomainFromUrl(story.url) }}
         </NuxtLink>
@@ -117,6 +121,7 @@ import { useScroll } from '~/composables/useScroll'
 import type { Story } from '~/types'
 import { useRouter } from 'vue-router'
 import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
+import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
 const props = defineProps<{
   story: Story
@@ -132,32 +137,21 @@ const getDomainFromUrl = (url: string): string => {
   }
 }
 
-// Define the radial gradient style using HSL and CSS variables
+const colorMode = useColorMode()
+
+const cardPaletteStyle = computed(() => {
+  return getSeedPaletteStyle(props.story.objectID, colorMode.value === 'dark' ? 'dark' : 'light')
+})
+
+// Define the radial gradient style using OKLCH CSS variables
 const radialGradientStyle = computed(() => ({
   background: `radial-gradient(
     circle at center,
-    hsla(var(--card-hue), 0%, 0%, 0) 0%,
-    hsla(var(--card-hue), 35%, 35%, 30%) 75%,
-    hsla(var(--card-hue), 35%, 20%, 40%) 100%
+    transparent 0%,
+    var(--seed-overlay-mid) 75%,
+    var(--seed-overlay-edge) 100%
   )`
 }))
-
-// Function to compute a hash from the objectID
-const computeHue = (id: string): number => {
-  const goldenRatio = 0.618033988749895
-  const hue = (parseInt(id, 10) * goldenRatio * 360) % 360 // Convert id to a number
-  return Math.floor(hue)
-}
-
-// Compute the hue for the current story
-const hue = computed(() => computeHue(props.story.objectID))
-
-// Define CSS variables for the gradient colors
-const gradientStyle = computed(() => ({
-  '--card-hue': `${hue.value}`
-}))
-
-const colorMode = useColorMode()
 
 // Extract category color logic into computed properties
 const categoryColorUpvotes = computed(() => {
