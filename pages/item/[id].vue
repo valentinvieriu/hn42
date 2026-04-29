@@ -1,9 +1,9 @@
 <template>
   <div :class="['min-h-screen', colorMode.value === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900']">
-    <div class="max-w-7xl mx-auto p-4 md:p-8">
+    <div class="max-w-7xl mx-auto p-4 md:p-8 lg:py-10">
       <div v-if="error" class="text-center mt-20">
-        <h1 class="text-3xl font-bold mb-4">Error</h1>
-        <p class="mb-6">{{ error }}</p>
+        <h1 class="text-3xl font-display font-semibold mb-4">Error</h1>
+        <p class="mb-6 leading-7">{{ error }}</p>
         <NuxtLink
           to="/"
           class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded"
@@ -13,66 +13,97 @@
       </div>
 
       <div v-else-if="isLoading" class="text-center mt-20">
-        <h1 class="text-3xl font-bold mb-4">Loading...</h1>
+        <h1 class="text-3xl font-display font-semibold mb-4">Loading...</h1>
       </div>
 
-      <div v-else class="flex flex-col md:flex-row md:gap-8">
-        <div class="md:w-1/2 mb-8 md:mb-0">
-          <h1 :class="['text-2xl', 'font-bold', 'mb-2', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
+      <div v-else class="grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+        <article class="min-w-0">
+          <h1 :class="['text-3xl', 'md:text-4xl', 'font-display', 'font-semibold', 'leading-tight', 'mb-3', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
             {{ story.title }}
           </h1>
           <a
             :href="story.url"
             target="_blank"
             rel="noopener noreferrer"
-            :class="['text-sm', 'flex', 'items-center', 'gap-1', 'mb-2', colorMode.value === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800']"
+            :class="['meta-text', 'flex', 'items-center', 'gap-1.5', 'mb-3', colorMode.value === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800']"
           >
             <span class="truncate">{{ story.url }}</span> <LucideExternalLink size="14" />
           </a>
-          <div :class="['text-sm', 'mb-2', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
-            by {{ story.author }} • {{ timeAgo }} ago
+          <div :class="['meta-text', 'mb-4', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
+            by
+            <a
+              :href="`https://news.ycombinator.com/user?id=${story.author}`"
+              target="_blank"
+              rel="noopener noreferrer"
+              :class="colorMode.value === 'dark' ? 'text-gray-300 hover:text-gray-100' : 'text-gray-700 hover:text-gray-900'"
+              class="font-medium hover:underline"
+            >
+              {{ story.author }}
+            </a>
+            • {{ timeAgo }}
           </div>
-          <div class="flex items-center gap-4 text-sm mb-4">
+          <div class="meta-text flex items-center gap-4 mb-6">
             <span :class="['flex', 'items-center', 'gap-1', story.points >= 0 ? (colorMode.value === 'dark' ? 'text-green-400' : 'text-green-600') : (colorMode.value === 'dark' ? 'text-red-400' : 'text-red-500')]">
               <LucideTrendingUp class="w-4 h-4" />
               {{ story.points }}
             </span>
             <span :class="['flex', 'items-center', 'gap-1', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
               <LucideMessageSquare class="w-4 h-4" />
-              {{ story.children.length }}
+              {{ commentCount }}
             </span>
             <span :class="['flex', 'items-center', 'gap-1', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
               <LucideClock class="w-4 h-4" />
               {{ timeAgo }}
             </span>
           </div>
-          <p :class="`${colorMode.value === 'dark' ? 'text-gray-300' : 'text-gray-700'} whitespace-pre-line`">
-            {{ sanitizedText }}
-          </p>
+          <div
+            :class="`${colorMode.value === 'dark' ? 'text-gray-300' : 'text-gray-700'} rich-text reading-measure text-base leading-7 mb-5`"
+            v-html="sanitizedText"
+          ></div>
           <img
                 :alt="story.title"
                 width="600"
                 :src="`/api/screenshot/${route.params.id}`" 
                 loading="lazy"
                 decoding="async"
-                class="hidden md:block w-full h-auto rounded-lg shadow-md mb-4"
+                class="hidden md:block w-full h-auto rounded-lg shadow-md mb-8"
           />
           
           <RelatedStories :story-id="storyId" />
-        </div>
-        <div class="md:w-1/2">
-          <h2 :class="['text-xl', 'font-semibold', 'mb-4', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">Comments</h2>
-          <div v-if="story.children.length === 0" class="text-gray-500">
+        </article>
+        <aside class="min-w-0">
+          <div class="comments-toolbar">
+            <div class="comments-title-group">
+              <h2 :class="['section-title', 'text-2xl', 'font-semibold', 'mb-0', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">Comments</h2>
+              <span v-if="commentCount > 0" :class="['comments-count', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
+                {{ commentCount }}
+              </span>
+            </div>
+            <button
+              v-if="hasCollapsedReplies"
+              type="button"
+              class="expand-comments-button"
+              :class="colorMode.value === 'dark' ? 'text-gray-300 hover:text-gray-100' : 'text-gray-700 hover:text-gray-900'"
+              @click="toggleExpandAllComments"
+            >
+              <LucideChevronsUp v-if="expandAllComments" class="w-4 h-4" />
+              <LucideChevronsDown v-else class="w-4 h-4" />
+              <span>{{ expandAllComments ? 'Collapse nested' : 'Expand all' }}</span>
+            </button>
+          </div>
+          <div v-if="story.children.length === 0" class="text-gray-500 leading-7">
             No comments yet.
           </div>
-          <div v-else>
+          <div v-else class="space-y-4">
             <CommentThread
               v-for="comment in story.children"
-              :key="comment.id"
+              :key="`${comment.id}-${expandAllComments ? 'expanded' : 'default'}`"
               :comment="comment"
+              :expand-all="expandAllComments"
+              :author-comment-counts="authorCommentCounts"
             />
           </div>
-        </div>
+        </aside>
       </div>
     </div>
   </div>
@@ -81,7 +112,7 @@
 <script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue';
 import { useRoute } from 'vue-router';
-import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock } from '@lucide/vue';
+import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp } from '@lucide/vue';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 
@@ -91,6 +122,12 @@ const colorMode = useColorMode();
 const story = ref(null);
 const error = ref(null);
 const isLoading = ref(true);
+const expandAllComments = ref(false);
+
+type StoryComment = {
+  author?: string
+  children?: StoryComment[]
+}
 
 // Fetch story data
 const { data: storyData, pending, error: fetchError } = await useFetch(() => `/api/item/${storyId.value}`, {
@@ -109,7 +146,48 @@ watchEffect(() => {
 
 // Use the sanitizer
 const { sanitize } = useSanitizer();
-const sanitizedText = computed(() => sanitize(story.value?.text || ''));
+const sanitizedText = computed(() => sanitize(story.value?.text || '', `story-${storyId.value}`));
+
+const MAX_COMMENT_DEPTH = 3;
+
+const countComments = (comments = []) => {
+  return comments.reduce((total, comment) => {
+    return total + 1 + countComments(comment.children || []);
+  }, 0);
+};
+
+const hasRepliesBeyondDefaultDepth = (comments = [], depth = 1) => {
+  return comments.some((comment) => {
+    const children = comment.children || [];
+
+    if (depth >= MAX_COMMENT_DEPTH && children.length > 0) {
+      return true;
+    }
+
+    return hasRepliesBeyondDefaultDepth(children, depth + 1);
+  });
+};
+
+const commentCount = computed(() => countComments(story.value?.children || []));
+const hasCollapsedReplies = computed(() => hasRepliesBeyondDefaultDepth(story.value?.children || []));
+
+const countCommentsByAuthor = (comments: StoryComment[] = [], counts: Record<string, number> = {}) => {
+  comments.forEach((comment) => {
+    if (comment.author) {
+      counts[comment.author] = (counts[comment.author] || 0) + 1;
+    }
+
+    countCommentsByAuthor(comment.children || [], counts);
+  });
+
+  return counts;
+};
+
+const authorCommentCounts = computed(() => countCommentsByAuthor(story.value?.children || []));
+
+const toggleExpandAllComments = () => {
+  expandAllComments.value = !expandAllComments.value;
+};
 
 const timeAgo = computed(() => {
   if (!story.value?.created_at) return '';
@@ -132,5 +210,51 @@ useSeoMeta({
 </script>
 
 <style scoped>
-/* Add any component-specific styles here */
+.comments-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.comments-title-group {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.comments-count {
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.expand-comments-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid rgb(148 163 184 / 0.24);
+  border-radius: 999px;
+  background: rgb(148 163 184 / 0.08);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.expand-comments-button:hover {
+  border-color: rgb(148 163 184 / 0.38);
+  background: rgb(148 163 184 / 0.13);
+}
+
+@media (max-width: 640px) {
+  .comments-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
 </style>

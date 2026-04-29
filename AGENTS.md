@@ -42,6 +42,30 @@ Do not turn HN42 into a dense text-first clone of Hacker News. Its purpose is to
 - `server/api/screenshot/[id].ts`: screenshot proxy and caching headers.
 - `server/utils/fetchStories.ts`: Algolia story fetch helper.
 - `server/utils/keywordExtractor.ts`: related-story keyword extraction.
+- `composables/useSanitizer.ts`: safe rich-text rendering and HN comment convention post-processing.
+- `assets/css/main.css`: global typography plus `.rich-text`, quote, code, and reference-line styling.
+
+## Comment Rendering And Post-Processing
+
+HN/Algolia item text arrives as a small HTML subset plus plain-text conventions. Do not flatten comments to plain text unless there is a concrete safety reason; links, paragraphs, emphasis, quotes, and code carry useful meaning and improve readability.
+
+Current rendering uses `useSanitizer.ts` to allowlist safe tags (`a`, `p`, `br`, `i`, `em`, `strong`, `pre`, `code`, lists, and `blockquote`), strip unsupported tags and attributes, and restrict links to safe protocols. Components render the result with `v-html`, so any new allowed markup must be sanitized first.
+
+After sanitization, `useSanitizer.ts` also post-processes common HN text conventions:
+
+- Paragraphs beginning with `>` are grouped into real `<blockquote>` blocks and styled as quoted text.
+- Footnote/reference lines like `[1] - <link>` are wrapped with `class="reference-line"` so citations read as secondary supporting material.
+- Inline footnote markers such as `[1]` link to matching reference lines inside the same comment.
+- Safe bare URLs are autolinked only when HN/Algolia did not already emit an anchor.
+- `Edit:`, `Update:`, and `TL;DR:` prefixes are styled as subtle note labels.
+
+Nested comments render to a limited depth by default. `pages/item/[id].vue` exposes an expand/collapse-all control at the comments heading, while `CommentThread.vue` shows a local "Show N replies" disclosure when replies are hidden under the depth limit.
+
+Good future opportunities for comment post-processing:
+
+- Add a copy affordance for long code/pre blocks.
+- Detect long quote-heavy comments and visually keep quotes secondary to the author's response.
+- Consider compacting very long comment branches with a "continue reading" affordance on small screens.
 
 ## Cloudflare Deployment
 

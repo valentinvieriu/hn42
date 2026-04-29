@@ -38,13 +38,13 @@
         </div>
       </NuxtLink>
     </div>
-    <div class="p-4 border-t-4" :style="{ 'border-top-color': 'var(--seed-accent)' }">
-      <div class="flex items-center justify-between mb-2">
+    <div class="p-4 md:p-5 border-t-4" :style="{ 'border-top-color': 'var(--seed-accent)' }">
+      <div class="flex items-center justify-between gap-3 mb-3">
         <NuxtLink
           :to="story.url"
           target="_blank"
           rel="noopener noreferrer"
-          class="text-xs font-medium px-2 py-1 rounded-full border"
+          class="text-[0.72rem] font-semibold leading-none px-2 py-1.5 rounded-full border"
           :style="{
             backgroundColor: 'var(--seed-accent-soft)',
             borderColor: 'var(--seed-border)',
@@ -65,11 +65,11 @@
         </NuxtLink>
       </div>
       <NuxtLink :to="`/item/${story.objectID}`">
-        <h2 class="text-lg font-semibold mb-2 line-clamp-2 md:line-clamp-2 md:min-h-[5em] overflow-hidden">
+        <h2 class="font-display text-[1.05rem] md:text-lg font-semibold leading-snug mb-3 line-clamp-2 md:line-clamp-2 md:min-h-[3.15rem] overflow-hidden">
           {{ story.title }}
         </h2>
       </NuxtLink>
-      <div class="flex items-center justify-between text-sm mb-2">
+      <div class="meta-text flex items-center justify-between gap-3 mb-3">
         <a 
           :href="`https://news.ycombinator.com/user?id=${story.author}`" 
           target="_blank" 
@@ -83,7 +83,7 @@
           {{ formatDistanceToNow(new Date(story.created_at), { addSuffix: true }) }}
         </span>
       </div>
-      <div class="flex items-center justify-between text-sm">
+      <div class="meta-text flex items-center justify-between gap-3">
         <span :class="`flex items-center gap-1 ${
           story.points < 100 && story.num_comments < 50
             ? 'text-gray-500'

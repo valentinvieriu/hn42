@@ -2,7 +2,7 @@
   <nav class="sticky top-0 z-50 backdrop-blur-lg bg-white/90 dark:bg-slate-900/90 border-b border-slate-200 dark:border-slate-800">
     <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
       <NuxtLink to="/top" class="flex items-center space-x-2">
-        <h1 class="text-2xl font-bold tracking-tight mt-4">
+        <h1 class="mb-0 text-2xl font-display font-semibold leading-none">
           <span class="text-slate-900 dark:text-slate-100">HN</span>
           <span class="text-orange-500">42</span>
         </h1>
@@ -12,7 +12,7 @@
           v-for="link in ['Top', 'Best', 'New', 'Show']" 
           :key="link"
           :to="`/${link.toLowerCase()}`"
-          class="text-sm font-medium transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
+          class="meta-text font-medium transition-colors text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
           {{ link }}
         </NuxtLink>

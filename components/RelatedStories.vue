@@ -1,6 +1,6 @@
 <template>
-  <div class="mt-8">
-    <h2 :class="['text-xl', 'font-semibold', 'mb-4', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
+  <div class="mt-10">
+    <h2 :class="['section-title', 'text-xl', 'font-semibold', 'mb-4', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
       Related Stories
     </h2>
     <div v-if="status === 'pending'" class="text-gray-500">
@@ -12,16 +12,16 @@
     <div v-else-if="stories.length === 0" class="text-gray-500">
       No related stories found.
     </div>
-    <div v-else class="space-y-4">
+    <div v-else class="space-y-3">
       <NuxtLink
         v-for="story in stories"
         :key="story.objectID"
         :to="`/item/${story.objectID}`"
-        class="block p-4 rounded-lg transition-colors"
+        class="block py-3 transition-colors"
         :class="colorMode.value === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'"
       >
-        <h3 class="font-medium mb-2">{{ story.title }}</h3>
-        <div class="text-sm flex items-center gap-4" :class="colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600'">
+        <h3 class="font-display font-medium leading-snug mb-2">{{ story.title }}</h3>
+        <div class="meta-text flex items-center gap-4" :class="colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600'">
           <span class="flex items-center gap-1">
             <LucideTrendingUp class="w-4 h-4" />
             {{ story.points }}

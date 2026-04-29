@@ -1,9 +1,9 @@
 <template>
   <div :class="`${colorMode.value === 'dark' ? 'bg-gray-800 text-gray-100' : 'bg-gray-100 text-gray-900'}`">
-    <div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="max-w-7xl mx-auto px-4 py-8 md:py-10">
       <div v-if="error" class="text-center mt-20">
-        <h1 class="text-3xl font-bold mb-4">Error</h1>
-        <p class="mb-6">{{ error }}</p>
+        <h1 class="text-3xl font-display font-semibold mb-4">Error</h1>
+        <p class="mb-6 leading-7">{{ error }}</p>
         <NuxtLink
           to="/"
           class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded"
@@ -13,10 +13,10 @@
       </div>
 
       <div v-else-if="isLoading" class="text-center mt-20">
-        <h1 class="text-3xl font-bold mb-4">Loading...</h1>
+        <h1 class="text-3xl font-display font-semibold mb-4">Loading...</h1>
       </div>
 
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-7">
         <StoryCard
           v-for="story in stories"
           :key="story.objectID"
@@ -45,4 +45,3 @@ useSeoMeta({
   twitterCard: firstStoryImage,
 });
 </script>
-

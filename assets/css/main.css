@@ -3,23 +3,28 @@
 @tailwind utilities;
 
 :root {
-  font-family: 'Inter', sans-serif;
-  /* Enable key OpenType features for better typography */
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Sora', 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --measure-reading: 70ch;
+  font-family: var(--font-sans);
   font-feature-settings: 'liga' 1, 'calt' 1, 'kern' 1;
+  text-rendering: optimizeLegibility;
 }
 
-/* Enable variable font for modern browsers */
 @supports (font-variation-settings: normal) {
   :root {
-    font-family: 'Inter var', sans-serif;
+    font-family: var(--font-sans);
+    font-variation-settings: normal;
   }
 }
 
 html {
   --card-luminosity: 90%;
   --card-saturation: 70%;
+  font-size: 16px;
   @apply bg-gray-100;
 }
+
 html.dark {
   --card-luminosity: 45%; 
   --card-saturation: 40%; 
@@ -27,6 +32,12 @@ html.dark {
 }
 
 body {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.55;
+  letter-spacing: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   @apply bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200;
 }
 
@@ -35,11 +46,214 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  @apply mb-4;
+  font-family: var(--font-display);
+  line-height: 1.15;
+  letter-spacing: 0;
+  @apply mb-4 font-semibold;
 }
 
 p {
-  @apply mb-6;
+  line-height: 1.68;
+  @apply mb-5;
+}
+
+a,
+button {
+  letter-spacing: 0;
+}
+
+.reading-measure {
+  max-width: var(--measure-reading);
+}
+
+.meta-text {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.section-title {
+  font-family: var(--font-display);
+  line-height: 1.18;
+  letter-spacing: 0;
+}
+
+.rich-text {
+  overflow-wrap: anywhere;
+}
+
+.rich-text > :first-child {
+  margin-top: 0;
+}
+
+.rich-text p {
+  margin: 1.05rem 0 0;
+  line-height: inherit;
+}
+
+.rich-text a {
+  color: #2563eb;
+  text-decoration-line: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.dark .rich-text a {
+  color: #93c5fd;
+}
+
+.rich-text a:hover {
+  color: #1d4ed8;
+}
+
+.dark .rich-text a:hover {
+  color: #bfdbfe;
+}
+
+.rich-text .footnote-marker {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.05em;
+  padding: 0.04em 0.24em;
+  border-radius: 999px;
+  background: rgb(37 99 235 / 0.12);
+  font-size: 0.82em;
+  font-weight: 650;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.dark .rich-text .footnote-marker {
+  background: rgb(147 197 253 / 0.16);
+}
+
+.rich-text strong,
+.rich-text b {
+  font-weight: 600;
+}
+
+.rich-text em,
+.rich-text i {
+  font-style: italic;
+}
+
+.rich-text ul,
+.rich-text ol {
+  margin: 1.05rem 0 0;
+  padding-left: 1.35rem;
+}
+
+.rich-text ul {
+  list-style: disc;
+}
+
+.rich-text ol {
+  list-style: decimal;
+}
+
+.rich-text li + li {
+  margin-top: 0.35rem;
+}
+
+.rich-text blockquote {
+  margin: 1.05rem 0 0;
+  padding: 0.8rem 0.95rem 0.85rem 1rem;
+  border-left: 3px solid currentColor;
+  border-radius: 0.45rem;
+  background: rgb(15 23 42 / 0.06);
+  color: inherit;
+  font-size: 0.96em;
+  line-height: 1.64;
+  opacity: 0.78;
+}
+
+.dark .rich-text blockquote {
+  background: rgb(255 255 255 / 0.055);
+}
+
+.rich-text blockquote p {
+  margin-top: 0.65rem;
+}
+
+.rich-text blockquote p:first-child {
+  margin-top: 0;
+}
+
+.rich-text .reference-line {
+  margin-top: 1.05rem;
+  padding: 0.55rem 0.7rem;
+  border-left: 2px solid currentColor;
+  border-radius: 0.4rem;
+  background: rgb(15 23 42 / 0.045);
+  font-size: 0.92em;
+  line-height: 1.55;
+  opacity: 0.86;
+}
+
+.dark .rich-text .reference-line {
+  background: rgb(255 255 255 / 0.045);
+}
+
+.rich-text .reference-line:target {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.rich-text .reference-label,
+.rich-text .note-label {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.35rem;
+  font-size: 0.78em;
+  font-weight: 700;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.rich-text .reference-label {
+  opacity: 0.72;
+}
+
+.rich-text .note-label {
+  padding: 0.08rem 0.35rem;
+  border-radius: 999px;
+  background: rgb(15 23 42 / 0.08);
+  color: inherit;
+}
+
+.dark .rich-text .note-label {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.rich-text code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+  line-height: 1.5;
+  padding: 0.12em 0.28em;
+  border-radius: 0.25rem;
+  background: rgb(15 23 42 / 0.08);
+}
+
+.dark .rich-text code {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.rich-text pre {
+  margin: 1.05rem 0 0;
+  max-height: 24rem;
+  padding: 0.8rem 0.9rem;
+  overflow-x: auto;
+  border-radius: 0.45rem;
+  background: rgb(15 23 42 / 0.08);
+  white-space: pre-wrap;
+}
+
+.dark .rich-text pre {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.rich-text pre code {
+  padding: 0;
+  background: transparent;
 }
 
 .section {

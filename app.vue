@@ -1,6 +1,6 @@
 <template>
   <ColorScheme>
-    <div class="min-h-screen font-inter bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 safe-area-container">
+    <div class="min-h-screen font-sans bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100 safe-area-container">
       <NuxtLoadingIndicator />
       <NuxtLayout>
         <NuxtPage />
@@ -18,4 +18,3 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 </style>
-

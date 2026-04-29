@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss'
+import defaultTheme from 'tailwindcss/defaultTheme'
 
 export default {
   darkMode: 'class',
@@ -12,6 +13,11 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Inter', ...defaultTheme.fontFamily.sans],
+        display: ['Sora', 'Inter', ...defaultTheme.fontFamily.sans],
+        reading: ['Inter', ...defaultTheme.fontFamily.sans],
+      },
       colors: {
         'light-gray': '#F0F0F0',
         'natural-wood': '#DEB887',

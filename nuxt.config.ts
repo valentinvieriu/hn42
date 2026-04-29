@@ -23,7 +23,10 @@ export default defineNuxtConfig({
       Inter: {
         wght: [100, 200, 300, 400, 500, 600, 700, 800, 900],
         ital: [400, 500, 600, 700],
-      }
+      },
+      Sora: {
+        wght: [400, 500, 600, 700],
+      },
     },
     display: 'swap',
     prefetch: true,
