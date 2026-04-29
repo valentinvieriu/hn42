@@ -64,7 +64,7 @@
           :to="story.url"
           target="_blank"
           rel="noopener noreferrer"
-          class="text-[0.72rem] font-semibold leading-none px-2 py-1.5 rounded-full border"
+          class="story-domain-chip text-[0.72rem] font-semibold leading-none px-2 py-1.5 rounded-full border"
           :style="{
             backgroundColor: 'var(--seed-accent-soft)',
             borderColor: 'var(--seed-border)',
@@ -79,13 +79,13 @@
           rel="noopener noreferrer"
           aria-label="Open external link"
           tabindex="0"
-          class="flex items-center"
+          class="story-card-external flex items-center"
         >
           <LucideExternalLink class="w-4 h-4" />
         </NuxtLink>
       </div>
       <NuxtLink :to="`/item/${story.objectID}`">
-        <h2 class="font-display text-[1.05rem] md:text-lg font-semibold leading-snug mb-3 line-clamp-2 md:line-clamp-2 md:min-h-[3.15rem] overflow-hidden">
+        <h2 class="story-card-title font-display text-[1.05rem] md:text-lg font-semibold leading-snug mb-3 line-clamp-2 md:line-clamp-2 md:min-h-[3.15rem] overflow-hidden">
           {{ story.title }}
         </h2>
       </NuxtLink>
@@ -94,35 +94,21 @@
           :href="`https://news.ycombinator.com/user?id=${story.author}`" 
           target="_blank" 
           rel="noopener noreferrer"
-          class="opacity-75"
+          class="story-card-muted"
         >
           {{ story.author }}
         </a>
-        <span class="flex items-center gap-1 opacity-75">
+        <span class="story-card-muted flex items-center gap-1">
           <LucideClock class="w-4 h-4" aria-label="Time since created" />
           {{ formatDistanceToNow(new Date(story.created_at), { addSuffix: true }) }}
         </span>
       </div>
       <div class="meta-text mt-auto flex items-center justify-between gap-3">
-        <span :class="`flex items-center gap-1 ${
-          story.points < 100 && story.num_comments < 50
-            ? 'text-gray-500'
-            : story.points >= 100 && story.num_comments < 50
-            ? 'text-yellow-600'
-            : story.points < 100 && story.num_comments >= 50
-            ? 'text-red-600'
-            : 'text-green-600'
-        }`">
+        <span :class="['story-card-metric flex items-center gap-1', pointsToneClass]">
           <LucideTrendingUp class="w-4 h-4" />
           {{ story.points }}
         </span>
-        <span :class="`flex items-center gap-1 ${
-          story.num_comments < 50
-            ? 'text-gray-500'
-            : story.num_comments >= 50
-            ? 'text-red-600'
-            : 'text-green-600'
-        }`">
+        <span :class="['story-card-metric flex items-center gap-1', commentsToneClass]">
           <LucideMessageSquare class="w-4 h-4" />
           <NuxtLink :to="`/item/${story.objectID}`" class="cursor-pointer">
             {{ story.num_comments }}
@@ -240,16 +226,28 @@ const radialGradientStyle = computed(() => ({
   )`
 }))
 
-// Extract category color logic into computed properties
-const categoryColorUpvotes = computed(() => {
-  if (props.story.points < 100 && props.story.num_comments < 50) return 'text-gray-500'
-  if (props.story.points >= 100 && props.story.num_comments < 50) return 'text-yellow-600'
-  if (props.story.points < 100 && props.story.num_comments >= 50) return 'text-red-600'
-  return 'text-green-600'
+const pointsToneClass = computed(() => {
+  if (props.story.points < 100 && props.story.num_comments < 50) {
+    return colorMode.value === 'dark' ? 'text-slate-400' : 'text-slate-600'
+  }
+
+  if (props.story.points >= 100 && props.story.num_comments < 50) {
+    return colorMode.value === 'dark' ? 'text-amber-300' : 'text-amber-800'
+  }
+
+  if (props.story.points < 100 && props.story.num_comments >= 50) {
+    return colorMode.value === 'dark' ? 'text-red-400' : 'text-red-700'
+  }
+
+  return colorMode.value === 'dark' ? 'text-emerald-300' : 'text-emerald-700'
 })
 
-const categoryColorComments = computed(() => {
-  return props.story.num_comments < 50 ? 'text-gray-500' : props.story.num_comments >= 50 ? 'text-red-600' : 'text-green-600'
+const commentsToneClass = computed(() => {
+  if (props.story.num_comments < 50) {
+    return colorMode.value === 'dark' ? 'text-slate-400' : 'text-slate-600'
+  }
+
+  return colorMode.value === 'dark' ? 'text-red-400' : 'text-red-700'
 })
 
 const router = useRouter()
@@ -434,28 +432,34 @@ onBeforeUnmount(() => {
 <style scoped>
 .story-card {
   position: relative;
-  border: 1px solid var(--seed-border);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 58%, rgb(203 213 225 / 0.62));
   box-shadow:
     0 18px 44px rgb(15 23 42 / 0.12),
     0 1px 0 rgb(255 255 255 / 0.46) inset;
   transform: translateZ(0);
 }
 
+.story-card > * {
+  position: relative;
+  z-index: 2;
+}
+
 .story-card::after {
   content: '';
   position: absolute;
   inset: 1px;
-  z-index: 2;
+  z-index: 1;
   pointer-events: none;
   border-radius: calc(1rem - 1px);
   background:
     linear-gradient(145deg, rgb(255 255 255 / 0.22), transparent 35%, transparent 100%),
     radial-gradient(circle at 100% 100%, var(--seed-ring) 0, transparent 46%),
     radial-gradient(circle at 12% 0%, rgb(255 255 255 / 0.28), transparent 28%);
-  opacity: 0.72;
+  opacity: 0.38;
 }
 
 .dark .story-card {
+  border-color: var(--seed-border);
   box-shadow:
     0 18px 48px rgb(0 0 0 / 0.32),
     0 1px 0 rgb(255 255 255 / 0.08) inset;
@@ -470,15 +474,63 @@ onBeforeUnmount(() => {
 }
 
 .story-card-body {
-  border-top: 1px solid color-mix(in oklch, var(--seed-border) 48%, transparent);
+  border-top: 1px solid color-mix(in oklch, var(--seed-border) 32%, rgb(226 232 240 / 0.82));
+  color: rgb(15 23 42);
   background:
-    linear-gradient(180deg, color-mix(in oklch, var(--seed-surface) 84%, white) 0%, color-mix(in oklch, var(--seed-surface-strong) 82%, white) 100%);
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, white 92%, var(--seed-surface) 8%) 0%,
+      color-mix(in oklch, rgb(248 250 252) 88%, var(--seed-surface-strong) 12%) 100%
+    );
 }
 
 .dark .story-card-body {
+  color: rgb(241 245 249);
   border-top-color: color-mix(in oklch, var(--seed-border) 58%, transparent);
   background:
     linear-gradient(180deg, color-mix(in oklch, var(--seed-surface) 72%, black) 0%, color-mix(in oklch, var(--seed-surface-strong) 76%, black) 100%);
+}
+
+.story-domain-chip {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.62) inset;
+}
+
+.dark .story-domain-chip {
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.08) inset;
+}
+
+.story-card-title {
+  color: rgb(15 23 42);
+}
+
+.dark .story-card-title {
+  color: rgb(241 245 249);
+}
+
+.story-card-muted {
+  color: rgb(71 85 105);
+}
+
+.dark .story-card-muted {
+  color: rgb(203 213 225 / 0.82);
+}
+
+.story-card-external {
+  color: rgb(51 65 85);
+  transition: color 180ms ease;
+}
+
+.story-card-external:hover,
+.story-card-external:focus-visible {
+  color: var(--seed-accent-strong);
+}
+
+.dark .story-card-external {
+  color: rgb(203 213 225 / 0.82);
+}
+
+.story-card-metric {
+  font-weight: 600;
 }
 
 @media (hover: hover) and (pointer: fine) {
