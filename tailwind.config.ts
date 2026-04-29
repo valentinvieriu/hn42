@@ -33,10 +33,4 @@ export default {
       },
     },
   },
-  safelist: [
-    {
-      pattern: /(from|to|bg|text|border)-(red|rose|pink|fuchsia|purple|violet|indigo|blue|sky|cyan|teal|emerald|green|lime|yellow|amber|orange)-(50|100|800|900)/,
-      variants: ['hover', 'dark'],
-    },
-  ],
 } satisfies Config

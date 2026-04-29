@@ -46,7 +46,8 @@
               {{ timeAgo }}
             </span>
           </div>
-          <p :class="`${colorMode.value === 'dark' ? 'text-gray-300' : 'text-gray-700'}`" v-html="sanitizedText">
+          <p :class="`${colorMode.value === 'dark' ? 'text-gray-300' : 'text-gray-700'} whitespace-pre-line`">
+            {{ sanitizedText }}
           </p>
           <img
                 :alt="story.title"
@@ -57,10 +58,7 @@
                 class="hidden md:block w-full h-auto rounded-lg shadow-md mb-4"
           />
           
-          <!-- Add Related Stories Section under the image -->
-          <ClientOnly>
-            <RelatedStories :story-id="route.params.id" />
-          </ClientOnly>
+          <RelatedStories :story-id="storyId" />
         </div>
         <div class="md:w-1/2">
           <h2 :class="['text-xl', 'font-semibold', 'mb-4', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">Comments</h2>
@@ -81,21 +79,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watchEffect } from 'vue';
+import { ref, computed, watchEffect } from 'vue';
 import { useRoute } from 'vue-router';
-import { useStoryCategories } from '~/composables/useStoryCategories';
 import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 
 const route = useRoute();
+const storyId = computed(() => String(route.params.id));
 const colorMode = useColorMode();
 const story = ref(null);
 const error = ref(null);
 const isLoading = ref(true);
 
 // Fetch story data
-const { data: storyData, pending, error: fetchError } = await useFetch(`/api/item/${route.params.id}`, {
+const { data: storyData, pending, error: fetchError } = await useFetch(() => `/api/item/${storyId.value}`, {
   immediate: true,
 });
 
@@ -108,9 +106,6 @@ watchEffect(() => {
   }
   isLoading.value = pending.value;
 });
-
-// Use the new composable for category colors
-const { color } = useStoryCategories(story.value?.points || 0, story.value?.children.length || 0);
 
 // Use the sanitizer
 const { sanitize } = useSanitizer();

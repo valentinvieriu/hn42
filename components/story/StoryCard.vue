@@ -177,13 +177,8 @@ const handleCardClick = () => {
   router.push(`/item/${props.story.objectID}`)
 }
 
-// Touch device detection
-const isTouchDevice = computed(() => {
-  if (typeof window !== 'undefined') {
-    return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0)
-  }
-  return false
-})
+// Touch device detection starts false for SSR and initial hydration.
+const isTouchDevice = ref(false)
 
 // Refs for DOM elements
 const cardRef = ref<HTMLElement | null>(null)
@@ -194,14 +189,17 @@ const isInView = ref(false)
 
 // Animation frame ID
 let animationFrameId: number | null = null
+let observer: IntersectionObserver | null = null
 
 // Scroll handling
 const scrollProgress = ref(0)
 
-let windowHeight = window.innerHeight || document.documentElement.clientHeight;
+let windowHeight = 0
+
+const getWindowHeight = () => window.innerHeight || document.documentElement.clientHeight
 
 const updateWindowHeight = useDebounce(() => {
-  windowHeight = window.innerHeight || document.documentElement.clientHeight;
+  windowHeight = getWindowHeight()
 }, 150);
 
 const handleScroll = () => {
@@ -228,8 +226,11 @@ const animate = () => {
 }
 
 onMounted(() => {
+  isTouchDevice.value = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
+  windowHeight = getWindowHeight()
+
   if (isTouchDevice.value) {
-    const observer = new IntersectionObserver(
+    observer = new IntersectionObserver(
       (entries) => {
         entries.forEach(entry => {
           isInView.value = entry.isIntersecting;
@@ -269,6 +270,7 @@ onBeforeUnmount(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)
   }
+  observer?.disconnect()
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', updateWindowHeight);
 })

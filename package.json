@@ -17,7 +17,6 @@
     "@nuxtjs/google-fonts": "^3.2.0",
     "@nuxtjs/tailwindcss": "^6.12.2",
     "date-fns": "^4.1.0",
-    "dompurify": "^3.1.7",
     "nuxt": "^4.4.2",
     "nuxt-lucide-icons": "^1.0.5",
     "pos": "^0.4.2",

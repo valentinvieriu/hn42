@@ -1,9 +1,9 @@
 <template>
-  <div v-if="mounted" class="mt-8">
+  <div class="mt-8">
     <h2 :class="['text-xl', 'font-semibold', 'mb-4', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
       Related Stories
     </h2>
-    <div v-if="loading" class="text-gray-500">
+    <div v-if="status === 'pending'" class="text-gray-500">
       Loading related stories...
     </div>
     <div v-else-if="error" class="text-gray-500">
@@ -38,28 +38,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare } from 'lucide-vue-next'
 
 const props = defineProps<{
   storyId: string
 }>()
 
-const colorMode = useColorMode()
-const mounted = ref(false)
-const loading = ref(true)
-const error = ref(null)
-const stories = ref([])
+interface RelatedStory {
+  title: string
+  objectID: string
+  points: number
+  num_comments: number
+  author: string
+  url: string
+}
 
-onMounted(async () => {
-  mounted.value = true
-  try {
-    stories.value = await $fetch(`/api/related/${props.storyId}`)
-  } catch (err) {
-    error.value = err
-    console.error('Failed to fetch related stories:', err)
-  } finally {
-    loading.value = false
-  }
-})
+const colorMode = useColorMode()
+const { data: stories, status, error } = await useFetch<RelatedStory[]>(
+  () => `/api/related/${props.storyId}`,
+  {
+    default: () => [],
+    server: true,
+  },
+)
 </script>

@@ -12,10 +12,9 @@
         {{ timeAgo }}
       </span>
     </div>
-    <p 
-      :class="`comment-text ${textColor} break-words overflow-hidden whitespace-normal`" 
-      v-html="sanitizedText"
-    ></p>
+    <p :class="`comment-text ${textColor} break-words overflow-hidden whitespace-pre-line`">
+      {{ sanitizedText }}
+    </p>
     <div class="comment-actions flex items-center gap-4 mt-2">
       <span :class="`flex items-center gap-1 ${categoryColor}`">
         <LucideMessageSquare class="w-4 h-4" />
@@ -52,9 +51,8 @@
 <script setup lang="ts">
 import { defineProps, computed, ref } from 'vue'
 import { LucideMessageSquare, LucideClock } from 'lucide-vue-next'
-import DOMPurify from 'dompurify'
 import { formatDistanceToNow } from 'date-fns'
-import { useSanitizer } from '~/composables/useSanitizer'; // Import the sanitizer composable
+import { useSanitizer } from '~/composables/useSanitizer'
 
 interface Comment {
   id: number
@@ -71,8 +69,8 @@ const props = defineProps<{
   currentDepth?: number
 }>()
 
-const { sanitize } = useSanitizer();
-const sanitizedText = computed(() => sanitize(props.comment.text));
+const { sanitize } = useSanitizer()
+const sanitizedText = computed(() => sanitize(props.comment.text))
 
 const MAX_DEPTH = 3
 const currentDepth = computed(() => props.currentDepth || 1)
