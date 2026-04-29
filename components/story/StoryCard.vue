@@ -111,7 +111,7 @@
 
 <script setup lang="ts">
 import { defineProps, computed, ref, onMounted, onBeforeUnmount } from 'vue'
-import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from 'lucide-vue-next'
+import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from '@lucide/vue'
 import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
 import type { Story } from '~/types'

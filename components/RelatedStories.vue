@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { LucideTrendingUp, LucideMessageSquare } from 'lucide-vue-next'
+import { LucideTrendingUp, LucideMessageSquare } from '@lucide/vue'
 
 const props = defineProps<{
   storyId: string

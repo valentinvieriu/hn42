@@ -50,7 +50,7 @@
 
 <script setup lang="ts">
 import { defineProps, computed, ref } from 'vue'
-import { LucideMessageSquare, LucideClock } from 'lucide-vue-next'
+import { LucideMessageSquare, LucideClock } from '@lucide/vue'
 import { formatDistanceToNow } from 'date-fns'
 import { useSanitizer } from '~/composables/useSanitizer'
 

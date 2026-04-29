@@ -81,7 +81,7 @@
 <script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue';
 import { useRoute } from 'vue-router';
-import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock } from 'lucide-vue-next';
+import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock } from '@lucide/vue';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 
