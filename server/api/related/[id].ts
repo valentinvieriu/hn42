@@ -1,10 +1,19 @@
 import { defineEventHandler, getRouterParams, createError, setHeaders } from '#imports'
+import type { H3Event } from 'h3'
 import { extractKeywords } from '../../utils/keywordExtractor'
+
+const setRelatedCacheHeaders = (event: H3Event) => {
+  setHeaders(event, {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'public, max-age=3600, stale-while-revalidate=1800',
+    'CDN-Cache-Control': 'public, max-age=3600',
+    'Cloudflare-CDN-Cache-Control': 'public, max-age=3600'
+  })
+}
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event)
   const id = params.id
-  console.log('Fetching related stories for story ID:', id);
 
   if (!id) {
     throw createError({
@@ -23,17 +32,13 @@ export default defineEventHandler(async (event) => {
         message: 'Story not found'
       })
     }
-    console.log('Story title:', story.title);
 
     // Extract keywords from the story title
     const keywords = extractKeywords(story.title)
-    console.log('Extracted Keywords:', keywords);
     
     if (keywords.length === 0) {
-      throw createError({
-        statusCode: 400,
-        message: 'No relevant keywords found in the story title'
-      })
+      setRelatedCacheHeaders(event)
+      return []
     }
 
     // Construct search query with keywords
@@ -49,8 +54,6 @@ export default defineEventHandler(async (event) => {
       query += `(${phrases.map(phrase => `"${phrase}"`).join(' OR ')})`
     }
 
-    console.log('Constructed Query:', query);
-
     // Fetch related stories from Algolia
     const searchUrl = `https://hn.algolia.com/api/v1/search`
     const searchParams = new URLSearchParams({
@@ -58,7 +61,6 @@ export default defineEventHandler(async (event) => {
       tags: 'story',
       hitsPerPage: '10'
     })
-    console.log('Search URL:', `${searchUrl}?${searchParams.toString()}`);
     const response = await $fetch(`${searchUrl}?${searchParams.toString()}`)
     
     // Filter out the current story and format the response
@@ -74,19 +76,12 @@ export default defineEventHandler(async (event) => {
       }))
       .slice(0, 10)
 
-    // Set cache headers
-    setHeaders(event, {
-      'Content-Type': 'application/json',
-      'Cache-Control': 'public, max-age=3600, stale-while-revalidate=1800',
-      'CDN-Cache-Control': 'public, max-age=3600',
-      'Cloudflare-CDN-Cache-Control': 'public, max-age=3600'
-    })
+    setRelatedCacheHeaders(event)
 
     // Return the response
     return relatedStories
 
   } catch (error) {
-    console.error('Error fetching related stories:', error)
     throw createError({
       statusCode: 500,
       message: 'Failed to fetch related stories'

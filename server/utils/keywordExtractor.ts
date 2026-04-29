@@ -54,5 +54,22 @@ export const extractKeywords = (title: string, maxKeywords: number = 10): string
     }
   }
 
+  if (uniqueKeywords.length > 0) {
+    return uniqueKeywords;
+  }
+
+  const fallbackTokens = title
+    .toLowerCase()
+    .match(/[a-z][a-z0-9.+-]{2,}/g) ?? [];
+
+  for (const token of fallbackTokens) {
+    if (STOPWORDS.has(token) || seen.has(token)) continue;
+
+    seen.add(token);
+    uniqueKeywords.push(token);
+
+    if (uniqueKeywords.length === maxKeywords) break;
+  }
+
   return uniqueKeywords;
 };

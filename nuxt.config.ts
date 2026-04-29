@@ -4,6 +4,12 @@ import { defineNuxtConfig } from 'nuxt/config'
 export default defineNuxtConfig({
   compatibilityDate: '2024-10-22',
   devtools: { enabled: false },
+  runtimeConfig: {
+    screenshotFetchConcurrency: '1',
+    public: {
+      screenshotImageQueueConcurrency: '1',
+    },
+  },
   nitro: {
     preset: "cloudflare-module",
     cloudflare: {

@@ -4,6 +4,8 @@
     tabindex="0"
     @keydown.enter="handleCardClick"
     ref="cardRef"
+    :data-screenshot-state="imageState"
+    :data-screenshot-requested="queuedImageSrc ? 'started' : 'pending'"
     class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
     :class="[
       colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
@@ -13,6 +15,18 @@
     <div class="relative aspect-[4/4] overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
+          <div class="story-visual-fallback absolute inset-0" :style="fallbackVisualStyle" aria-hidden="true">
+            <div class="fallback-panels absolute inset-0">
+              <span
+                v-for="panel in fallbackPanels"
+                :key="panel.key"
+                class="fallback-panel absolute"
+                :class="panel.variant"
+                :style="panel.style"
+              ></span>
+            </div>
+            <div class="fallback-mark" aria-hidden="true">{{ fallbackInitials }}</div>
+          </div>
           <div 
             ref="imageContainerRef"
             class="relative w-full h-full transform transition-transform duration-500 will-change-transform" 
@@ -21,12 +35,18 @@
               'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
             }">
             <img
+              v-if="queuedImageSrc"
               :alt="story.title"
               width="400"
-              :src="`/api/screenshot/${story.objectID}`" 
-              loading="lazy"
+              :src="queuedImageSrc"
+              loading="eager"
               decoding="async"
-              class="w-full object-cover"
+              fetchpriority="low"
+              class="w-full object-cover transition-opacity duration-500"
+              :class="imageState === 'loaded' ? 'opacity-100' : 'opacity-0'"
+              :aria-hidden="imageState !== 'loaded'"
+              @load="handleImageLoad"
+              @error="handleImageError"
             />
           </div>
         </div>
@@ -114,13 +134,14 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from '@lucide/vue'
 import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
 import type { Story } from '~/types'
 import { useRouter } from 'vue-router'
 import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
+import { useImageLoadQueue, type ImageLoadQueueHandle } from '~/composables/useImageLoadQueue'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
 const props = defineProps<{
@@ -142,6 +163,72 @@ const colorMode = useColorMode()
 const cardPaletteStyle = computed(() => {
   return getSeedPaletteStyle(props.story.objectID, colorMode.value === 'dark' ? 'dark' : 'light')
 })
+
+const storySeed = computed(() => `${props.story.objectID}:${props.story.title}:${props.story.url}`)
+
+const hashSeed = (seed: string): number => {
+  let hash = 2166136261
+
+  for (const character of seed) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return hash >>> 0
+}
+
+const seededRange = (salt: string, min: number, max: number): number => {
+  const hash = hashSeed(`${storySeed.value}:${salt}`)
+  return min + (hash % (max - min + 1))
+}
+
+const fallbackInitials = computed(() => {
+  const domain = getDomainFromUrl(props.story.url).replace(/^www\./, '')
+  const domainLabel = domain.split('.')[0] || props.story.title || 'HN'
+  const compactLabel = domainLabel.replace(/[^a-z0-9]/gi, '')
+
+  return (compactLabel.slice(0, 2) || 'HN').toUpperCase()
+})
+
+const fallbackVisualStyle = computed(() => {
+  const angle = seededRange('angle', -32, 32)
+
+  return {
+    '--fallback-angle': `${angle}deg`,
+    '--fallback-frame-angle': `${angle * -0.5}deg`,
+    '--fallback-band-angle': `${angle * 0.25}deg`,
+    '--fallback-grid': `${seededRange('grid', 26, 44)}px`,
+    '--fallback-sweep': `${seededRange('sweep', 18, 76)}%`,
+    '--fallback-cut': `${seededRange('cut', 24, 68)}%`,
+  }
+})
+
+const fallbackPanels = computed(() => {
+  return Array.from({ length: 9 }, (_, index) => {
+    const panelSeed = `panel-${index}`
+    const width = seededRange(`${panelSeed}-width`, 18, 46)
+    const height = seededRange(`${panelSeed}-height`, 5, 15)
+    const left = seededRange(`${panelSeed}-left`, -8, 86)
+    const top = seededRange(`${panelSeed}-top`, 9, 84)
+    const rotate = seededRange(`${panelSeed}-rotate`, -22, 22)
+    const opacity = seededRange(`${panelSeed}-opacity`, 30, 68) / 100
+
+    return {
+      key: `${props.story.objectID}-${index}`,
+      variant: index % 3 === 0 ? 'fallback-panel-strong' : index % 3 === 1 ? 'fallback-panel-soft' : 'fallback-panel-line',
+      style: {
+        width: `${width}%`,
+        height: `${height}%`,
+        left: `${left}%`,
+        top: `${top}%`,
+        opacity,
+        transform: `rotate(${rotate}deg)`,
+      },
+    }
+  })
+})
+
+const screenshotSrc = computed(() => `/api/screenshot/${props.story.objectID}`)
 
 // Define the radial gradient style using OKLCH CSS variables
 const radialGradientStyle = computed(() => ({
@@ -177,6 +264,56 @@ const isTouchDevice = ref(false)
 // Refs for DOM elements
 const cardRef = ref<HTMLElement | null>(null)
 const imageContainerRef = ref<HTMLElement | null>(null)
+const queuedImageSrc = ref<string | null>(null)
+const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>('queued')
+const hasRequestedImageLoad = ref(false)
+const { enqueueImageLoad } = useImageLoadQueue()
+let imageQueueHandle: ImageLoadQueueHandle | null = null
+let imageLoadObserver: IntersectionObserver | null = null
+
+const releaseImageQueueSlot = () => {
+  imageQueueHandle?.complete()
+  imageQueueHandle = null
+}
+
+const handleImageLoad = (event: Event) => {
+  const image = event.target as HTMLImageElement
+  imageState.value = image.naturalWidth > 1 && image.naturalHeight > 1 ? 'loaded' : 'failed'
+  releaseImageQueueSlot()
+}
+
+const handleImageError = () => {
+  imageState.value = 'failed'
+  releaseImageQueueSlot()
+}
+
+const queueScreenshotLoad = () => {
+  if (queuedImageSrc.value || imageQueueHandle) {
+    return
+  }
+
+  hasRequestedImageLoad.value = true
+  imageState.value = 'queued'
+  imageQueueHandle = enqueueImageLoad(() => {
+    imageState.value = 'loading'
+    queuedImageSrc.value = screenshotSrc.value
+  })
+}
+
+watch(
+  () => props.story.objectID,
+  async () => {
+    imageQueueHandle?.cancel()
+    imageQueueHandle = null
+    queuedImageSrc.value = null
+    imageState.value = 'queued'
+    await nextTick()
+
+    if (hasRequestedImageLoad.value) {
+      queueScreenshotLoad()
+    }
+  },
+)
 
 // Visibility state
 const isInView = ref(false)
@@ -220,6 +357,28 @@ const animate = () => {
 }
 
 onMounted(() => {
+  if ('IntersectionObserver' in window) {
+    imageLoadObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          queueScreenshotLoad()
+          imageLoadObserver?.disconnect()
+          imageLoadObserver = null
+        }
+      },
+      {
+        rootMargin: '700px 0px',
+        threshold: 0.01,
+      },
+    )
+
+    if (cardRef.value) {
+      imageLoadObserver.observe(cardRef.value)
+    }
+  } else {
+    queueScreenshotLoad()
+  }
+
   isTouchDevice.value = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
   windowHeight = getWindowHeight()
 
@@ -264,6 +423,8 @@ onBeforeUnmount(() => {
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)
   }
+  imageQueueHandle?.cancel()
+  imageLoadObserver?.disconnect()
   observer?.disconnect()
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', updateWindowHeight);
@@ -271,6 +432,70 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.story-visual-fallback {
+  background:
+    linear-gradient(135deg, transparent 0 var(--fallback-cut), var(--seed-ring) var(--fallback-cut) calc(var(--fallback-cut) + 1px), transparent calc(var(--fallback-cut) + 1px)),
+    repeating-linear-gradient(var(--fallback-angle), rgb(255 255 255 / 0.055) 0 1px, transparent 1px var(--fallback-grid)),
+    linear-gradient(150deg, var(--seed-surface-strong) 0%, var(--seed-overlay-mid) var(--fallback-sweep), var(--seed-overlay-edge) 100%);
+}
+
+.story-visual-fallback::before,
+.story-visual-fallback::after {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  pointer-events: none;
+}
+
+.story-visual-fallback::before {
+  border: 1px solid var(--seed-border);
+  opacity: 0.34;
+  transform: rotate(var(--fallback-frame-angle));
+}
+
+.story-visual-fallback::after {
+  inset: 17% 11%;
+  border-top: 1px solid var(--seed-border);
+  border-bottom: 1px solid var(--seed-border);
+  opacity: 0.24;
+  transform: skewY(var(--fallback-band-angle));
+}
+
+.fallback-panel {
+  border: 1px solid var(--seed-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 18px 40px rgb(15 23 42 / 0.16);
+  transform-origin: center;
+}
+
+.fallback-panel-strong {
+  background: var(--seed-accent-soft);
+}
+
+.fallback-panel-soft {
+  background: var(--seed-surface);
+}
+
+.fallback-panel-line {
+  height: 2px !important;
+  border-radius: 999px;
+  background: var(--seed-accent);
+  border-color: transparent;
+}
+
+.fallback-mark {
+  position: absolute;
+  right: 1.1rem;
+  bottom: 0.6rem;
+  color: var(--seed-accent-strong);
+  font-family: var(--font-display);
+  font-size: 4.2rem;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
 .scrolling {
   /* Define the transform within CSS for better performance */
   transform: translate3d(0, -50%, 0);
