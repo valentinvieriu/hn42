@@ -1,8 +1,5 @@
 import { defineEventHandler, getRequestURL, getRouterParams, createError, useRuntimeConfig } from '#imports'
 
-const SCREENSHOT_CACHE_CONTROL = 'public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400'
-const CDN_CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400'
-const FALLBACK_CACHE_CONTROL = 'public, max-age=900, s-maxage=900, stale-while-revalidate=3600'
 const FALLBACK_MEMORY_TTL_MS = 15 * 60 * 1000
 const SCREENSHOT_TIMEOUT_MS = 8000
 const DEFAULT_SCREENSHOT_FETCH_CONCURRENCY = 1
@@ -11,6 +8,19 @@ const TRANSPARENT_GIF = Uint8Array.from([
   255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
 ])
 const fallbackExpirations = new Map<string, number>()
+
+const SCREENSHOT_CACHE_HEADERS = {
+  'Cache-Control': 'public, max-age=604800',
+  'CDN-Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400, stale-if-error=86400',
+  'Cloudflare-CDN-Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400, stale-if-error=86400',
+} as const
+
+const FALLBACK_CACHE_HEADERS = {
+  'Cache-Control': 'public, max-age=900',
+  'CDN-Cache-Control': 'public, max-age=900, stale-while-revalidate=3600, stale-if-error=3600',
+  'Cloudflare-CDN-Cache-Control': 'public, max-age=900, stale-while-revalidate=3600, stale-if-error=3600',
+} as const
+
 type ScreenshotQueueTask = {
   release: (releaseSlot: () => void) => void
 }
@@ -98,6 +108,39 @@ const releaseOnStreamEnd = (body: ReadableStream<Uint8Array>, release: () => voi
   })
 }
 
+const putCacheResponse = (
+  event: any,
+  cache: Cache | undefined,
+  cacheKey: Request | undefined,
+  response: Response,
+) => {
+  if (!cache || !cacheKey) {
+    return
+  }
+
+  const cachePut = cache.put(cacheKey, response.clone())
+  const waitUntil = event.context.cloudflare?.context.waitUntil?.bind(event.context.cloudflare.context)
+    ?? event.waitUntil?.bind(event)
+
+  if (waitUntil) {
+    waitUntil(cachePut)
+    return
+  }
+
+  cachePut.catch(() => {})
+}
+
+const withScreenshotCacheStatus = (response: Response, status: 'HIT' | 'MISS' | 'FALLBACK') => {
+  const headers = new Headers(response.headers)
+  headers.set('X-HN42-Screenshot-Cache', status)
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 const hasFreshFallback = (id: string) => {
   const expiresAt = fallbackExpirations.get(id)
 
@@ -127,18 +170,16 @@ const createFallbackResponse = async (
     headers: {
       'Content-Type': 'image/gif',
       'Content-Length': String(TRANSPARENT_GIF.byteLength),
-      'Cache-Control': FALLBACK_CACHE_CONTROL,
-      'CDN-Cache-Control': FALLBACK_CACHE_CONTROL,
-      'Cloudflare-CDN-Cache-Control': FALLBACK_CACHE_CONTROL,
+      'ETag': id ? `W/"hn42-screenshot-fallback-${id}"` : 'W/"hn42-screenshot-fallback"',
+      'Accept-Ranges': 'bytes',
       'X-HN42-Screenshot-Fallback': '1',
+      ...FALLBACK_CACHE_HEADERS,
     },
   })
 
-  if (cache && cacheKey) {
-    event.context.cloudflare?.context.waitUntil(cache.put(cacheKey, response.clone()))
-  }
+  putCacheResponse(event, cache, cacheKey, response)
 
-  return response
+  return withScreenshotCacheStatus(response, 'FALLBACK')
 }
 
 const fetchWithTimeout = async (url: string, timeoutMs: number) => {
@@ -169,7 +210,7 @@ export default defineEventHandler(async (event) => {
     const cachedResponse = cacheKey ? await cache?.match(cacheKey) : undefined
 
     if (cachedResponse) {
-      return cachedResponse
+      return withScreenshotCacheStatus(cachedResponse, 'HIT')
     }
 
     if (hasFreshFallback(id)) {
@@ -204,10 +245,9 @@ export default defineEventHandler(async (event) => {
 
     const headers = new Headers({
       'Content-Type': imageResponse.headers.get('Content-Type') || 'image/jpeg',
-      'Cache-Control': SCREENSHOT_CACHE_CONTROL,
-      'CDN-Cache-Control': CDN_CACHE_CONTROL,
-      'Cloudflare-CDN-Cache-Control': CDN_CACHE_CONTROL,
-      'Vary': 'Accept-Encoding',
+      'ETag': `W/"hn42-screenshot-${id}"`,
+      'Accept-Ranges': 'bytes',
+      ...SCREENSHOT_CACHE_HEADERS,
     })
     const contentLength = imageResponse.headers.get('Content-Length')
 
@@ -223,11 +263,9 @@ export default defineEventHandler(async (event) => {
       { headers },
     )
 
-    if (cache && cacheKey) {
-      event.context.cloudflare?.context.waitUntil(cache.put(cacheKey, response.clone()))
-    }
+    putCacheResponse(event, cache, cacheKey, response)
     
-    return response
+    return withScreenshotCacheStatus(response, 'MISS')
   } catch {
     releaseScreenshotFetchSlot?.()
     return createFallbackResponse(event, undefined, undefined, id)
