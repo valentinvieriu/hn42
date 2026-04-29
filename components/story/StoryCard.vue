@@ -38,14 +38,14 @@
         </div>
       </NuxtLink>
     </div>
-    <div class="p-4 border-t-4" :style="{ 'border-top-color': 'hsla(var(--card-hue), var(--card-saturation), var(--card-luminosity), 100%)' }">
+    <div class="p-4 border-t-4" :style="{ 'border-top-color': 'var(--card-accent)' }">
       <div class="flex items-center justify-between mb-2">
         <NuxtLink
           :to="story.url"
           target="_blank"
           rel="noopener noreferrer"
           class="text-xs font-medium px-2 py-1 rounded-full opacity-75"
-          :style="{ backgroundColor: 'hsla(var(--card-hue), var(--card-saturation), var(--card-luminosity), 100%)' }"
+          :style="{ backgroundColor: 'var(--card-accent)' }"
         >
           {{ getDomainFromUrl(story.url) }}
         </NuxtLink>
@@ -136,25 +136,20 @@ const getDomainFromUrl = (url: string): string => {
 const radialGradientStyle = computed(() => ({
   background: `radial-gradient(
     circle at center,
-    hsla(var(--card-hue), 0%, 0%, 0) 0%,
-    hsla(var(--card-hue), 35%, 35%, 30%) 75%,
-    hsla(var(--card-hue), 35%, 20%, 40%) 100%
+    transparent 0%,
+    color-mix(in oklch, var(--card-accent), black 72%) 75%,
+    color-mix(in oklch, var(--card-accent), black 82%) 100%
   )`
 }))
 
 // Function to compute a hash from the objectID
-const computeHue = (id: string): number => {
-  const goldenRatio = 0.618033988749895
-  const hue = (parseInt(id, 10) * goldenRatio * 360) % 360 // Convert id to a number
-  return Math.floor(hue)
-}
+const { getHueFromSeed } = useSeededPalette()
 
-// Compute the hue for the current story
-const hue = computed(() => computeHue(props.story.objectID))
+const hue = computed(() => getHueFromSeed(props.story.objectID))
 
-// Define CSS variables for the gradient colors
 const gradientStyle = computed(() => ({
-  '--card-hue': `${hue.value}`
+  '--card-hue': `${hue.value}`,
+  '--card-accent': `oklch(${colorMode.value === 'dark' ? '58%' : '68%'} 0.14 ${hue.value})`
 }))
 
 const colorMode = useColorMode()
