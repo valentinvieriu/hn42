@@ -6,13 +6,13 @@
     ref="cardRef"
     :data-screenshot-state="imageState"
     :data-screenshot-requested="queuedImageSrc ? 'started' : 'pending'"
-    class="group rounded-2xl overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300" 
+    class="story-card group flex flex-col rounded-2xl overflow-hidden transition-[border-color,box-shadow,transform] duration-300" 
     :class="[
       colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
       { 'pointer-events-none': isScrolling }
     ]" 
     :style="cardPaletteStyle">
-    <div class="relative aspect-[4/4] overflow-hidden">
+    <div class="relative aspect-[4/4] shrink-0 overflow-hidden">
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="absolute inset-0 overflow-hidden">
           <div class="story-visual-fallback absolute inset-0" :style="fallbackVisualStyle" aria-hidden="true">
@@ -58,7 +58,7 @@
         </div>
       </NuxtLink>
     </div>
-    <div class="p-4 md:p-5 border-t-4" :style="{ 'border-top-color': 'var(--seed-accent)' }">
+    <div class="story-card-body flex flex-1 flex-col p-4 md:p-5">
       <div class="flex items-center justify-between gap-3 mb-3">
         <NuxtLink
           :to="story.url"
@@ -103,7 +103,7 @@
           {{ formatDistanceToNow(new Date(story.created_at), { addSuffix: true }) }}
         </span>
       </div>
-      <div class="meta-text flex items-center justify-between gap-3">
+      <div class="meta-text mt-auto flex items-center justify-between gap-3">
         <span :class="`flex items-center gap-1 ${
           story.points < 100 && story.num_comments < 50
             ? 'text-gray-500'
@@ -432,6 +432,71 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.story-card {
+  position: relative;
+  border: 1px solid var(--seed-border);
+  box-shadow:
+    0 18px 44px rgb(15 23 42 / 0.12),
+    0 1px 0 rgb(255 255 255 / 0.46) inset;
+  transform: translateZ(0);
+}
+
+.story-card::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: 2;
+  pointer-events: none;
+  border-radius: calc(1rem - 1px);
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.22), transparent 35%, transparent 100%),
+    radial-gradient(circle at 100% 100%, var(--seed-ring) 0, transparent 46%),
+    radial-gradient(circle at 12% 0%, rgb(255 255 255 / 0.28), transparent 28%);
+  opacity: 0.72;
+}
+
+.dark .story-card {
+  box-shadow:
+    0 18px 48px rgb(0 0 0 / 0.32),
+    0 1px 0 rgb(255 255 255 / 0.08) inset;
+}
+
+.dark .story-card::after {
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.08), transparent 38%, transparent 100%),
+    radial-gradient(circle at 100% 100%, var(--seed-ring) 0, transparent 46%),
+    radial-gradient(circle at 12% 0%, rgb(255 255 255 / 0.1), transparent 28%);
+  opacity: 0.86;
+}
+
+.story-card-body {
+  border-top: 1px solid color-mix(in oklch, var(--seed-border) 48%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--seed-surface) 84%, white) 0%, color-mix(in oklch, var(--seed-surface-strong) 82%, white) 100%);
+}
+
+.dark .story-card-body {
+  border-top-color: color-mix(in oklch, var(--seed-border) 58%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in oklch, var(--seed-surface) 72%, black) 0%, color-mix(in oklch, var(--seed-surface-strong) 76%, black) 100%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .story-card:hover {
+    border-color: var(--seed-accent);
+    box-shadow:
+      0 24px 62px rgb(15 23 42 / 0.18),
+      0 1px 0 rgb(255 255 255 / 0.5) inset;
+    transform: translateY(-3px);
+  }
+
+  .dark .story-card:hover {
+    box-shadow:
+      0 24px 62px rgb(0 0 0 / 0.44),
+      0 1px 0 rgb(255 255 255 / 0.1) inset;
+  }
+}
+
 .story-visual-fallback {
   background:
     linear-gradient(135deg, transparent 0 var(--fallback-cut), var(--seed-ring) var(--fallback-cut) calc(var(--fallback-cut) + 1px), transparent calc(var(--fallback-cut) + 1px)),

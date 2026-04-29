@@ -1,6 +1,26 @@
 <template>
-  <div :class="`${colorMode.value === 'dark' ? 'bg-gray-800 text-gray-100' : 'bg-gray-100 text-gray-900'}`">
+  <div
+    class="feed-shell min-h-full text-slate-900 dark:text-slate-100"
+    :style="feedThemeStyle"
+  >
     <div class="max-w-7xl mx-auto px-4 py-8 md:py-10">
+      <header class="feed-page-header mb-7 md:mb-8">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="feed-kicker meta-text mb-2 inline-flex items-center gap-2 font-semibold uppercase">
+              <span class="feed-kicker-dot h-2.5 w-2.5 rounded-full" aria-hidden="true"></span>
+              {{ feedTheme.label }}
+            </p>
+            <h1 class="mb-0 text-3xl font-display font-semibold leading-tight md:text-4xl">
+              {{ feedTheme.title }}
+            </h1>
+          </div>
+          <p class="feed-description mb-0 max-w-sm text-sm leading-6 sm:text-right">
+            {{ feedTheme.description }}
+          </p>
+        </div>
+      </header>
+
       <div v-if="error" class="text-center mt-20">
         <h1 class="text-3xl font-display font-semibold mb-4">Error</h1>
         <p class="mb-6 leading-7">{{ error }}</p>
@@ -23,18 +43,18 @@
           <div
             v-for="index in 9"
             :key="`story-skeleton-${endpoint}-${index}`"
-            class="story-card-skeleton rounded-2xl overflow-hidden shadow-lg"
+            class="story-card-skeleton flex flex-col rounded-2xl overflow-hidden shadow-lg"
             :class="colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white'"
             :style="skeletonPaletteStyle(index)"
             aria-hidden="true"
           >
-            <div class="relative aspect-[4/4] overflow-hidden skeleton-shot">
+            <div class="relative aspect-[4/4] shrink-0 overflow-hidden skeleton-shot">
               <div class="absolute inset-x-[14%] top-[16%] h-[10%] rounded-full skeleton-line"></div>
               <div class="absolute inset-x-[10%] top-[31%] h-[7%] rounded-full skeleton-line skeleton-line-muted"></div>
               <div class="absolute inset-x-[18%] top-[43%] h-[7%] rounded-full skeleton-line skeleton-line-muted"></div>
               <div class="absolute left-[11%] right-[26%] top-[62%] h-[20%] rounded-lg skeleton-block"></div>
             </div>
-            <div class="p-4 md:p-5 border-t-4" :style="{ 'border-top-color': 'var(--seed-accent)' }">
+            <div class="story-card-skeleton-body flex flex-1 flex-col p-4 md:p-5">
               <div class="flex items-center justify-between gap-3 mb-4">
                 <div class="h-6 w-28 rounded-full skeleton-pill"></div>
                 <div class="h-4 w-4 rounded skeleton-pill"></div>
@@ -47,7 +67,7 @@
                 <div class="h-3 w-20 rounded-full skeleton-line skeleton-line-muted"></div>
                 <div class="h-3 w-24 rounded-full skeleton-line skeleton-line-muted"></div>
               </div>
-              <div class="flex items-center justify-between gap-3">
+              <div class="mt-auto flex items-center justify-between gap-3">
                 <div class="h-3 w-12 rounded-full skeleton-line skeleton-line-muted"></div>
                 <div class="h-3 w-12 rounded-full skeleton-line skeleton-line-muted"></div>
               </div>
@@ -85,12 +105,17 @@
 <script setup lang="ts">
 import { useStories } from '~/composables/useStories';
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
+import { getFeedTheme, getFeedThemeStyle } from '~/composables/useFeedTheme';
+import type { FeedEndpoint } from '~/composables/useFeedTheme';
 import { LucideRefreshCw } from '@lucide/vue';
 
-const props = defineProps<{ endpoint: 'best' | 'new' | 'show' | 'top' }>();
+const props = defineProps<{ endpoint: FeedEndpoint }>();
 const { stories, hoveredStory, isLoading, isRefreshing, error } = useStories(props.endpoint);
 const colorMode = useColorMode();
-const title = ref(`${props.endpoint.charAt(0).toUpperCase() + props.endpoint.slice(1)} Stories`);
+const colorModeName = computed(() => colorMode.value === 'dark' ? 'dark' : 'light');
+const feedTheme = computed(() => getFeedTheme(props.endpoint));
+const feedThemeStyle = computed(() => getFeedThemeStyle(props.endpoint, colorModeName.value));
+const title = computed(() => feedTheme.value.title);
 const firstStoryImage = computed(() => stories.value.length > 0 ? stories.value[0].screenshotUrl : 'https://example.com/default-image.png'); // Default image if no stories
 const skeletonTitleWidths = ['82%', '68%', '76%', '58%', '88%'];
 const skeletonPaletteStyle = (index: number) => {
@@ -99,17 +124,79 @@ const skeletonPaletteStyle = (index: number) => {
 
 useSeoMeta({
   title,
-  description: () => `Explore the latest ${props.endpoint} stories on our platform.`,
+  description: () => feedTheme.value.description,
   ogTitle: title,
-  ogDescription: () => `Explore the latest ${props.endpoint} stories on our platform.`,
+  ogDescription: () => feedTheme.value.description,
   ogImage: firstStoryImage,
   twitterCard: firstStoryImage,
 });
 </script>
 
 <style scoped>
+.feed-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 8% -7%, var(--feed-glow-a) 0, transparent 30rem),
+    radial-gradient(circle at 84% 0%, var(--feed-glow-b) 0, transparent 34rem),
+    radial-gradient(circle at 52% 28%, var(--feed-glow-c) 0, transparent 28rem),
+    linear-gradient(135deg, var(--feed-bg-start) 0%, var(--feed-bg-mid) 48%, var(--feed-bg-end) 100%);
+}
+
+.feed-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(15 23 42 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(15 23 42 / 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  -webkit-mask-image: linear-gradient(180deg, rgb(0 0 0 / 0.5), transparent 70%);
+  mask-image: linear-gradient(180deg, rgb(0 0 0 / 0.5), transparent 70%);
+}
+
+.dark .feed-shell::before {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+}
+
+.feed-page-header {
+  border-bottom: 1px solid var(--feed-border);
+  padding-bottom: 1.25rem;
+}
+
+.feed-kicker {
+  color: var(--feed-accent-strong);
+}
+
+.feed-kicker-dot {
+  background: var(--feed-swatch);
+  box-shadow:
+    0 0 0 4px var(--feed-accent-soft),
+    0 8px 22px var(--feed-glow-a);
+}
+
+.feed-description {
+  color: rgb(71 85 105);
+}
+
+.dark .feed-description {
+  color: rgb(203 213 225);
+}
+
 .story-card-skeleton {
   position: relative;
+  border: 1px solid var(--seed-border);
+  box-shadow:
+    0 18px 46px rgb(15 23 42 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.24);
+}
+
+.story-card-skeleton-body {
+  border-top: 1px solid color-mix(in oklch, var(--seed-border) 48%, transparent);
 }
 
 .skeleton-shot {
