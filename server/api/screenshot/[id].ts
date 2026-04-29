@@ -1,4 +1,7 @@
-import { defineEventHandler, getRouterParams, createError } from '#imports'
+import { defineEventHandler, getRequestURL, getRouterParams, createError } from '#imports'
+
+const SCREENSHOT_CACHE_CONTROL = 'public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400'
+const CDN_CACHE_CONTROL = 'public, max-age=604800, stale-while-revalidate=86400'
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event)
@@ -10,6 +13,14 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const cache = globalThis.caches?.default
+    const cacheKey = cache ? new Request(getRequestURL(event).toString(), { method: 'GET' }) : undefined
+    const cachedResponse = cacheKey ? await cache?.match(cacheKey) : undefined
+
+    if (cachedResponse) {
+      return cachedResponse
+    }
+
     // Fetch story details from HN Firebase API
     const story = await $fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
     
@@ -24,7 +35,6 @@ export default defineEventHandler(async (event) => {
     )}&resX=1080&resY=1600&outFormat=jpg&waitTime=100&isFullPage=true&dismissModals=true`
 
     // Fetch the image
-    console.log(screenshotUrl);
     const imageResponse = await fetch(screenshotUrl)
     
     if (!imageResponse.ok || !imageResponse.body) {
@@ -33,20 +43,26 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Get the full image buffer
-    const arrayBuffer = await imageResponse.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const headers = new Headers({
+      'Content-Type': imageResponse.headers.get('Content-Type') || 'image/jpeg',
+      'Cache-Control': SCREENSHOT_CACHE_CONTROL,
+      'CDN-Cache-Control': CDN_CACHE_CONTROL,
+      'Cloudflare-CDN-Cache-Control': CDN_CACHE_CONTROL,
+      'Vary': 'Accept-Encoding',
+    })
+    const contentLength = imageResponse.headers.get('Content-Length')
 
-    // Set appropriate headers for image response
-    event.node.res.setHeader('Content-Type', imageResponse.headers.get('Content-Type') || 'image/jpeg')
-    event.node.res.setHeader('Cache-Control', 'public, max-age=604800, stale-while-revalidate=86400') // Cache for 1 week, stale for 1 day
-    event.node.res.setHeader('CDN-Cache-Control', 'public, max-age=604800')
-    event.node.res.setHeader('Cloudflare-CDN-Cache-Control', 'public, max-age=604800')
-    event.node.res.setHeader('Content-Length', buffer.length)
-    event.node.res.setHeader('Vary', 'Accept-Encoding')
+    if (contentLength) {
+      headers.set('Content-Length', contentLength)
+    }
+
+    const response = new Response(imageResponse.body, { headers })
+
+    if (cache && cacheKey) {
+      event.context.cloudflare?.context.waitUntil(cache.put(cacheKey, response.clone()))
+    }
     
-    // Return the buffer directly
-    return buffer
+    return response
   } catch (error) {
     console.error('Error fetching screenshot:', error)
     throw createError({

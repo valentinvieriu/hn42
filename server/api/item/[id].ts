@@ -1,6 +1,5 @@
 import { defineEventHandler, getRouterParams, createError } from 'h3'
-import { HNResponse, Story, Comment } from '~/types'
-import { getCacheHeaders } from '~/utils/cacheHeaders'
+import type { HNResponse, Story } from '~/types'
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event) // Retrieve route parameters

@@ -20,13 +20,12 @@
               scrolling: isTouchDevice && isInView,
               'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
             }">
-            <NuxtImg 
+            <img
               :alt="story.title"
-              provider="cloudflare" 
-              preset="thumbnail"
               width="400"
               :src="`/api/screenshot/${story.objectID}`" 
               loading="lazy"
+              decoding="async"
               class="w-full object-cover"
             />
           </div>
@@ -115,7 +114,7 @@ import { defineProps, computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from 'lucide-vue-next'
 import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
-import { Story } from '~/types'
+import type { Story } from '~/types'
 import { useRouter } from 'vue-router'
 import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
 

@@ -48,15 +48,19 @@
           </div>
           <p :class="`${colorMode.value === 'dark' ? 'text-gray-300' : 'text-gray-700'}`" v-html="sanitizedText">
           </p>
-          <NuxtImg 
+          <img
                 :alt="story.title"
-                provider="cloudflare" 
-                preset="detail"
                 width="600"
                 :src="`/api/screenshot/${route.params.id}`" 
                 loading="lazy"
+                decoding="async"
                 class="hidden md:block w-full h-auto rounded-lg shadow-md mb-4"
           />
+          
+          <!-- Add Related Stories Section under the image -->
+          <ClientOnly>
+            <RelatedStories :story-id="route.params.id" />
+          </ClientOnly>
         </div>
         <div class="md:w-1/2">
           <h2 :class="['text-xl', 'font-semibold', 'mb-4', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">Comments</h2>
@@ -79,10 +83,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watchEffect } from 'vue';
 import { useRoute } from 'vue-router';
-import { useStoryCategories } from '~/composables/useStoryCategories'; // Import the new composable
+import { useStoryCategories } from '~/composables/useStoryCategories';
 import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock } from 'lucide-vue-next';
 import { formatDistanceToNow } from 'date-fns';
-import { useSanitizer } from '~/composables/useSanitizer'; // Import the sanitizer composable
+import { useSanitizer } from '~/composables/useSanitizer';
 
 const route = useRoute();
 const colorMode = useColorMode();

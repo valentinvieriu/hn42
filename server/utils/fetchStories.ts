@@ -1,4 +1,4 @@
-import { HNHit } from '~/types'
+import type { HNHit } from '~/types'
 
 export const fetchStories = async (baseUrl: string, queryParams: Record<string, string>) => {
   try {
@@ -6,8 +6,6 @@ export const fetchStories = async (baseUrl: string, queryParams: Record<string, 
     if (!response.hits) {
       return [];
     }
-    console.log(`Fetching stories from URL: ${baseUrl}?${new URLSearchParams(queryParams)}`);
-
     const stories = response.hits
       .filter((hit: HNHit) => hit.url)
       .map((hit: HNHit) => {
@@ -27,4 +25,19 @@ export const fetchStories = async (baseUrl: string, queryParams: Record<string, 
     console.error('Error fetching stories:', error);
     throw new Error('Failed to fetch stories'); // Custom error handling
   }
+};
+
+export const fetchRelatedStories = async (keywords: string[], excludeId?: string) => {
+  const query = keywords.join(' OR ');
+  const queryParams = {
+    query,
+    tags: 'story',
+    restrictSearchableAttributes: 'title',
+    hitsPerPage: '5'
+  };
+
+  const stories = await fetchStories('http://hn.algolia.com/api/v1/search', queryParams);
+  
+  // Filter out the current story if excludeId is provided
+  return stories.filter(story => story.objectID !== excludeId);
 };

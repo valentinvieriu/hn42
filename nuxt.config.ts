@@ -95,9 +95,6 @@ export default defineNuxtConfig({
       '2xl': 1536
     },
     domains: ['backup15.terasp.net'],
-    cloudflare: {
-      baseURL: 'https://hn42.net/'
-    },
     presets: {
       detail: {
         modifiers: {
