@@ -6,9 +6,9 @@
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
-    "preview": "npm run build && wrangler pages dev",
+    "preview": "npm run build && wrangler dev",
     "postinstall": "nuxt prepare",
-    "deploy": "npm run build && wrangler pages deploy",
+    "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
@@ -26,10 +26,10 @@
     "vue-router": "latest"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20241022.0",
+    "@cloudflare/workers-types": "^4.20260426.1",
     "nitro-cloudflare-dev": "^0.2.1",
     "nitropack": "^2.9.7",
     "typescript": "^5.6.3",
-    "wrangler": "^3.83.0"
+    "wrangler": "^4.86.0"
   }
 }

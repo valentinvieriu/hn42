@@ -5,7 +5,10 @@ export default defineNuxtConfig({
   compatibilityDate: '2024-10-22',
   devtools: { enabled: false },
   nitro: {
-    preset: "cloudflare-pages",
+    preset: "cloudflare-module",
+    cloudflare: {
+      nodeCompat: true,
+    },
   },
   modules: [
     "nitro-cloudflare-dev",
