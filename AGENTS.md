@@ -4,7 +4,7 @@
 
 HN42 is a Nuxt 4 Hacker News reader focused on visual article discovery. It renders top, best, new, and show story feeds, story detail pages with comments and related-story suggestions, user activity pages, and per-story article screenshots.
 
-The app is an older codebase that has been upgraded to Nuxt 4. Keep changes conservative and preserve the existing project shape unless a migration explicitly requires moving files.
+The app is an older codebase that has been upgraded to Nuxt 4 and now uses the Nuxt 4 `app/` source directory. Keep changes conservative and preserve the existing project shape unless a migration explicitly requires moving files.
 
 ## Product Philosophy
 
@@ -33,24 +33,24 @@ HN42 uses Nuxt pages for the main routes and Nitro server routes for Hacker News
 
 Frontend:
 
-- `pages/top.vue`, `pages/best.vue`, `pages/new.vue`, `pages/show.vue`: feed pages.
-- `pages/item/[id].vue`: story detail page with metadata, screenshot, comments, and related stories.
-- `pages/user/[username].vue`: user profile/activity page with posts and comments.
-- `components/story/StoryGrid.vue`: feed layout and loading states.
-- `components/story/StoryCard.vue`: visual story card, source link, screenshot preview, title, and status row.
-- `components/comment/CommentThread.vue`: nested comment renderer.
-- `components/user/UserCommentCard.vue`: user activity comment card.
-- `components/RelatedStories.vue`: related story list on detail pages.
-- `components/layout/Header.vue` and `components/layout/Footer.vue`: shared shell.
+- `app/pages/top.vue`, `app/pages/best.vue`, `app/pages/new.vue`, `app/pages/show.vue`: feed pages.
+- `app/pages/item/[id].vue`: story detail page with metadata, screenshot, comments, and related stories.
+- `app/pages/user/[username].vue`: user profile/activity page with posts and comments.
+- `app/components/story/StoryGrid.vue`: feed layout and loading states.
+- `app/components/story/StoryCard.vue`: visual story card, source link, screenshot preview, title, and status row.
+- `app/components/comment/CommentThread.vue`: nested comment renderer.
+- `app/components/user/UserCommentCard.vue`: user activity comment card.
+- `app/components/RelatedStories.vue`: related story list on detail pages.
+- `app/components/layout/Header.vue` and `app/components/layout/Footer.vue`: shared shell.
 
 Shared client logic:
 
-- `composables/useStories.ts`: feed loading, session-memory cache, and stale refresh state.
-- `composables/useImageLoadQueue.ts`: client-side image load queue.
-- `composables/useFeedTheme.ts`: feed-specific labels, routes, and color theme variables.
-- `composables/useSeedPalette.ts`: deterministic card color palettes.
-- `composables/useSanitizer.ts`: safe rich-text rendering and HN comment post-processing.
-- `composables/useScroll.ts` and `useDebounce.ts`: scroll and timing helpers.
+- `app/composables/useStories.ts`: feed loading, session-memory cache, and stale refresh state.
+- `app/composables/useImageLoadQueue.ts`: client-side image load queue.
+- `app/composables/useFeedTheme.ts`: feed-specific labels, routes, and color theme variables.
+- `app/composables/useSeedPalette.ts`: deterministic card color palettes.
+- `app/composables/useSanitizer.ts`: safe rich-text rendering and HN comment post-processing.
+- `app/composables/useScroll.ts` and `useDebounce.ts`: scroll and timing helpers.
 
 Server/API:
 
@@ -66,8 +66,8 @@ Server/API:
 
 Types and global styling:
 
-- `types/index.ts`: shared story, comment, user, and activity types.
-- `assets/css/main.css`: base typography, rich-text rendering, quote/code/reference styles.
+- `shared/types/index.ts`: shared story, comment, user, and activity types used by the Vue app and Nitro server.
+- `app/assets/css/main.css`: base typography, rich-text rendering, quote/code/reference styles.
 - `tailwind.config.ts`: Tailwind content paths, fonts, dark mode, and extended color tokens.
 
 ## Data Sources And Caching
@@ -128,7 +128,7 @@ Current rendering uses `useSanitizer.ts` to:
 - Autolink safe bare URLs only when HN/Algolia did not already emit an anchor.
 - Style `Edit:`, `Update:`, and `TL;DR:` as note labels.
 
-Nested comments render to a limited depth by default. `pages/item/[id].vue` exposes expand/collapse-all controls, while `CommentThread.vue` shows local reply disclosure when replies are hidden under the depth limit.
+Nested comments render to a limited depth by default. `app/pages/item/[id].vue` exposes expand/collapse-all controls, while `CommentThread.vue` shows local reply disclosure when replies are hidden under the depth limit.
 
 ## Images And Screenshots
 
@@ -148,7 +148,7 @@ Styling approach:
 
 - TailwindCSS is the base styling system.
 - Component-specific CSS generally lives in scoped Vue styles.
-- Shared typography/rich-text styling belongs in `assets/css/main.css`.
+- Shared typography/rich-text styling belongs in `app/assets/css/main.css`.
 - Dark mode uses `@nuxtjs/color-mode` with class-based Tailwind dark mode.
 - Fonts are Inter for body text and Sora for display headings.
 - Prefer the existing feed theme and seed palette helpers over one-off color systems.
@@ -213,6 +213,7 @@ git diff --check
 - Preserve user changes in the worktree. Do not revert unrelated edits.
 - Keep edits scoped to the request and the surrounding module.
 - Prefer compatibility fixes over broad rewrites.
+- For important architectural changes, update `README.md` and `AGENTS.md` in the same change so project documentation and agent guidance stay accurate.
 - For UI changes, preserve the screenshot-first product hierarchy.
 - For UI changes, verify in the in-app browser when feasible.
 - For Cloudflare deployment changes, verify both build and Wrangler dry-run when possible.

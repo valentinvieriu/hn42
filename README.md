@@ -89,12 +89,13 @@ Use `npm run build` as the baseline check before shipping changes.
 
 ## Project Structure
 
-- `pages/`: feed pages, story detail pages, and user activity pages.
-- `components/story/`: story grid and visual story card UI.
-- `components/comment/`: nested comment rendering.
+- `app/pages/`: feed pages, story detail pages, and user activity pages.
+- `app/components/story/`: story grid and visual story card UI.
+- `app/components/comment/`: nested comment rendering.
 - `server/api/`: feed, item, related-story, user, and screenshot APIs.
-- `composables/`: shared client logic such as story loading and sanitization.
-- `assets/css/main.css`: global typography and rich-text styling.
+- `app/composables/`: shared client logic such as story loading and sanitization.
+- `app/assets/css/main.css`: global typography and rich-text styling.
+- `shared/types/index.ts`: story, comment, user, and activity types shared by the app and server.
 - `wrangler.toml`: Cloudflare Workers deployment config.
 
 ## Deployment
