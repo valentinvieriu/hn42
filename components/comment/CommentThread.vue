@@ -168,12 +168,22 @@ const shouldRenderChildren = computed(() => {
 .comment-panel {
   position: relative;
   background:
-    linear-gradient(90deg, var(--seed-surface-strong) 0%, var(--seed-surface) 64%, transparent 100%);
-  border: 1px solid var(--seed-border);
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    linear-gradient(90deg, var(--seed-surface-raised) 0%, var(--seed-surface) 66%, transparent 100%);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 82%, transparent);
   border-left: 4px solid var(--seed-rail);
   border-radius: 0.5rem;
+  box-shadow:
+    0 14px 34px var(--seed-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 0.34);
   overflow: hidden;
   transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dark .comment-panel {
+  box-shadow:
+    0 16px 38px var(--seed-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
 }
 
 .comment-panel::before {
@@ -196,7 +206,8 @@ const shouldRenderChildren = computed(() => {
 
 .comment-max-depth .comment-panel {
   background:
-    linear-gradient(90deg, var(--seed-surface-strong) 0%, var(--seed-surface) 45%, transparent 100%);
+    linear-gradient(135deg, var(--seed-highlight), transparent 32%),
+    linear-gradient(90deg, var(--seed-surface-raised) 0%, var(--seed-surface) 48%, transparent 100%);
 }
 
 .comment-header {
@@ -204,7 +215,9 @@ const shouldRenderChildren = computed(() => {
   flex-wrap: wrap;
   padding: 0.625rem 0.95rem 0.55rem 1rem;
   border-bottom: 1px solid color-mix(in oklch, var(--seed-border), transparent 25%);
-  background: linear-gradient(90deg, color-mix(in oklch, var(--seed-surface-strong), transparent 8%), transparent);
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--seed-surface-strong), transparent 8%), transparent),
+    color-mix(in oklch, var(--seed-metric-bg), transparent 32%);
   font-size: 0.765rem;
   font-weight: 500;
   line-height: 1.3;
@@ -279,7 +292,9 @@ const shouldRenderChildren = computed(() => {
   flex-wrap: wrap;
   padding: 0.55rem 1rem 0.65rem;
   border-top: 1px solid color-mix(in oklch, var(--seed-border), transparent 28%);
-  background: linear-gradient(90deg, color-mix(in oklch, var(--seed-surface), transparent 18%), transparent);
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--seed-surface), transparent 18%), transparent),
+    color-mix(in oklch, var(--seed-metric-bg), transparent 44%);
   font-size: 0.765rem;
   font-weight: 500;
   line-height: 1.25;
@@ -317,13 +332,18 @@ const shouldRenderChildren = computed(() => {
   padding: 0.2rem 0.55rem;
   border: 1px solid color-mix(in oklch, var(--seed-border), transparent 20%);
   border-radius: 999px;
-  background: color-mix(in oklch, var(--seed-surface-strong), transparent 30%);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 46%),
+    var(--seed-metric-bg);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.34) inset;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .reply-action:hover {
-  border-color: var(--seed-border);
-  background: color-mix(in oklch, var(--seed-surface-strong), transparent 14%);
+  border-color: var(--seed-border-strong);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 42%),
+    var(--seed-metric-bg-hover);
 }
 
 .more-replies-button {
@@ -331,13 +351,18 @@ const shouldRenderChildren = computed(() => {
   padding: 0.2rem 0.55rem;
   border: 1px solid color-mix(in oklch, var(--seed-border), transparent 20%);
   border-radius: 999px;
-  background: color-mix(in oklch, var(--seed-surface-strong), transparent 30%);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 46%),
+    var(--seed-metric-bg);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.34) inset;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .more-replies-button:hover {
-  border-color: var(--seed-border);
-  background: color-mix(in oklch, var(--seed-surface-strong), transparent 14%);
+  border-color: var(--seed-border-strong);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 42%),
+    var(--seed-metric-bg-hover);
 }
 
 @media (max-width: 640px) {

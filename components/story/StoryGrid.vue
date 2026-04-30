@@ -49,27 +49,24 @@
             aria-hidden="true"
           >
             <div class="relative aspect-[4/4] shrink-0 overflow-hidden skeleton-shot">
+              <div class="story-card-skeleton-topbar meta-text">
+                <div class="h-3 w-24 rounded-full skeleton-line"></div>
+                <div class="h-3 w-12 rounded-full skeleton-line skeleton-line-muted"></div>
+              </div>
               <div class="absolute inset-x-[14%] top-[16%] h-[10%] rounded-full skeleton-line"></div>
               <div class="absolute inset-x-[10%] top-[31%] h-[7%] rounded-full skeleton-line skeleton-line-muted"></div>
               <div class="absolute inset-x-[18%] top-[43%] h-[7%] rounded-full skeleton-line skeleton-line-muted"></div>
               <div class="absolute left-[11%] right-[26%] top-[62%] h-[20%] rounded-lg skeleton-block"></div>
             </div>
-            <div class="story-card-skeleton-body flex flex-1 flex-col p-4 md:p-5">
-              <div class="flex items-center justify-between gap-3 mb-4">
-                <div class="h-6 w-28 rounded-full skeleton-pill"></div>
-                <div class="h-4 w-4 rounded skeleton-pill"></div>
-              </div>
-              <div class="space-y-2.5 mb-5">
+            <div class="story-card-skeleton-body flex flex-1 flex-col p-4">
+              <div class="space-y-2.5 mb-4">
                 <div class="h-4 rounded-full skeleton-line" :style="{ width: skeletonTitleWidths[(index - 1) % skeletonTitleWidths.length] }"></div>
                 <div class="h-4 w-2/3 rounded-full skeleton-line skeleton-line-muted"></div>
-              </div>
-              <div class="flex items-center justify-between gap-3 mb-4">
-                <div class="h-3 w-20 rounded-full skeleton-line skeleton-line-muted"></div>
-                <div class="h-3 w-24 rounded-full skeleton-line skeleton-line-muted"></div>
+                <div class="h-4 w-5/6 rounded-full skeleton-line skeleton-line-muted"></div>
               </div>
               <div class="mt-auto flex items-center justify-between gap-3">
-                <div class="h-3 w-12 rounded-full skeleton-line skeleton-line-muted"></div>
-                <div class="h-3 w-12 rounded-full skeleton-line skeleton-line-muted"></div>
+                <div class="h-3 w-20 rounded-full skeleton-line skeleton-line-muted"></div>
+                <div class="h-3 w-24 rounded-full skeleton-line skeleton-line-muted"></div>
               </div>
             </div>
           </div>
@@ -189,14 +186,53 @@ useSeoMeta({
 
 .story-card-skeleton {
   position: relative;
-  border: 1px solid var(--seed-border);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 72%, rgb(203 213 225 / 0.5));
+  background:
+    linear-gradient(145deg, var(--seed-highlight), transparent 32%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
   box-shadow:
-    0 18px 46px rgb(15 23 42 / 0.12),
-    inset 0 1px 0 rgb(255 255 255 / 0.24);
+    0 20px 48px var(--seed-shadow),
+    inset 0 1px 0 rgb(255 255 255 / 0.36);
+}
+
+.story-card-skeleton-topbar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--seed-border) 46%, transparent);
+  background:
+    linear-gradient(135deg, var(--seed-highlight), transparent 34%),
+    color-mix(in oklch, var(--seed-surface-raised) 58%, white 18%);
+  padding: 0.7rem 0.95rem 0.62rem;
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
 }
 
 .story-card-skeleton-body {
-  border-top: 1px solid color-mix(in oklch, var(--seed-border) 48%, transparent);
+  border-top: 1px solid color-mix(in oklch, var(--seed-border) 54%, transparent);
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--seed-ring) 68%, transparent) 0, transparent 48%),
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, white 82%, var(--seed-surface-raised) 9%),
+      color-mix(in oklch, rgb(248 250 252) 76%, var(--seed-surface-strong) 14%)
+    );
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+  backdrop-filter: blur(12px) saturate(1.08);
+}
+
+.dark .story-card-skeleton-body {
+  background:
+    radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--seed-ring) 72%, transparent) 0, transparent 48%),
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--seed-surface-raised) 68%, black 14%),
+      color-mix(in oklch, var(--seed-surface-strong) 66%, black 18%)
+    );
 }
 
 .skeleton-shot {
@@ -223,8 +259,11 @@ useSeoMeta({
 .skeleton-line,
 .skeleton-pill,
 .skeleton-block {
-  background: var(--seed-accent-soft);
-  border: 1px solid var(--seed-border);
+  border: 1px solid var(--seed-metric-border);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 48%),
+    var(--seed-metric-bg);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.36) inset;
 }
 
 .skeleton-line-muted {

@@ -100,23 +100,25 @@ const hnCommentUrl = computed(() => `https://news.ycombinator.com/item?id=${prop
 .user-comment-card {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--seed-border);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 82%, transparent);
   border-left: 4px solid var(--seed-rail);
   border-radius: 0.5rem;
   background:
-    linear-gradient(90deg, var(--seed-surface-strong) 0%, var(--seed-surface) 66%, transparent 100%),
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    linear-gradient(90deg, var(--seed-surface-raised) 0%, var(--seed-surface) 66%, transparent 100%),
     rgb(255 255 255 / 0.82);
   box-shadow:
-    0 16px 42px rgb(15 23 42 / 0.08),
+    0 16px 42px var(--seed-shadow),
     inset 0 1px 0 rgb(255 255 255 / 0.38);
 }
 
 .dark .user-comment-card {
   background:
-    linear-gradient(90deg, var(--seed-surface-strong) 0%, var(--seed-surface) 66%, transparent 100%),
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    linear-gradient(90deg, var(--seed-surface-raised) 0%, var(--seed-surface) 66%, transparent 100%),
     rgb(15 23 42 / 0.68);
   box-shadow:
-    0 16px 42px rgb(0 0 0 / 0.22),
+    0 16px 42px var(--seed-shadow),
     inset 0 1px 0 rgb(255 255 255 / 0.08);
 }
 
@@ -136,6 +138,9 @@ const hnCommentUrl = computed(() => `https://news.ycombinator.com/item?id=${prop
   justify-content: space-between;
   gap: 0.8rem;
   border-bottom: 1px solid color-mix(in oklch, var(--seed-border), transparent 22%);
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--seed-surface-strong), transparent 8%), transparent),
+    color-mix(in oklch, var(--seed-metric-bg), transparent 34%);
   padding: 0.8rem 1rem 0.72rem 1.05rem;
 }
 
@@ -189,16 +194,35 @@ const hnCommentUrl = computed(() => `https://news.ycombinator.com/item?id=${prop
   flex-wrap: wrap;
   align-items: center;
   gap: 0.95rem;
+  border-top: 1px solid color-mix(in oklch, var(--seed-border), transparent 34%);
   padding: 0.72rem 1.05rem 0.95rem;
+  background:
+    linear-gradient(90deg, color-mix(in oklch, var(--seed-surface), transparent 18%), transparent),
+    color-mix(in oklch, var(--seed-metric-bg), transparent 46%);
 }
 
 .comment-card-link {
+  min-height: 1.85rem;
+  border: 1px solid color-mix(in oklch, var(--seed-border), transparent 20%);
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 46%),
+    var(--seed-metric-bg);
+  padding: 0.22rem 0.56rem;
   color: var(--seed-author-text);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.34) inset;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
 }
 
 .comment-card-link:hover {
+  border-color: var(--seed-border-strong);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 42%),
+    var(--seed-metric-bg-hover);
   color: var(--seed-accent-strong);
-  text-decoration: underline;
 }
 
 @media (max-width: 640px) {

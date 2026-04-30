@@ -12,9 +12,25 @@
       { 'pointer-events-none': isScrolling }
     ]" 
     :style="cardPaletteStyle">
-    <div class="relative aspect-[4/4] shrink-0 overflow-hidden">
+    <div class="story-card-visual relative aspect-[4/4] shrink-0 overflow-hidden">
+      <div class="story-card-topbar meta-text">
+        <NuxtLink
+          :to="externalStoryUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="story-source-link"
+          :aria-label="`Open ${storyDomain} externally`"
+        >
+          <span class="story-domain-chip">{{ storyDomain }}</span>
+          <LucideExternalLink class="story-source-icon" aria-hidden="true" />
+        </NuxtLink>
+        <span class="story-card-time">
+          <LucideClock class="w-4 h-4" aria-hidden="true" />
+          {{ formatCompactDistanceToNow(story.created_at) }}
+        </span>
+      </div>
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
-        <div class="absolute inset-0 overflow-hidden">
+        <div class="story-card-image-layer absolute inset-0 overflow-hidden">
           <div class="story-visual-fallback absolute inset-0" :style="fallbackVisualStyle" aria-hidden="true">
             <div class="fallback-panels absolute inset-0">
               <span
@@ -29,7 +45,7 @@
           </div>
           <div 
             ref="imageContainerRef"
-            class="relative w-full h-full transform transition-transform duration-500 will-change-transform" 
+            class="story-card-image-track relative w-full h-full transform transition-transform duration-500 will-change-transform"
             :class="{
               scrolling: isTouchDevice && isInView,
               'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
@@ -42,7 +58,7 @@
               loading="eager"
               decoding="async"
               fetchpriority="low"
-              class="w-full object-cover transition-opacity duration-500"
+              class="story-card-image w-full object-cover transition-opacity duration-500"
               :class="imageState === 'loaded' ? 'opacity-100' : 'opacity-0'"
               :aria-hidden="imageState !== 'loaded'"
               @load="handleImageLoad"
@@ -58,60 +74,62 @@
         </div>
       </NuxtLink>
     </div>
-    <div class="story-card-body flex flex-1 flex-col p-4 md:p-5">
-      <div class="flex items-center justify-between gap-3 mb-3">
-        <NuxtLink
-          :to="externalStoryUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="story-domain-chip text-[0.72rem] font-semibold leading-none px-2 py-1.5 rounded-full border"
-          :style="{
-            backgroundColor: 'var(--seed-accent-soft)',
-            borderColor: 'var(--seed-border)',
-            color: 'var(--seed-author-text)'
+    <div class="story-card-body flex flex-1 flex-col p-4 md:p-4">
+      <div class="story-card-body-backdrop" aria-hidden="true">
+        <div
+          ref="bodyImageContainerRef"
+          class="story-card-body-image-track relative w-full h-full transform transition-transform duration-500 will-change-transform"
+          :class="{
+            scrolling: isTouchDevice && isInView,
+            'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
           }"
         >
-          {{ storyDomain }}
-        </NuxtLink>
-        <NuxtLink
-          :to="externalStoryUrl"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Open external link"
-          tabindex="0"
-          class="story-card-external flex items-center"
-        >
-          <LucideExternalLink class="w-4 h-4" />
-        </NuxtLink>
+          <img
+            v-if="queuedImageSrc"
+            alt=""
+            width="400"
+            :src="queuedImageSrc"
+            loading="eager"
+            decoding="async"
+            fetchpriority="low"
+            class="story-card-body-image w-full object-cover transition-opacity duration-500"
+            :class="{ 'is-loaded': imageState === 'loaded' }"
+          />
+        </div>
       </div>
-      <NuxtLink :to="`/item/${story.objectID}`">
-        <h2 class="story-card-title font-display text-[1.05rem] md:text-lg font-semibold leading-snug mb-3 line-clamp-2 md:line-clamp-2 md:min-h-[3.15rem] overflow-hidden">
-          {{ story.title }}
-        </h2>
-      </NuxtLink>
-      <div class="meta-text flex items-center justify-between gap-3 mb-3">
-        <NuxtLink
-          :to="getUserPath(story.author)"
-          class="story-card-muted"
-        >
-          {{ story.author }}
+      <div class="story-card-content">
+        <NuxtLink :to="`/item/${story.objectID}`" class="story-card-title-link">
+          <h2 class="story-card-title font-display text-[1.05rem] md:text-[1.08rem] font-semibold leading-snug line-clamp-3 overflow-hidden">
+            {{ story.title }}
+          </h2>
         </NuxtLink>
-        <span class="story-card-muted flex items-center gap-1">
-          <LucideClock class="w-4 h-4" aria-label="Time since created" />
-          {{ formatDistanceToNow(new Date(story.created_at), { addSuffix: true }) }}
-        </span>
-      </div>
-      <div class="meta-text mt-auto flex items-center justify-between gap-3">
-        <span :class="['story-card-metric flex items-center gap-1', pointsToneClass]">
-          <LucideTrendingUp class="w-4 h-4" />
-          {{ story.points }}
-        </span>
-        <span :class="['story-card-metric flex items-center gap-1', commentsToneClass]">
-          <LucideMessageSquare class="w-4 h-4" />
-          <NuxtLink :to="`/item/${story.objectID}`" class="cursor-pointer">
-            {{ story.num_comments }}
+        <div class="story-card-status-row meta-text">
+          <NuxtLink
+            :to="getUserPath(story.author)"
+            class="story-card-author"
+          >
+            {{ story.author }}
           </NuxtLink>
-        </span>
+          <div class="story-card-stat-group">
+            <span
+              :class="['story-card-metric', pointsToneClass]"
+              :aria-label="`${story.points} points`"
+            >
+              <LucideTrendingUp class="w-4 h-4" aria-hidden="true" />
+              <span>{{ story.points }}</span>
+              <span class="story-card-metric-label">pts</span>
+            </span>
+            <span class="story-card-stat-separator" aria-hidden="true"></span>
+            <NuxtLink
+              :to="`/item/${story.objectID}`"
+              :class="['story-card-metric', 'story-card-metric-link', commentsToneClass]"
+              :aria-label="`${story.num_comments} comments on ${story.title}`"
+            >
+              <LucideMessageSquare class="w-4 h-4" aria-hidden="true" />
+              <span>{{ story.num_comments }}</span>
+            </NuxtLink>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -120,7 +138,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from '@lucide/vue'
-import { formatDistanceToNow } from 'date-fns'
 import { useScroll } from '~/composables/useScroll'
 import type { Story } from '~/types'
 import { useRouter } from 'vue-router'
@@ -144,6 +161,43 @@ const getDomainFromUrl = (url: string): string => {
 
 const getHnItemUrl = (id: string) => `https://news.ycombinator.com/item?id=${id}`
 const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
+
+const formatCompactDistanceToNow = (dateValue: string): string => {
+  const timestamp = new Date(dateValue).getTime()
+
+  if (Number.isNaN(timestamp)) {
+    return ''
+  }
+
+  const diffSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
+  const minute = 60
+  const hour = minute * 60
+  const day = hour * 24
+  const month = day * 30
+  const year = day * 365
+
+  if (diffSeconds < minute) {
+    return 'now'
+  }
+
+  if (diffSeconds < hour) {
+    return `${Math.floor(diffSeconds / minute)}m ago`
+  }
+
+  if (diffSeconds < day) {
+    return `${Math.floor(diffSeconds / hour)}h ago`
+  }
+
+  if (diffSeconds < month) {
+    return `${Math.floor(diffSeconds / day)}d ago`
+  }
+
+  if (diffSeconds < year) {
+    return `${Math.floor(diffSeconds / month)}mo ago`
+  }
+
+  return `${Math.floor(diffSeconds / year)}y ago`
+}
 
 const colorMode = useColorMode()
 
@@ -265,6 +319,7 @@ const isTouchDevice = ref(false)
 // Refs for DOM elements
 const cardRef = ref<HTMLElement | null>(null)
 const imageContainerRef = ref<HTMLElement | null>(null)
+const bodyImageContainerRef = ref<HTMLElement | null>(null)
 const queuedImageSrc = ref<string | null>(null)
 const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>('queued')
 const hasRequestedImageLoad = ref(false)
@@ -334,6 +389,16 @@ const updateWindowHeight = useDebounce(() => {
   windowHeight = getWindowHeight()
 }, 150);
 
+const setImageTrackTransform = (transform: string) => {
+  if (imageContainerRef.value) {
+    imageContainerRef.value.style.transform = transform
+  }
+
+  if (bodyImageContainerRef.value) {
+    bodyImageContainerRef.value.style.transform = transform
+  }
+}
+
 const handleScroll = () => {
   if (!isInView.value || !isTouchDevice.value || !imageContainerRef.value) return;
 
@@ -349,7 +414,7 @@ const handleScroll = () => {
   scrollProgress.value = visibleRatio;
 
   // Apply transform using translate3d for better performance
-  imageContainerRef.value.style.transform = `translate3d(0, ${-50 * scrollProgress.value}%, 0)`;
+  setImageTrackTransform(`translate3d(0, ${-50 * scrollProgress.value}%, 0)`);
 };
 
 const animate = () => {
@@ -390,9 +455,7 @@ onMounted(() => {
           isInView.value = entry.isIntersecting;
           if (entry.isIntersecting) {
             // Reset transform when card comes into view
-            if (imageContainerRef.value) {
-              imageContainerRef.value.style.transform = 'translate3d(0, 0%, 0)';
-            }
+            setImageTrackTransform('translate3d(0, 0%, 0)')
             if (!animationFrameId) {
               animate();
             }
@@ -435,11 +498,25 @@ onBeforeUnmount(() => {
 <style scoped>
 .story-card {
   position: relative;
-  border: 1px solid color-mix(in oklch, var(--seed-border) 58%, rgb(203 213 225 / 0.62));
+  border: 1px solid color-mix(in oklch, var(--seed-border) 70%, rgb(203 213 225 / 0.58));
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 54%, transparent), transparent 32%),
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--seed-surface-raised) 26%, transparent),
+      color-mix(in oklch, var(--seed-surface) 18%, transparent)
+    );
   box-shadow:
-    0 18px 44px rgb(15 23 42 / 0.12),
+    0 20px 48px var(--seed-shadow),
+    0 5px 18px rgb(15 23 42 / 0.055),
     0 1px 0 rgb(255 255 255 / 0.46) inset;
   transform: translateZ(0);
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.story-card:focus-visible {
+  outline: 3px solid var(--seed-ring);
+  outline-offset: 4px;
 }
 
 .story-card > * {
@@ -450,105 +527,376 @@ onBeforeUnmount(() => {
 .story-card::after {
   content: '';
   position: absolute;
-  inset: 1px;
+  inset: 0;
   z-index: 1;
   pointer-events: none;
-  border-radius: calc(1rem - 1px);
+  border-radius: inherit;
   background:
-    linear-gradient(145deg, rgb(255 255 255 / 0.22), transparent 35%, transparent 100%),
-    radial-gradient(circle at 100% 100%, var(--seed-ring) 0, transparent 46%),
-    radial-gradient(circle at 12% 0%, rgb(255 255 255 / 0.28), transparent 28%);
-  opacity: 0.38;
+    linear-gradient(145deg, rgb(255 255 255 / 0.34), transparent 34%, transparent 100%),
+    radial-gradient(circle at 102% 96%, var(--seed-ring) 0, transparent 40%),
+    radial-gradient(circle at 10% 0%, var(--seed-highlight) 0, transparent 30%);
+  opacity: 0.24;
 }
 
 .dark .story-card {
   border-color: var(--seed-border);
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 50%, transparent), transparent 34%),
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--seed-surface-raised) 34%, transparent),
+      color-mix(in oklch, var(--seed-surface) 24%, transparent)
+    );
   box-shadow:
-    0 18px 48px rgb(0 0 0 / 0.32),
+    0 22px 54px var(--seed-shadow),
+    0 5px 18px rgb(0 0 0 / 0.24),
     0 1px 0 rgb(255 255 255 / 0.08) inset;
 }
 
 .dark .story-card::after {
   background:
-    linear-gradient(145deg, rgb(255 255 255 / 0.08), transparent 38%, transparent 100%),
-    radial-gradient(circle at 100% 100%, var(--seed-ring) 0, transparent 46%),
-    radial-gradient(circle at 12% 0%, rgb(255 255 255 / 0.1), transparent 28%);
-  opacity: 0.86;
+    linear-gradient(145deg, rgb(255 255 255 / 0.09), transparent 38%, transparent 100%),
+    radial-gradient(circle at 102% 96%, var(--seed-ring) 0, transparent 42%),
+    radial-gradient(circle at 12% 0%, var(--seed-highlight) 0, transparent 30%);
+  opacity: 0.5;
+}
+
+.story-card-topbar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 5;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: var(--story-card-topbar-height);
+  border-bottom: 1px solid color-mix(in oklch, var(--seed-border) 46%, transparent);
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--seed-highlight) 72%, transparent), transparent 46%),
+    color-mix(in oklch, var(--seed-surface-raised) 58%, white 18%);
+  padding: 0.68rem 0.95rem 0.6rem;
+  -webkit-backdrop-filter: blur(18px) saturate(1.35);
+  backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 0.08);
+}
+
+.dark .story-card-topbar {
+  background:
+    linear-gradient(135deg, color-mix(in oklch, var(--seed-highlight) 54%, transparent), transparent 46%),
+    color-mix(in oklch, var(--seed-surface-raised) 46%, black 20%);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.22);
+}
+
+.story-card-visual {
+  --story-card-topbar-height: 2.75rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--seed-border) 42%, transparent);
+}
+
+.story-card-image-layer {
+  box-sizing: border-box;
+  padding-top: var(--story-card-topbar-height);
+}
+
+.story-card-image-track {
+  transform-origin: center top;
+}
+
+.story-card-image {
+  display: block;
+  min-height: 100%;
 }
 
 .story-card-body {
-  border-top: 1px solid color-mix(in oklch, var(--seed-border) 32%, rgb(226 232 240 / 0.82));
+  position: relative;
+  gap: 0.7rem;
+  isolation: isolate;
+  min-height: 9.65rem;
+  overflow: hidden;
   color: rgb(15 23 42);
+  background: transparent;
+  -webkit-backdrop-filter: blur(4px) saturate(1.08);
+  backdrop-filter: blur(4px) saturate(1.08);
+  box-shadow:
+    0 -1px 0 color-mix(in oklch, white 68%, transparent) inset,
+    0 1px 0 color-mix(in oklch, var(--seed-border) 38%, transparent) inset;
+}
+
+.story-card-body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(10px) saturate(1.12);
+  backdrop-filter: blur(10px) saturate(1.12);
   background:
+    linear-gradient(135deg, oklch(100% 0 var(--seed-hue) / 0.38), transparent 48%),
+    radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--seed-ring) 38%, transparent) 0, transparent 42%),
     linear-gradient(
       180deg,
-      color-mix(in oklch, white 92%, var(--seed-surface) 8%) 0%,
-      color-mix(in oklch, rgb(248 250 252) 88%, var(--seed-surface-strong) 12%) 100%
+      oklch(99% 0.004 var(--seed-hue) / 0.78) 0%,
+      oklch(96.8% 0.012 var(--seed-hue) / 0.7) 100%
     );
 }
 
 .dark .story-card-body {
   color: rgb(241 245 249);
-  border-top-color: color-mix(in oklch, var(--seed-border) 58%, transparent);
+  background: transparent;
+  -webkit-backdrop-filter: blur(5px) saturate(1.08);
+  backdrop-filter: blur(5px) saturate(1.08);
+  box-shadow:
+    0 -1px 0 rgb(255 255 255 / 0.08) inset,
+    0 1px 0 color-mix(in oklch, var(--seed-border) 44%, transparent) inset;
+}
+
+.dark .story-card-body::before {
   background:
-    linear-gradient(180deg, color-mix(in oklch, var(--seed-surface) 72%, black) 0%, color-mix(in oklch, var(--seed-surface-strong) 76%, black) 100%);
+    linear-gradient(135deg, oklch(88% 0.04 var(--seed-hue) / 0.1), transparent 48%),
+    radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--seed-ring) 42%, transparent) 0, transparent 48%),
+    linear-gradient(
+      180deg,
+      oklch(22% 0.024 var(--seed-hue) / 0.82) 0%,
+      oklch(16% 0.028 var(--seed-hue) / 0.86) 100%
+    );
+}
+
+.story-card-body-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.story-card-body-image-track {
+  min-height: 14rem;
+  transform-origin: center top;
+}
+
+.story-card-body-image {
+  display: block;
+  min-height: 18rem;
+  filter: blur(7px) saturate(1.16) contrast(0.94);
+  opacity: 0;
+  transform: scale(1.05);
+}
+
+.story-card-body-image.is-loaded {
+  opacity: 0.18;
+}
+
+.dark .story-card-body-image.is-loaded {
+  opacity: 0.24;
+}
+
+.story-source-link {
+  display: inline-flex;
+  min-width: 0;
+  max-width: min(72%, 16rem);
+  min-height: 1.35rem;
+  align-items: center;
+  gap: 0.32rem;
+  color: var(--seed-author-text);
+  font-weight: 700;
+  line-height: 1.1;
+  transition:
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.story-source-link:hover,
+.story-source-link:focus-visible {
+  color: var(--seed-accent-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.dark .story-source-link {
+  color: color-mix(in oklch, var(--seed-author-text) 90%, white);
 }
 
 .story-domain-chip {
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.62) inset;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dark .story-domain-chip {
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.08) inset;
+.story-source-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  opacity: 0.7;
+}
+
+.story-card-content {
+  display: flex;
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.story-card-title-link {
+  display: block;
+  min-width: 0;
 }
 
 .story-card-title {
+  margin-bottom: 0;
   color: rgb(15 23 42);
+  transition: color 180ms ease;
+}
+
+.story-card-title-link:hover .story-card-title,
+.story-card-title-link:focus-visible .story-card-title {
+  color: var(--seed-accent-strong);
 }
 
 .dark .story-card-title {
   color: rgb(241 245 249);
 }
 
-.story-card-muted {
-  color: rgb(71 85 105);
-}
-
-.dark .story-card-muted {
-  color: rgb(203 213 225 / 0.82);
-}
-
-.story-card-external {
-  color: rgb(51 65 85);
-  transition: color 180ms ease;
-}
-
-.story-card-external:hover,
-.story-card-external:focus-visible {
+.dark .story-card-title-link:hover .story-card-title,
+.dark .story-card-title-link:focus-visible .story-card-title {
   color: var(--seed-accent-strong);
 }
 
-.dark .story-card-external {
+.story-card-status-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: auto;
+  border-top: 1px solid color-mix(in oklch, var(--seed-border) 38%, transparent);
+  padding-top: 0.7rem;
+}
+
+.story-card-author,
+.story-card-time {
+  color: rgb(71 85 105);
+  min-width: 0;
+}
+
+.story-card-author {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.story-card-author:hover,
+.story-card-author:focus-visible {
+  color: var(--seed-accent-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
+}
+
+.story-card-time {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.3rem;
+  color: rgb(71 85 105);
+  white-space: nowrap;
+}
+
+.dark .story-card-author,
+.dark .story-card-time {
   color: rgb(203 213 225 / 0.82);
 }
 
+.story-card-stat-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.62rem;
+  margin-top: auto;
+}
+
+.story-card-stat-separator {
+  width: 1px;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--seed-border) 70%, transparent);
+  opacity: 0.82;
+}
+
+.dark .story-card-stat-separator {
+  background: color-mix(in oklch, var(--seed-border) 78%, transparent);
+  opacity: 0.72;
+}
+
 .story-card-metric {
-  font-weight: 600;
+  display: inline-flex;
+  min-width: 0;
+  min-height: 1.45rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.24rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.story-card-metric svg {
+  flex: 0 0 auto;
+}
+
+.story-card-metric-label {
+  color: currentColor;
+  font-size: 0.72rem;
+  font-weight: 700;
+  opacity: 0.68;
+}
+
+.story-card-metric-link:hover,
+.story-card-metric-link:focus-visible {
+  color: var(--seed-accent-strong);
+  text-decoration: underline;
+  text-decoration-thickness: 0.08em;
+  text-underline-offset: 0.18em;
 }
 
 @media (hover: hover) and (pointer: fine) {
   .story-card:hover {
-    border-color: var(--seed-accent);
+    border-color: var(--seed-border-strong);
     box-shadow:
-      0 24px 62px rgb(15 23 42 / 0.18),
-      0 1px 0 rgb(255 255 255 / 0.5) inset;
+      0 28px 64px var(--seed-shadow-strong),
+      0 8px 24px rgb(15 23 42 / 0.075),
+      0 1px 0 rgb(255 255 255 / 0.56) inset;
     transform: translateY(-3px);
   }
 
   .dark .story-card:hover {
     box-shadow:
-      0 24px 62px rgb(0 0 0 / 0.44),
+      0 30px 68px var(--seed-shadow-strong),
+      0 8px 26px rgb(0 0 0 / 0.3),
       0 1px 0 rgb(255 255 255 / 0.1) inset;
+  }
+}
+
+@media (max-width: 430px) {
+  .story-card-status-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .story-card-stat-group {
+    justify-content: flex-start;
+    width: 100%;
   }
 }
 

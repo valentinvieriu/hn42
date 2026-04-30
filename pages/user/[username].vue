@@ -582,19 +582,25 @@ useSeoMeta({
 
 .user-summary-panel {
   align-self: start;
-  border: 1px solid var(--seed-border);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 82%, transparent);
   border-radius: 0.5rem;
-  background: rgb(255 255 255 / 0.74);
+  background:
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface)),
+    rgb(255 255 255 / 0.74);
   padding: 1rem;
   box-shadow:
-    0 16px 42px rgb(15 23 42 / 0.08),
+    0 16px 42px var(--seed-shadow),
     inset 0 1px 0 rgb(255 255 255 / 0.34);
 }
 
 .dark .user-summary-panel {
-  background: rgb(15 23 42 / 0.62);
+  background:
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface)),
+    rgb(15 23 42 / 0.62);
   box-shadow:
-    0 16px 42px rgb(0 0 0 / 0.24),
+    0 16px 42px var(--seed-shadow),
     inset 0 1px 0 rgb(255 255 255 / 0.08);
 }
 
@@ -608,8 +614,12 @@ useSeoMeta({
 .user-stat {
   min-width: 0;
   border-radius: 0.45rem;
-  background: var(--seed-accent-soft);
+  border: 1px solid var(--seed-metric-border);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 48%),
+    var(--seed-metric-bg);
   padding: 0.8rem;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.34) inset;
 }
 
 .user-stat-label,
@@ -672,10 +682,13 @@ useSeoMeta({
   max-width: 100%;
   gap: 0.25rem;
   overflow-x: auto;
-  border: 1px solid var(--seed-border);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 82%, transparent);
   border-radius: 0.5rem;
-  background: rgb(255 255 255 / 0.68);
+  background:
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    rgb(255 255 255 / 0.68);
   padding: 0.25rem;
+  box-shadow: 0 12px 30px var(--seed-shadow);
   scrollbar-width: none;
 }
 
@@ -684,7 +697,9 @@ useSeoMeta({
 }
 
 .dark .activity-tabs {
-  background: rgb(15 23 42 / 0.62);
+  background:
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    rgb(15 23 42 / 0.62);
 }
 
 .activity-tab {
@@ -714,7 +729,9 @@ useSeoMeta({
 
 .activity-tab-active,
 .dark .activity-tab-active {
-  background: var(--seed-accent-soft);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 46%),
+    var(--seed-metric-bg-hover);
   color: var(--seed-accent-strong);
 }
 
@@ -765,18 +782,25 @@ useSeoMeta({
 
 .activity-load-button {
   min-height: 2.35rem;
-  border: 1px solid var(--seed-border);
+  border: 1px solid var(--seed-metric-border);
   border-radius: 0.45rem;
-  background: rgb(255 255 255 / 0.72);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 46%),
+    var(--seed-metric-bg);
   padding: 0.55rem 0.95rem;
   color: var(--seed-author-text);
   font-size: 0.84rem;
   font-weight: 700;
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.34) inset,
+    0 10px 24px var(--seed-shadow);
 }
 
 .activity-load-button:hover {
-  border-color: var(--seed-accent);
-  background: var(--seed-accent-soft);
+  border-color: var(--seed-border-strong);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 42%),
+    var(--seed-metric-bg-hover);
   color: var(--seed-accent-strong);
 }
 
@@ -791,14 +815,21 @@ useSeoMeta({
 .user-post-skeleton,
 .user-comment-skeleton {
   overflow: hidden;
-  border: 1px solid var(--seed-border);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 82%, transparent);
   border-radius: 0.5rem;
-  background: rgb(255 255 255 / 0.72);
+  background:
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface)),
+    rgb(255 255 255 / 0.72);
+  box-shadow: 0 14px 34px var(--seed-shadow);
 }
 
 .dark .user-post-skeleton,
 .dark .user-comment-skeleton {
-  background: rgb(15 23 42 / 0.62);
+  background:
+    linear-gradient(135deg, var(--seed-highlight), transparent 36%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface)),
+    rgb(15 23 42 / 0.62);
 }
 
 .user-post-skeleton-shot {
@@ -820,7 +851,10 @@ useSeoMeta({
   display: block;
   height: 0.7rem;
   border-radius: 999px;
-  background: color-mix(in oklch, var(--seed-border), transparent 32%);
+  background:
+    linear-gradient(180deg, var(--seed-highlight), transparent 48%),
+    var(--seed-metric-bg);
+  border: 1px solid var(--seed-metric-border);
 }
 
 @media (min-width: 900px) {
