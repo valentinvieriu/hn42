@@ -196,7 +196,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
   LucideClock,
@@ -206,7 +205,7 @@ import {
   LucideRefreshCw,
   LucideTrendingUp,
 } from '@lucide/vue'
-import type { HNUserProfile, UserActivityPage, UserComment, UserPost } from '~/types'
+import type { HNUserProfile, UserActivityPage, UserComment, UserPost } from '#shared/types'
 import { useSanitizer } from '~/composables/useSanitizer'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
@@ -252,7 +251,7 @@ const profileDataKey = computed(() => `user-profile:${username.value || 'missing
 const postsDataKey = computed(() => `user-posts:${username.value || 'missing'}:${PAGE_SIZE}`)
 const commentsDataKey = computed(() => `user-comments:${username.value || 'missing'}:${PAGE_SIZE}`)
 
-const { data: profile, pending: profilePending, error: profileFetchError } = await useAsyncData<HNUserProfile | null>(
+const { data: profile, pending: profilePending, error: profileFetchError } = useAsyncData<HNUserProfile | null>(
   profileDataKey,
   async () => {
     if (!username.value) {
@@ -267,7 +266,7 @@ const { data: profile, pending: profilePending, error: profileFetchError } = awa
   },
 )
 
-const { data: initialPostsData, pending: postsPending, error: postsFetchError } = await useAsyncData<UserActivityPage<UserPost> | null>(
+const { data: initialPostsData, pending: postsPending, error: postsFetchError } = useAsyncData<UserActivityPage<UserPost> | null>(
   postsDataKey,
   async () => {
     if (!username.value) {
@@ -287,7 +286,7 @@ const { data: initialPostsData, pending: postsPending, error: postsFetchError } 
   },
 )
 
-const { data: initialCommentsData, pending: commentsPending, error: commentsFetchError } = await useAsyncData<UserActivityPage<UserComment> | null>(
+const { data: initialCommentsData, pending: commentsPending, error: commentsFetchError } = useAsyncData<UserActivityPage<UserComment> | null>(
   commentsDataKey,
   async () => {
     if (!username.value) {

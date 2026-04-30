@@ -130,8 +130,7 @@
 import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from '@lucide/vue'
 import { useScroll } from '~/composables/useScroll'
-import type { Story } from '~/types'
-import { useRouter } from 'vue-router'
+import type { Story } from '#shared/types'
 import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
 import { useImageLoadQueue, type ImageLoadQueueHandle } from '~/composables/useImageLoadQueue'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'

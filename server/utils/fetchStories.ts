@@ -1,4 +1,4 @@
-import type { HNHit } from '~/types'
+import type { HNHit } from '#shared/types'
 
 export const fetchStories = async (baseUrl: string, queryParams: Record<string, string>) => {
   try {

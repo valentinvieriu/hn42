@@ -1,4 +1,4 @@
-import type { UserActivityPage, UserComment, UserPost } from '~/types'
+import type { UserActivityPage, UserComment, UserPost } from '#shared/types'
 
 const ALGOLIA_SEARCH_BY_DATE_URL = 'https://hn.algolia.com/api/v1/search_by_date'
 const ALGOLIA_RESULT_WINDOW = 1000

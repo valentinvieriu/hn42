@@ -59,7 +59,7 @@
 import { computed } from 'vue'
 import { formatDistanceToNow } from 'date-fns'
 import { LucideClock, LucideExternalLink, LucideMessageSquare, LucideTrendingUp } from '@lucide/vue'
-import type { UserComment } from '~/types'
+import type { UserComment } from '#shared/types'
 import { useSanitizer } from '~/composables/useSanitizer'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 

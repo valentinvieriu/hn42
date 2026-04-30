@@ -4,12 +4,8 @@ import defaultTheme from 'tailwindcss/defaultTheme'
 export default {
   darkMode: 'class',
   content: [
-    './components/**/*.{vue,js,ts}',
-    './layouts/**/*.vue',
-    './pages/**/*.vue',
-    './composables/**/*.{js,ts}',
-    './plugins/**/*.{js,ts}',
-    './app.vue',
+    './app/**/*.{vue,js,ts}',
+    './shared/**/*.{js,ts}',
   ],
   theme: {
     extend: {

@@ -1,5 +1,5 @@
 import { createError, defineEventHandler, getRouterParams, setHeader } from 'h3'
-import type { HNUserProfile } from '~/types'
+import type { HNUserProfile } from '#shared/types'
 import { isValidHNUsername } from '../../utils/userActivity'
 
 type AlgoliaUserProfile = {

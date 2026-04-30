@@ -1,7 +1,7 @@
 import { computed, ref, watch } from 'vue';
 import { useFetch } from 'nuxt/app';
 import type { Ref } from 'vue';
-import type { Story } from '~/types';
+import type { Story } from '#shared/types';
 
 type StoryEndpoint = 'best' | 'new' | 'show' | 'top';
 

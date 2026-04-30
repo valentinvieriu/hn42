@@ -1,5 +1,5 @@
 import { defineEventHandler, getRouterParams, createError, setHeader } from 'h3'
-import type { Comment, HNResponse } from '~/types'
+import type { Comment, HNResponse } from '#shared/types'
 
 type StoryDetail = {
   id: number

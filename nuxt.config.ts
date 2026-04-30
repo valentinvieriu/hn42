@@ -84,7 +84,7 @@ export default defineNuxtConfig({
     }
   },
   tailwindcss: {
-    configPath: '~/tailwind.config',
+    configPath: 'tailwind.config',
     exposeConfig: true,
   },
 

@@ -109,7 +109,6 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { useRoute } from 'vue-router';
 import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp } from '@lucide/vue';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
@@ -150,7 +149,7 @@ const storyId = computed(() => normalizeStoryId(route.params.id))
 const storyDataKey = computed(() => `story-detail:${storyId.value ?? 'missing'}`)
 const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
 
-const { data: storyData, pending, error: fetchError } = await useAsyncData<StoryDetail | null>(
+const { data: storyData, pending, error: fetchError } = useAsyncData<StoryDetail | null>(
   storyDataKey,
   async () => {
     const id = storyId.value
@@ -163,6 +162,7 @@ const { data: storyData, pending, error: fetchError } = await useAsyncData<Story
   },
   {
     default: () => null,
+    watch: [storyId],
   },
 )
 
