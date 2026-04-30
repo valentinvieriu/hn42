@@ -61,7 +61,7 @@
     <div class="story-card-body flex flex-1 flex-col p-4 md:p-5">
       <div class="flex items-center justify-between gap-3 mb-3">
         <NuxtLink
-          :to="story.url"
+          :to="externalStoryUrl"
           target="_blank"
           rel="noopener noreferrer"
           class="story-domain-chip text-[0.72rem] font-semibold leading-none px-2 py-1.5 rounded-full border"
@@ -71,10 +71,10 @@
             color: 'var(--seed-author-text)'
           }"
         >
-          {{ getDomainFromUrl(story.url) }}
+          {{ storyDomain }}
         </NuxtLink>
         <NuxtLink
-          :to="story.url"
+          :to="externalStoryUrl"
           target="_blank"
           rel="noopener noreferrer"
           aria-label="Open external link"
@@ -90,14 +90,12 @@
         </h2>
       </NuxtLink>
       <div class="meta-text flex items-center justify-between gap-3 mb-3">
-        <a 
-          :href="`https://news.ycombinator.com/user?id=${story.author}`" 
-          target="_blank" 
-          rel="noopener noreferrer"
+        <NuxtLink
+          :to="getUserPath(story.author)"
           class="story-card-muted"
         >
           {{ story.author }}
-        </a>
+        </NuxtLink>
         <span class="story-card-muted flex items-center gap-1">
           <LucideClock class="w-4 h-4" aria-label="Time since created" />
           {{ formatDistanceToNow(new Date(story.created_at), { addSuffix: true }) }}
@@ -140,9 +138,12 @@ const getDomainFromUrl = (url: string): string => {
   try {
     return new URL(url).hostname
   } catch {
-    return ''
+    return 'news.ycombinator.com'
   }
 }
+
+const getHnItemUrl = (id: string) => `https://news.ycombinator.com/item?id=${id}`
+const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
 
 const colorMode = useColorMode()
 
@@ -150,7 +151,9 @@ const cardPaletteStyle = computed(() => {
   return getSeedPaletteStyle(props.story.objectID, colorMode.value === 'dark' ? 'dark' : 'light')
 })
 
-const storySeed = computed(() => `${props.story.objectID}:${props.story.title}:${props.story.url}`)
+const externalStoryUrl = computed(() => props.story.url || getHnItemUrl(props.story.objectID))
+const storyDomain = computed(() => getDomainFromUrl(externalStoryUrl.value))
+const storySeed = computed(() => `${props.story.objectID}:${props.story.title}:${externalStoryUrl.value}`)
 
 const hashSeed = (seed: string): number => {
   let hash = 2166136261
@@ -169,7 +172,7 @@ const seededRange = (salt: string, min: number, max: number): number => {
 }
 
 const fallbackInitials = computed(() => {
-  const domain = getDomainFromUrl(props.story.url).replace(/^www\./, '')
+  const domain = storyDomain.value.replace(/^www\./, '')
   const domainLabel = domain.split('.')[0] || props.story.title || 'HN'
   const compactLabel = domainLabel.replace(/[^a-z0-9]/gi, '')
 

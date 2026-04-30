@@ -14,6 +14,44 @@ export interface Story extends BaseStory {
   screenshotUrl: string;
 }
 
+export interface HNUserProfile {
+  username: string;
+  created_at: string;
+  karma: number;
+  about: string | null;
+}
+
+export interface UserPost extends Story {
+  created_at_i?: number;
+  story_text?: string | null;
+}
+
+export interface UserComment {
+  id: number;
+  objectID: string;
+  author: string;
+  created_at: string;
+  created_at_i?: number;
+  text: string;
+  story_id: string;
+  story_title: string;
+  story_url: string;
+  parent_id: number | null;
+  points: number;
+}
+
+export interface UserActivityPage<T> {
+  items: T[];
+  page: number;
+  hitsPerPage: number;
+  nbHits: number;
+  nbPages: number;
+  nextPage: number | null;
+  nextCursor: number | null;
+  hasMore: boolean;
+  exhaustiveNbHits?: boolean;
+}
+
 export interface Comment {
   id: number;
   created_at: string;

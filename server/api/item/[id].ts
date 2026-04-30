@@ -1,26 +1,64 @@
-import { defineEventHandler, getRouterParams, createError } from 'h3'
-import type { HNResponse, Story } from '~/types'
+import { defineEventHandler, getRouterParams, createError, setHeader } from 'h3'
+import type { Comment, HNResponse } from '~/types'
+
+type StoryDetail = {
+  id: number
+  created_at: string
+  author: string
+  title: string
+  url: string
+  text: string | null
+  points: number
+  parent_id: number | null
+  children: Comment[]
+}
+
+const isValidStoryId = (id: unknown): id is string => {
+  return typeof id === 'string' && /^\d+$/.test(id)
+}
+
+const getStatusCode = (error: unknown): number | null => {
+  if (!error || typeof error !== 'object') {
+    return null
+  }
+
+  if ('statusCode' in error && typeof error.statusCode === 'number') {
+    return error.statusCode
+  }
+
+  if ('response' in error && error.response && typeof error.response === 'object') {
+    const response = error.response as { status?: unknown }
+
+    if (typeof response.status === 'number') {
+      return response.status
+    }
+  }
+
+  return null
+}
 
 export default defineEventHandler(async (event) => {
-  const params = getRouterParams(event) // Retrieve route parameters
-  const id = params.id // Extract the id from route parameters
+  const params = getRouterParams(event)
+  const id = params.id
 
-  console.log('Received ID:', id) // Log the received ID
-  if (!id) {
+  if (!isValidStoryId(id)) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Story ID is required',
+      statusMessage: 'Valid story ID is required',
     })
   }
 
   try {
-    const hnResponse: HNResponse = await $fetch(`http://hn.algolia.com/api/v1/items/${id}`)
+    const hnResponse: HNResponse = await $fetch(`https://hn.algolia.com/api/v1/items/${id}`)
 
-    if (!hnResponse) {
-      throw new Error('No data found')
+    if (!hnResponse?.id) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Story not found',
+      })
     }
 
-    const story: Story = {
+    const story: StoryDetail = {
       id: hnResponse.id,
       created_at: hnResponse.created_at,
       author: hnResponse.author,
@@ -32,15 +70,17 @@ export default defineEventHandler(async (event) => {
       children: hnResponse.children || [],
     }
 
-    const response = new Response(JSON.stringify(story), {
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'public, max-age=120, stale-while-revalidate',
-      },
-    })
+    setHeader(event, 'Cache-Control', 'public, max-age=120, stale-while-revalidate')
 
-    return response
+    return story
   } catch (error) {
+    if (getStatusCode(error) === 404) {
+      throw createError({
+        statusCode: 404,
+        statusMessage: 'Story not found',
+      })
+    }
+
     console.error('Error fetching story:', error)
     throw createError({
       statusCode: 500,

@@ -31,15 +31,13 @@
           </a>
           <div :class="['meta-text', 'mb-4', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
             by
-            <a
-              :href="`https://news.ycombinator.com/user?id=${story.author}`"
-              target="_blank"
-              rel="noopener noreferrer"
+            <NuxtLink
+              :to="getUserPath(story.author)"
               :class="colorMode.value === 'dark' ? 'text-gray-300 hover:text-gray-100' : 'text-gray-700 hover:text-gray-900'"
               class="font-medium hover:underline"
             >
               {{ story.author }}
-            </a>
+            </NuxtLink>
             • {{ timeAgo }}
           </div>
           <div class="meta-text flex items-center gap-4 mb-6">
@@ -61,15 +59,15 @@
             v-html="sanitizedText"
           ></div>
           <img
-                :alt="story.title"
-                width="600"
-                :src="`/api/screenshot/${route.params.id}`" 
-                loading="lazy"
-                decoding="async"
-                class="hidden md:block w-full h-auto rounded-lg shadow-md mb-8"
+            :alt="story.title"
+            width="600"
+            :src="screenshotSrc"
+            loading="lazy"
+            decoding="async"
+            class="hidden md:block w-full h-auto rounded-lg shadow-md mb-8"
           />
-          
-          <RelatedStories :story-id="storyId" />
+
+          <RelatedStories v-if="storyId" :story-id="storyId" />
         </article>
         <aside class="min-w-0">
           <div class="comments-toolbar">
@@ -110,39 +108,82 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watchEffect } from 'vue';
+import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp } from '@lucide/vue';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 
 const route = useRoute();
-const storyId = computed(() => String(route.params.id));
 const colorMode = useColorMode();
-const story = ref(null);
-const error = ref(null);
-const isLoading = ref(true);
 const expandAllComments = ref(false);
 
 type StoryComment = {
+  id?: number
+  created_at?: string
   author?: string
+  text?: string
+  points?: number
+  parent_id?: number | null
   children?: StoryComment[]
 }
 
-// Fetch story data
-const { data: storyData, pending, error: fetchError } = await useFetch(() => `/api/item/${storyId.value}`, {
-  immediate: true,
-});
+type StoryDetail = {
+  id: number
+  created_at: string
+  author: string
+  title: string
+  url: string
+  text: string | null
+  points: number
+  parent_id: number | null
+  children: StoryComment[]
+}
 
-watchEffect(() => {
+const normalizeStoryId = (param: unknown): string | null => {
+  const rawId = Array.isArray(param) ? param[0] : param
+
+  return typeof rawId === 'string' && /^\d+$/.test(rawId) ? rawId : null
+}
+
+const storyId = computed(() => normalizeStoryId(route.params.id))
+const storyDataKey = computed(() => `story-detail:${storyId.value ?? 'missing'}`)
+const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
+
+const { data: storyData, pending, error: fetchError } = await useAsyncData<StoryDetail | null>(
+  storyDataKey,
+  async () => {
+    const id = storyId.value
+
+    if (!id) {
+      return null
+    }
+
+    return await $fetch<StoryDetail>(`/api/item/${id}`)
+  },
+  {
+    default: () => null,
+  },
+)
+
+const story = computed(() => storyData.value)
+const error = computed(() => {
+  if (!storyId.value) {
+    return 'Story ID is required'
+  }
+
   if (fetchError.value) {
-    error.value = fetchError.value.message;
+    return fetchError.value.message
   }
-  if (storyData.value) {
-    story.value = storyData.value;
+
+  if (!pending.value && !story.value) {
+    return 'Story not found'
   }
-  isLoading.value = pending.value;
-});
+
+  return null
+})
+const isLoading = computed(() => pending.value)
+const screenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}` : '')
 
 // Use the sanitizer
 const { sanitize } = useSanitizer();

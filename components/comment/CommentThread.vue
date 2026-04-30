@@ -4,9 +4,9 @@
       <div :class="`comment-header ${headerTextColor} flex items-center`">
         <span class="author-chip">
           <span class="author-dot" aria-hidden="true"></span>
-          <a :href="`https://news.ycombinator.com/user?id=${comment.author}`" target="_blank" rel="noopener noreferrer" class="hover:underline">
+          <NuxtLink :to="getUserPath(comment.author)" class="hover:underline">
             {{ comment.author }}
-          </a>
+          </NuxtLink>
         </span>
         <span
           v-if="authorCommentCount > 1"
@@ -66,7 +66,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineProps, computed, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { LucideMessageSquare, LucideClock, LucideChevronDown, LucideChevronRight } from '@lucide/vue'
 import { formatDistanceToNow } from 'date-fns'
 import { useSanitizer } from '~/composables/useSanitizer'
@@ -97,6 +97,7 @@ const currentDepth = computed(() => props.currentDepth || 1)
 const expandAll = computed(() => Boolean(props.expandAll))
 const authorCommentCounts = computed(() => props.authorCommentCounts || {})
 const authorCommentCount = computed(() => authorCommentCounts.value[props.comment.author] || 1)
+const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
 
 const colorMode = useColorMode()
 
