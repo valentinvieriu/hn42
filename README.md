@@ -1,64 +1,126 @@
 # HN42
 
-HN42 is a modern Hacker News client built with Nuxt 3, Vue 3, TailwindCSS, and TypeScript. It provides an enhanced user experience with features like dark mode, responsive design, and a clean interface.
+HN42 is a visual Hacker News reader. It keeps Hacker News as the source of truth, but gives readers a more visual way to scan stories, judge links, and read discussions.
 
-## Features
+Live app: https://hn42.vv42.workers.dev/
 
-- View top, new, and show stories from Hacker News
-- Detailed story view with comments
-- Responsive grid layout
-- Dark mode support
-- No analytics or marketing cookies
+## Why HN42 Exists
 
-## Technologies Used
+Hacker News is fast and information-dense, but it is also heavily text-based. A title, score, and comment count do not always tell you what you are about to open. Some links are thoughtful essays, papers, or useful technical writeups. Others are thin product pages, ad-heavy landing pages, paywalls, modals, or low-signal posts.
 
-- **Nuxt 3** with Composition API
-- **Vue 3**
-- **TailwindCSS**
-- **TypeScript**
-- **Lucide Icons**
-- **Date-fns** for date formatting
+HN42 adds visual context before the click. Each story card includes a preview of the linked page so you can quickly ask:
 
-## Installation
+- Does this look like a real article, paper, announcement, or discussion starter?
+- Is the page readable, substantial, and worth opening?
+- Does it look like a marketing page, dark pattern, modal wall, or low-value landing page?
+- Do I want the article, the HN discussion, or neither?
+
+The goal is not to replace Hacker News. It is an alternative way to consume the same public HN stories: more visual, easier to scan, and still quick.
+
+## What It Does
+
+- Shows Top, Best, New, and Show HN feeds.
+- Presents each story with a visual page preview, title, source, freshness, author, points, and comment count.
+- Opens an HN42 story page for the card, with metadata, comments, screenshot, and related stories.
+- Opens the original source from the source/domain link.
+- Renders HN comments with safer rich text, nested threads, quote handling, reference links, and expand controls.
+- Includes user activity pages for posts and comments.
+- Supports responsive layouts and dark mode.
+- Avoids analytics and marketing cookies.
+
+## Product Philosophy
+
+HN42 treats each story as something to evaluate visually before reading. The screenshot is not decoration; it is the main browsing affordance.
+
+The card model is intentionally simple:
+
+- The preview helps you judge the linked page.
+- The title confirms what the story is.
+- The source and timestamp orient you.
+- The score and comments provide HN context.
+- The card opens the HN42 story page.
+- The source link opens the external article.
+
+This keeps the browsing flow direct: scan, compare, open, or move on.
+
+## Tech Stack
+
+- Nuxt 4 / Vue 3 / Nitro
+- TailwindCSS
+- TypeScript
+- Lucide icons
+- Cloudflare Workers with Workers Static Assets
+- npm with `package-lock.json`
+
+## Getting Started
+
+Requirements:
+
+- Node.js 22.12.0 or newer compatible with Nuxt 4
+- npm
+
+Install dependencies:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/hn42.git
-
-# Navigate to the project directory
+git clone https://github.com/valentinvieriu/hn42.git
 cd hn42
-
-# Install dependencies
 npm install
+```
 
-# Start the development server
+Start the development server:
+
+```bash
 npm run dev
 ```
 
-## Usage
+Nuxt usually serves the app at `http://localhost:3000`, but it may choose another port if that one is already in use.
 
-- Navigate to `http://localhost:3000/top` to view top stories.
-- Use the navigation links to switch between Top, New, and Show stories.
-- Click on a story to view details and comments.
-
-## Building for Production
+## Useful Commands
 
 ```bash
-# Build the application
-npm run build
-
-# Start the production server
-npm run start
+npm run dev          # Start local development
+npm run build        # Build for production
+npm run preview      # Build and preview with Wrangler
+npm run deploy       # Build and deploy to Cloudflare Workers
+npm run cf-typegen   # Generate Cloudflare Worker types
 ```
 
-## Contributing
+Use `npm run build` as the baseline check before shipping changes.
 
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
+## Project Structure
 
-## License
+- `pages/`: feed pages, story detail pages, and user activity pages.
+- `components/story/`: story grid and visual story card UI.
+- `components/comment/`: nested comment rendering.
+- `server/api/`: feed, item, related-story, user, and screenshot APIs.
+- `composables/`: shared client logic such as story loading and sanitization.
+- `assets/css/main.css`: global typography and rich-text styling.
+- `wrangler.toml`: Cloudflare Workers deployment config.
 
-This project is licensed under the MIT License.
+## Deployment
 
-## Contact
+HN42 deploys to Cloudflare Workers, not Cloudflare Pages.
 
-For inquiries, use the current maintainer contact channel published with the project.
+Production is hosted at:
+
+```text
+https://hn42.vv42.workers.dev/
+```
+
+The Worker entry and static asset output are configured in `wrangler.toml`:
+
+- Worker entry: `.output/server/index.mjs`
+- Static assets: `.output/public`
+
+Before deployment, use:
+
+```bash
+npm run build
+npx wrangler deploy --dry-run
+```
+
+## Data Sources
+
+HN42 reads public Hacker News and Algolia-powered HN APIs. Article screenshots are requested from public story URLs and served through the app's screenshot route so they can be cached and reused.
+
+There is no HN login, voting, posting, or private account integration.

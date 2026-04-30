@@ -2,92 +2,190 @@
 
 ## App Overview
 
-HN42 is a Nuxt Hacker News reader. It renders top, best, new, and show story feeds, story detail pages with comments, related-story suggestions, and per-story screenshots.
+HN42 is a Nuxt 4 Hacker News reader focused on visual article discovery. It renders top, best, new, and show story feeds, story detail pages with comments and related-story suggestions, user activity pages, and per-story article screenshots.
 
-The app is an older codebase that has been upgraded to Nuxt 4. Keep changes conservative and preserve the existing app structure unless a migration explicitly requires moving files.
+The app is an older codebase that has been upgraded to Nuxt 4. Keep changes conservative and preserve the existing project shape unless a migration explicitly requires moving files.
 
 ## Product Philosophy
 
-Hacker News is valuable, but it can be text-heavy and hard to scan quickly. HN42 offers a more visual way to explore the same stories without changing the underlying source of truth.
+HN42 is an alternative way to browse Hacker News, not a dense text-first clone of Hacker News.
 
-The core product idea is that each story gets a full-page article screenshot. The screenshot helps users scan the shape and substance of an article before committing to reading it, and makes it easier to judge whether a story is worth opening. This is especially important because HN titles alone often hide the quality, length, or character of the linked content.
+The core product idea is that a story can be evaluated before opening it. HN titles often hide the shape and quality of the linked page: it might be a substantial essay, a paper, a useful announcement, an ad-heavy landing page, a modal wall, or a thin product page. HN42 exposes that context by giving each story a visual article preview.
 
-The app should feel fast and lightweight. Story data comes from Algolia-powered Hacker News APIs, and the UI should keep the browsing flow quick: glance, compare, open, or move on.
+The desired browsing loop is:
 
-Visual diversity is intentional. Story cards use varied color palettes so the feed does not feel like a boring wall of text. Preserve that sense of color and texture when changing card layouts, screenshots, or feed presentation.
+```text
+scan -> compare -> open the HN42 story page, open the source, or move on
+```
 
-Do not turn HN42 into a dense text-first clone of Hacker News. Its purpose is to keep HN's speed and information density while adding enough visual context to make exploration easier.
+Preserve these product principles:
 
-## Tech Stack
+- Screenshots are central. They are the main evaluation surface, not decorative thumbnails.
+- Hacker News metadata should orient the user without overpowering the preview.
+- The source/domain link is the explicit external escape; the card/title opens the HN42 story page.
+- Visual variety matters. Story cards should not collapse into a flat text list.
+- Comments are a major part of the HN value. Keep nested discussion, quotes, references, and code readable.
+- Avoid heavy CTAs or duplicate buttons when they do not represent genuinely different destinations.
 
-- Framework: Nuxt 4 / Vue 3 / Nitro
-- Styling: TailwindCSS
-- Deployment: Cloudflare Workers with Workers Static Assets, not Cloudflare Pages
-- Node: 22.12.0 or newer compatible with Nuxt 4 (`^20.19.0 || >=22.12.0`)
-- Package manager: npm with `package-lock.json`
+## Architecture
 
-## Key Files
+HN42 uses Nuxt pages for the main routes and Nitro server routes for Hacker News, Algolia, related-story, user, and screenshot APIs.
 
-- `nuxt.config.ts`: Nuxt modules, Cloudflare Nitro preset, image settings, route rules.
-- `wrangler.toml`: Cloudflare Workers deploy config. It should use `main = "./.output/server/index.mjs"` and `assets.directory = "./.output/public"`.
+Frontend:
+
 - `pages/top.vue`, `pages/best.vue`, `pages/new.vue`, `pages/show.vue`: feed pages.
-- `pages/item/[id].vue`: story detail page with comments, screenshot, and related stories.
-- `components/story/StoryGrid.vue`: feed grid wrapper.
-- `components/story/StoryCard.vue`: individual feed card and screenshot display.
-- `components/comment/CommentThread.vue`: nested comment rendering.
+- `pages/item/[id].vue`: story detail page with metadata, screenshot, comments, and related stories.
+- `pages/user/[username].vue`: user profile/activity page with posts and comments.
+- `components/story/StoryGrid.vue`: feed layout and loading states.
+- `components/story/StoryCard.vue`: visual story card, source link, screenshot preview, title, and status row.
+- `components/comment/CommentThread.vue`: nested comment renderer.
+- `components/user/UserCommentCard.vue`: user activity comment card.
 - `components/RelatedStories.vue`: related story list on detail pages.
-- `server/api/top.ts`, `server/api/best.ts`, `server/api/new.ts`, `server/api/show.ts`: feed APIs.
-- `server/api/item/[id].ts`: story detail API.
-- `server/api/related/[id].ts`: related story API.
-- `server/api/screenshot/[id].ts`: screenshot proxy and caching headers.
-- `server/utils/fetchStories.ts`: Algolia story fetch helper.
-- `server/utils/keywordExtractor.ts`: related-story keyword extraction.
-- `composables/useSanitizer.ts`: safe rich-text rendering and HN comment convention post-processing.
-- `assets/css/main.css`: global typography plus `.rich-text`, quote, code, and reference-line styling.
+- `components/layout/Header.vue` and `components/layout/Footer.vue`: shared shell.
 
-## Comment Rendering And Post-Processing
+Shared client logic:
 
-HN/Algolia item text arrives as a small HTML subset plus plain-text conventions. Do not flatten comments to plain text unless there is a concrete safety reason; links, paragraphs, emphasis, quotes, and code carry useful meaning and improve readability.
+- `composables/useStories.ts`: feed loading, session-memory cache, and stale refresh state.
+- `composables/useImageLoadQueue.ts`: client-side image load queue.
+- `composables/useFeedTheme.ts`: feed-specific labels, routes, and color theme variables.
+- `composables/useSeedPalette.ts`: deterministic card color palettes.
+- `composables/useSanitizer.ts`: safe rich-text rendering and HN comment post-processing.
+- `composables/useScroll.ts` and `useDebounce.ts`: scroll and timing helpers.
 
-Current rendering uses `useSanitizer.ts` to allowlist safe tags (`a`, `p`, `br`, `i`, `em`, `strong`, `pre`, `code`, lists, and `blockquote`), strip unsupported tags and attributes, and restrict links to safe protocols. Components render the result with `v-html`, so any new allowed markup must be sanitized first.
+Server/API:
 
-After sanitization, `useSanitizer.ts` also post-processes common HN text conventions:
+- `server/api/top.ts`, `best.ts`, `new.ts`, `show.ts`: fetch ordered story IDs from HN Firebase, hydrate story data from Algolia, and preserve source order.
+- `server/api/item/[id].ts`: fetch story details and comment tree from Algolia Items API.
+- `server/api/related/[id].ts`: build related-story candidates from title, URL, comments, and Algolia search results.
+- `server/api/screenshot/[id].ts`: screenshot proxy and cache layer.
+- `server/api/user/[username].ts`: user profile from Algolia.
+- `server/api/user/[username]/comments.ts` and `stories.ts`: paginated user activity using Algolia search-by-date.
+- `server/utils/fetchStories.ts`: common Algolia story normalization.
+- `server/utils/userActivity.ts`: user activity validation, pagination, and mapping.
+- `server/utils/keywordExtractor.ts`: related-story keyword support.
 
-- Paragraphs beginning with `>` are grouped into real `<blockquote>` blocks and styled as quoted text.
-- Footnote/reference lines like `[1] - <link>` are wrapped with `class="reference-line"` so citations read as secondary supporting material.
-- Inline footnote markers such as `[1]` link to matching reference lines inside the same comment.
-- Safe bare URLs are autolinked only when HN/Algolia did not already emit an anchor.
-- `Edit:`, `Update:`, and `TL;DR:` prefixes are styled as subtle note labels.
+Types and global styling:
 
-Nested comments render to a limited depth by default. `pages/item/[id].vue` exposes an expand/collapse-all control at the comments heading, while `CommentThread.vue` shows a local "Show N replies" disclosure when replies are hidden under the depth limit.
+- `types/index.ts`: shared story, comment, user, and activity types.
+- `assets/css/main.css`: base typography, rich-text rendering, quote/code/reference styles.
+- `tailwind.config.ts`: Tailwind content paths, fonts, dark mode, and extended color tokens.
 
-Good future opportunities for comment post-processing:
+## Data Sources And Caching
 
-- Add a copy affordance for long code/pre blocks.
-- Detect long quote-heavy comments and visually keep quotes secondary to the author's response.
-- Consider compacting very long comment branches with a "continue reading" affordance on small screens.
+HN42 reads public data only. There is no HN login, voting, posting, or private account integration.
 
-## Cloudflare Deployment
+Primary upstreams:
 
-This app deploys to Cloudflare Workers, not Pages.
+- HN Firebase API for feed story IDs and screenshot story URLs.
+- Algolia HN Search API for story/feed data.
+- Algolia Items API for story detail and comment trees.
+- Algolia users/search-by-date endpoints for user profiles and activity.
+- `backup15.terasp.net` for article screenshot generation.
 
-- Nuxt/Nitro preset: `cloudflare-module`
-- Build output:
-  - Worker entry: `.output/server/index.mjs`
-  - Static assets: `.output/public`
-- Wrangler command: `wrangler deploy`
-- Do not switch scripts back to `wrangler pages deploy` or `wrangler pages dev`.
-- Keep `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml`; Nitro uses Node compatibility in the Worker build.
+Caching expectations:
+
+- Feed and item routes use short public cache headers so story metadata stays fresh.
+- Related stories use longer cache headers because they are derived and less time-sensitive.
+- User profile/activity routes cache briefly.
+- Screenshot responses use long browser/CDN cache headers and Cloudflare `caches.default`.
+- Screenshot fallbacks are transparent GIFs with shorter cache headers; they avoid retry storms when a screenshot cannot be generated.
+- Preserve screenshot cache behavior unless the task is specifically about invalidation or freshness.
+
+## UI And Interaction Principles
+
+Story cards are the core product surface.
+
+- The screenshot/preview should remain visually dominant.
+- Source and age should orient the user quickly.
+- Title should confirm the preview, not replace it as the only evaluation signal.
+- Author, points, and comments are status/context, not primary action buttons.
+- Card/title should route to `/item/:id`.
+- Source/domain should open the external URL.
+- Author should route to `/user/:username`.
+- Comment count can route to the story page or a comments anchor if one is added.
+
+On mobile, avoid interactions where the screenshot preview fights page scroll. Prefer simple, robust scrolling behavior over clever nested gesture handling.
+
+For visual work:
+
+- Preserve the colorful seeded card/feed palette system.
+- Use existing Tailwind utilities, scoped component CSS, and CSS custom properties before adding new styling systems.
+- Keep UI text compact and functional.
+- Avoid turning HN42 into a marketing page or a text-only HN clone.
+
+## Comment Rendering
+
+HN/Algolia item text arrives as a small HTML subset plus plain-text conventions. Do not flatten comments to plain text unless there is a concrete safety reason; links, paragraphs, emphasis, quotes, and code carry meaning.
+
+Current rendering uses `useSanitizer.ts` to:
+
+- Allowlist safe tags and attributes.
+- Restrict links to safe protocols.
+- Render through sanitized `v-html`.
+- Convert paragraphs beginning with `>` into blockquotes.
+- Style reference lines like `[1] - <link>`.
+- Link inline markers such as `[1]` to matching references in the same comment.
+- Autolink safe bare URLs only when HN/Algolia did not already emit an anchor.
+- Style `Edit:`, `Update:`, and `TL;DR:` as note labels.
+
+Nested comments render to a limited depth by default. `pages/item/[id].vue` exposes expand/collapse-all controls, while `CommentThread.vue` shows local reply disclosure when replies are hidden under the depth limit.
 
 ## Images And Screenshots
 
-The old Cloudflare Image CDN URL under `hn42.net/cdn-cgi/image/...` is no longer owned and must not be used.
+Story screenshots should render from `/api/screenshot/:id`.
 
-- Story screenshots should render directly from `/api/screenshot/:id`.
+- Do not use the old `hn42.net/cdn-cgi/image/...` URL; that domain is no longer owned.
 - Do not add `provider="cloudflare"` to `NuxtImg` for screenshots.
 - Current screenshot rendering intentionally uses plain `<img>` tags to avoid Nuxt Image generating CDN proxy URLs.
-- `server/api/screenshot/[id].ts` fetches screenshots from `backup15.terasp.net` and sets cache headers. Preserve browser/CDN caching behavior so repeat views do not hammer the screenshot service.
-- If changing screenshot cache behavior, verify headers on `/api/screenshot/:id` and keep a long shared-cache TTL unless there is a concrete invalidation need.
+- `server/api/screenshot/[id].ts` fetches screenshots from `backup15.terasp.net` with full-page options and modal dismissal.
+- Server-side screenshot fetch concurrency is controlled by `runtimeConfig.screenshotFetchConcurrency`.
+- Client-side image request concurrency is controlled by `runtimeConfig.public.screenshotImageQueueConcurrency`.
+- Keep long shared-cache TTLs unless there is a concrete invalidation need.
+
+## Styling, Linting, And Code Style
+
+Styling approach:
+
+- TailwindCSS is the base styling system.
+- Component-specific CSS generally lives in scoped Vue styles.
+- Shared typography/rich-text styling belongs in `assets/css/main.css`.
+- Dark mode uses `@nuxtjs/color-mode` with class-based Tailwind dark mode.
+- Fonts are Inter for body text and Sora for display headings.
+- Prefer the existing feed theme and seed palette helpers over one-off color systems.
+
+Linting and checks:
+
+- There is currently no dedicated `lint` script in `package.json`.
+- Use `npm run build` as the baseline verification.
+- Use `git diff --check` for whitespace issues when editing docs or code.
+- Type checking currently reports pre-existing issues across the codebase; do not treat `nuxi typecheck` failures as caused by your change unless isolated.
+
+Code conventions:
+
+- Follow nearby file style instead of reformatting broad areas.
+- Keep dependency and lockfile changes intentional.
+- Avoid broad refactors unless the requested change genuinely requires them.
+- Add comments only where they clarify non-obvious behavior.
+
+## Cloudflare Deployment
+
+This app deploys to Cloudflare Workers, not Cloudflare Pages.
+
+Production app URL: `https://hn42.vv42.workers.dev/`.
+
+- Nuxt/Nitro preset: `cloudflare-module`
+- Worker entry: `.output/server/index.mjs`
+- Static assets: `.output/public`
+- Wrangler command: `wrangler deploy`
+- Keep `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml`.
+- Do not switch scripts back to `wrangler pages deploy` or `wrangler pages dev`.
+
+For deployment config changes, verify:
+
+```bash
+npm run build
+npx wrangler deploy --dry-run
+```
 
 ## Commands
 
@@ -99,21 +197,22 @@ npm run preview
 npm run deploy
 npm run cf-typegen
 npx wrangler deploy --dry-run
+git diff --check
 ```
-
-Use `npm run build` as the baseline verification. Use `npx wrangler deploy --dry-run` to validate Worker deploy config without publishing.
 
 ## Known Caveats
 
-- Type checking currently reports pre-existing type issues across the codebase. Do not treat a failing `nuxi typecheck` as caused by your change unless you have isolated it.
-- The image screenshot route can be slow because it proxies external screenshot generation. Cache headers are important.
+- The screenshot route can be slow because it proxies external screenshot generation.
+- Browser verification should use the in-app browser against `http://localhost:3000` or the actual Nuxt dev port.
 - The dev server may need a restart after dependency or Nuxt/Nitro preset changes; hot reload can leave the app shell blank.
-- Browser verification should use the in-app browser against `http://localhost:3000` when the server is already running.
+- Screenshot latency is expected and should not be treated as a UI regression unless the task is specifically about screenshots.
+- Type checking has known pre-existing issues.
 
 ## Working Conventions
 
 - Preserve user changes in the worktree. Do not revert unrelated edits.
-- Keep dependency and lockfile changes intentional and explainable.
-- Prefer small compatibility fixes over broad refactors.
-- For Cloudflare deployment changes, verify both `npm run build` and `npx wrangler deploy --dry-run` when possible.
-- For UI changes, verify the app in the in-app browser and ignore known transient screenshot latency unless the task is specifically about images.
+- Keep edits scoped to the request and the surrounding module.
+- Prefer compatibility fixes over broad rewrites.
+- For UI changes, preserve the screenshot-first product hierarchy.
+- For UI changes, verify in the in-app browser when feasible.
+- For Cloudflare deployment changes, verify both build and Wrangler dry-run when possible.
