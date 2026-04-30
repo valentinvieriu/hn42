@@ -45,7 +45,7 @@
           </div>
           <div 
             ref="imageContainerRef"
-            class="story-card-image-track relative w-full h-full transform transition-transform duration-500 will-change-transform"
+            class="story-card-image-track relative w-full h-full transform transition-transform duration-500"
             :class="{
               scrolling: isTouchDevice && isInView,
               'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
@@ -78,23 +78,14 @@
       <div class="story-card-body-backdrop" aria-hidden="true">
         <div
           ref="bodyImageContainerRef"
-          class="story-card-body-image-track relative w-full h-full transform transition-transform duration-500 will-change-transform"
+          class="story-card-body-image-track relative w-full h-full transform transition-transform duration-500"
           :class="{
             scrolling: isTouchDevice && isInView,
+            'is-loaded': imageState === 'loaded',
             'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
           }"
         >
-          <img
-            v-if="queuedImageSrc"
-            alt=""
-            width="400"
-            :src="queuedImageSrc"
-            loading="eager"
-            decoding="async"
-            fetchpriority="low"
-            class="story-card-body-image w-full object-cover transition-opacity duration-500"
-            :class="{ 'is-loaded': imageState === 'loaded' }"
-          />
+          <div class="story-card-body-image" :style="bodyBackdropImageStyle"></div>
         </div>
       </div>
       <div class="story-card-content">
@@ -327,6 +318,16 @@ const { enqueueImageLoad } = useImageLoadQueue()
 let imageQueueHandle: ImageLoadQueueHandle | null = null
 let imageLoadObserver: IntersectionObserver | null = null
 
+const bodyBackdropImageStyle = computed(() => {
+  if (!queuedImageSrc.value || imageState.value !== 'loaded') {
+    return {}
+  }
+
+  return {
+    backgroundImage: `url("${queuedImageSrc.value}")`,
+  }
+})
+
 const releaseImageQueueSlot = () => {
   imageQueueHandle?.complete()
   imageQueueHandle = null
@@ -375,8 +376,9 @@ watch(
 const isInView = ref(false)
 
 // Animation frame ID
-let animationFrameId: number | null = null
+let scrollAnimationFrameId: number | null = null
 let observer: IntersectionObserver | null = null
+let isListeningForTouchScroll = false
 
 // Scroll handling
 const scrollProgress = ref(0)
@@ -384,10 +386,6 @@ const scrollProgress = ref(0)
 let windowHeight = 0
 
 const getWindowHeight = () => window.innerHeight || document.documentElement.clientHeight
-
-const updateWindowHeight = useDebounce(() => {
-  windowHeight = getWindowHeight()
-}, 150);
 
 const setImageTrackTransform = (transform: string) => {
   if (imageContainerRef.value) {
@@ -399,7 +397,7 @@ const setImageTrackTransform = (transform: string) => {
   }
 }
 
-const handleScroll = () => {
+const updateImageScrollTransform = () => {
   if (!isInView.value || !isTouchDevice.value || !imageContainerRef.value) return;
 
   const card = cardRef.value;
@@ -417,9 +415,38 @@ const handleScroll = () => {
   setImageTrackTransform(`translate3d(0, ${-50 * scrollProgress.value}%, 0)`);
 };
 
-const animate = () => {
-  handleScroll()
-  animationFrameId = requestAnimationFrame(animate)
+const scheduleImageScrollUpdate = () => {
+  if (!isInView.value || !isTouchDevice.value || scrollAnimationFrameId !== null) {
+    return
+  }
+
+  scrollAnimationFrameId = requestAnimationFrame(() => {
+    scrollAnimationFrameId = null
+    updateImageScrollTransform()
+  })
+}
+
+const updateWindowHeight = useDebounce(() => {
+  windowHeight = getWindowHeight()
+  scheduleImageScrollUpdate()
+}, 150)
+
+const addTouchScrollListener = () => {
+  if (isListeningForTouchScroll) {
+    return
+  }
+
+  window.addEventListener('scroll', scheduleImageScrollUpdate, { passive: true })
+  isListeningForTouchScroll = true
+}
+
+const removeTouchScrollListener = () => {
+  if (!isListeningForTouchScroll) {
+    return
+  }
+
+  window.removeEventListener('scroll', scheduleImageScrollUpdate)
+  isListeningForTouchScroll = false
 }
 
 onMounted(() => {
@@ -449,49 +476,53 @@ onMounted(() => {
   windowHeight = getWindowHeight()
 
   if (isTouchDevice.value) {
-    observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach(entry => {
-          isInView.value = entry.isIntersecting;
-          if (entry.isIntersecting) {
-            // Reset transform when card comes into view
-            setImageTrackTransform('translate3d(0, 0%, 0)')
-            if (!animationFrameId) {
-              animate();
-            }
-          } else {
-            if (animationFrameId) {
-              cancelAnimationFrame(animationFrameId);
-              animationFrameId = null;
-            }
-          }
-        });
-      },
-      {
-        threshold: [0, 0.5, 1],
-        rootMargin: '0px', // Adjust if necessary to preload images slightly before they enter the viewport
-      }
-    );
+    if ('IntersectionObserver' in window) {
+      observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach(entry => {
+            isInView.value = entry.isIntersecting
 
-    if (cardRef.value) {
-      observer.observe(cardRef.value);
+            if (entry.isIntersecting) {
+              addTouchScrollListener()
+              scheduleImageScrollUpdate()
+              return
+            }
+
+            removeTouchScrollListener()
+            if (scrollAnimationFrameId) {
+              cancelAnimationFrame(scrollAnimationFrameId)
+              scrollAnimationFrameId = null
+            }
+          })
+        },
+        {
+          threshold: [0, 0.1, 0.5, 1],
+          rootMargin: '25% 0px',
+        }
+      )
+
+      if (cardRef.value) {
+        observer.observe(cardRef.value)
+      }
+    } else {
+      isInView.value = true
+      addTouchScrollListener()
+      scheduleImageScrollUpdate()
     }
 
-    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', updateWindowHeight)
   }
-
-  window.addEventListener('resize', updateWindowHeight);
 })
 
 onBeforeUnmount(() => {
-  if (animationFrameId) {
-    cancelAnimationFrame(animationFrameId)
+  if (scrollAnimationFrameId) {
+    cancelAnimationFrame(scrollAnimationFrameId)
   }
   imageQueueHandle?.cancel()
   imageLoadObserver?.disconnect()
   observer?.disconnect()
-  window.removeEventListener('scroll', handleScroll)
-  window.removeEventListener('resize', updateWindowHeight);
+  removeTouchScrollListener()
+  window.removeEventListener('resize', updateWindowHeight)
 })
 </script>
 
@@ -510,8 +541,14 @@ onBeforeUnmount(() => {
     0 20px 48px var(--seed-shadow),
     0 5px 18px rgb(15 23 42 / 0.055),
     0 1px 0 rgb(255 255 255 / 0.46) inset;
-  transform: translateZ(0);
   transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@supports (content-visibility: auto) {
+  .story-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 34rem;
+  }
 }
 
 .story-card:focus-visible {
@@ -599,6 +636,7 @@ onBeforeUnmount(() => {
 }
 
 .story-card-image-track {
+  backface-visibility: hidden;
   transform-origin: center top;
 }
 
@@ -615,8 +653,6 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: rgb(15 23 42);
   background: transparent;
-  -webkit-backdrop-filter: blur(4px) saturate(1.08);
-  backdrop-filter: blur(4px) saturate(1.08);
   box-shadow:
     0 -1px 0 color-mix(in oklch, white 68%, transparent) inset,
     0 1px 0 color-mix(in oklch, var(--seed-border) 38%, transparent) inset;
@@ -643,8 +679,6 @@ onBeforeUnmount(() => {
 .dark .story-card-body {
   color: rgb(241 245 249);
   background: transparent;
-  -webkit-backdrop-filter: blur(5px) saturate(1.08);
-  backdrop-filter: blur(5px) saturate(1.08);
   box-shadow:
     0 -1px 0 rgb(255 255 255 / 0.08) inset,
     0 1px 0 color-mix(in oklch, var(--seed-border) 44%, transparent) inset;
@@ -671,22 +705,27 @@ onBeforeUnmount(() => {
 
 .story-card-body-image-track {
   min-height: 14rem;
+  backface-visibility: hidden;
   transform-origin: center top;
 }
 
 .story-card-body-image {
-  display: block;
-  min-height: 18rem;
+  position: absolute;
+  inset: -10%;
+  background-position: center top;
+  background-repeat: no-repeat;
+  background-size: cover;
   filter: blur(7px) saturate(1.16) contrast(0.94);
   opacity: 0;
   transform: scale(1.05);
+  transition: opacity 500ms ease;
 }
 
-.story-card-body-image.is-loaded {
+.story-card-body-image-track.is-loaded .story-card-body-image {
   opacity: 0.18;
 }
 
-.dark .story-card-body-image.is-loaded {
+.dark .story-card-body-image-track.is-loaded .story-card-body-image {
   opacity: 0.24;
 }
 
@@ -877,6 +916,12 @@ onBeforeUnmount(() => {
       0 8px 24px rgb(15 23 42 / 0.075),
       0 1px 0 rgb(255 255 255 / 0.56) inset;
     transform: translateY(-3px);
+    will-change: transform;
+  }
+
+  .story-card:hover .story-card-image-track,
+  .story-card:hover .story-card-body-image-track {
+    will-change: transform;
   }
 
   .dark .story-card:hover {
@@ -884,6 +929,43 @@ onBeforeUnmount(() => {
       0 30px 68px var(--seed-shadow-strong),
       0 8px 26px rgb(0 0 0 / 0.3),
       0 1px 0 rgb(255 255 255 / 0.1) inset;
+  }
+}
+
+.story-card-image-track.scrolling,
+.story-card-body-image-track.scrolling {
+  transition-duration: 0ms;
+  will-change: transform;
+}
+
+@media (pointer: coarse) {
+  .story-card-topbar {
+    -webkit-backdrop-filter: blur(14px) saturate(1.22);
+    backdrop-filter: blur(14px) saturate(1.22);
+  }
+
+  .story-card-body::before {
+    -webkit-backdrop-filter: blur(6px) saturate(1.06);
+    backdrop-filter: blur(6px) saturate(1.06);
+  }
+
+  .story-card-body-image {
+    filter: blur(5px) saturate(1.1) contrast(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .story-card,
+  .story-card-image-track,
+  .story-card-body-image-track,
+  .story-card-body-image {
+    transition-duration: 1ms !important;
+  }
+
+  .story-card:hover,
+  .story-card:hover .story-card-image-track,
+  .story-card:hover .story-card-body-image-track {
+    transform: none !important;
   }
 }
 
@@ -964,9 +1046,4 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.scrolling {
-  /* Define the transform within CSS for better performance */
-  transform: translate3d(0, -50%, 0);
-  transition: transform 0.5s ease-out;
-}
 </style>
