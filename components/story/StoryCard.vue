@@ -971,14 +971,28 @@ onBeforeUnmount(() => {
 
 @media (max-width: 430px) {
   .story-card-status-row {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.5rem;
+  }
+
+  .story-card-author {
+    flex: 1 1 auto;
   }
 
   .story-card-stat-group {
-    justify-content: flex-start;
-    width: 100%;
+    gap: 0.42rem;
+  }
+
+  .story-card-metric {
+    gap: 0.18rem;
+  }
+
+  .story-card-metric svg {
+    width: 0.9rem;
+    height: 0.9rem;
+  }
+
+  .story-card-metric-label {
+    display: none;
   }
 }
 
