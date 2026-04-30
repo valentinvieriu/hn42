@@ -16,8 +16,8 @@
         <h1 class="text-3xl font-display font-semibold mb-4">Loading...</h1>
       </div>
 
-      <div v-else class="grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
-        <article class="min-w-0">
+      <div v-else class="grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+        <article class="min-w-0 lg:col-start-1">
           <h1 :class="['text-3xl', 'md:text-4xl', 'font-display', 'font-semibold', 'leading-tight', 'mb-3', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
             {{ story.title }}
           </h1>
@@ -45,10 +45,14 @@
               <LucideTrendingUp class="w-4 h-4" />
               {{ story.points }}
             </span>
-            <span :class="['flex', 'items-center', 'gap-1', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
+            <a
+              href="#comments"
+              aria-label="Jump to comments"
+              :class="['flex', 'items-center', 'gap-1', colorMode.value === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900']"
+            >
               <LucideMessageSquare class="w-4 h-4" />
               {{ commentCount }}
-            </span>
+            </a>
             <span :class="['flex', 'items-center', 'gap-1', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
               <LucideClock class="w-4 h-4" />
               {{ timeAgo }}
@@ -66,10 +70,8 @@
             decoding="async"
             class="hidden md:block w-full h-auto rounded-lg shadow-md mb-8"
           />
-
-          <RelatedStories v-if="storyId" :story-id="storyId" />
         </article>
-        <aside class="min-w-0">
+        <aside id="comments" class="min-w-0 scroll-mt-24 lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <div class="comments-toolbar">
             <div class="comments-title-group">
               <h2 :class="['section-title', 'text-2xl', 'font-semibold', 'mb-0', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">Comments</h2>
@@ -102,6 +104,9 @@
             />
           </div>
         </aside>
+        <section class="min-w-0 lg:col-start-1">
+          <RelatedStories v-if="storyId" :story-id="storyId" />
+        </section>
       </div>
     </div>
   </div>
