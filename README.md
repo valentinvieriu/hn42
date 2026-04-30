@@ -8,7 +8,7 @@ HN42 is a modern Hacker News client built with Nuxt 3, Vue 3, TailwindCSS, and T
 - Detailed story view with comments
 - Responsive grid layout
 - Dark mode support
-- No cookies or analytics tracking
+- No analytics or marketing cookies
 
 ## Technologies Used
 
@@ -61,4 +61,4 @@ This project is licensed under the MIT License.
 
 ## Contact
 
-For any inquiries, please contact contact (at) hn42 (dot) net.
+For inquiries, use the current maintainer contact channel published with the project.

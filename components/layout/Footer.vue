@@ -7,7 +7,7 @@
           <span class="text-orange-500">42</span>
         </h2>
         <p class="meta-text text-slate-600 dark:text-slate-400">
-          © 2024 HN42. All rights reserved.
+          © {{ copyrightYears }} HN42. Story content belongs to its original sources.
         </p>
       </div>
       <nav>
@@ -29,6 +29,12 @@
 </template>
 
 <script setup lang="ts">
+const startYear = 2024;
+const currentYear = new Date().getFullYear();
+const copyrightYears = currentYear <= startYear
+  ? String(startYear)
+  : `${startYear}-${currentYear}`;
+
 const footerLinks = [
   { name: 'Privacy', to: '/privacy' },
   { name: 'Terms', to: '/terms' },
