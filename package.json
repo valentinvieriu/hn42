@@ -9,9 +9,11 @@
     "preview": "npm run build && wrangler dev",
     "postinstall": "nuxt prepare",
     "deploy": "npm run build && wrangler deploy",
-    "cf-typegen": "wrangler types"
+    "cf-typegen": "wrangler types --include-runtime false",
+    "cf:screenshots:bootstrap": "bash scripts/bootstrap-cloudflare-screenshots.sh"
   },
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
     "@lucide/vue": "^1.14.0",
     "@nuxt/image": "^2.0.0",
     "@nuxtjs/color-mode": "^4.0.0",

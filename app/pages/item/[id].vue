@@ -1,5 +1,5 @@
 <template>
-  <div :class="['min-h-screen', colorMode.value === 'dark' ? 'bg-gray-900 text-gray-100' : 'bg-white text-gray-900']">
+  <div class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
     <div class="max-w-7xl mx-auto p-4 md:p-8 lg:py-10">
       <div v-if="error" class="text-center mt-20">
         <h1 class="text-3xl font-display font-semibold mb-4">Error</h1>
@@ -18,48 +18,47 @@
 
       <div v-else class="grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
         <article class="min-w-0 lg:col-start-1">
-          <h1 :class="['text-3xl', 'md:text-4xl', 'font-display', 'font-semibold', 'leading-tight', 'mb-3', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
+          <h1 class="mb-3 text-3xl font-display font-semibold leading-tight text-gray-900 dark:text-gray-100 md:text-4xl">
             {{ story.title }}
           </h1>
           <a
             :href="story.url"
             target="_blank"
             rel="noopener noreferrer"
-            :class="['meta-text', 'flex', 'items-center', 'gap-1.5', 'mb-3', colorMode.value === 'dark' ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800']"
+            class="meta-text mb-3 flex items-center gap-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           >
             <span class="truncate">{{ story.url }}</span> <LucideExternalLink size="14" />
           </a>
-          <div :class="['meta-text', 'mb-4', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
+          <div class="meta-text mb-4 text-gray-600 dark:text-gray-400">
             by
             <NuxtLink
               :to="getUserPath(story.author)"
-              :class="colorMode.value === 'dark' ? 'text-gray-300 hover:text-gray-100' : 'text-gray-700 hover:text-gray-900'"
-              class="font-medium hover:underline"
+              class="font-medium text-gray-700 hover:text-gray-900 hover:underline dark:text-gray-300 dark:hover:text-gray-100"
             >
               {{ story.author }}
             </NuxtLink>
             • {{ timeAgo }}
           </div>
           <div class="meta-text flex items-center gap-4 mb-6">
-            <span :class="['flex', 'items-center', 'gap-1', story.points >= 0 ? (colorMode.value === 'dark' ? 'text-green-400' : 'text-green-600') : (colorMode.value === 'dark' ? 'text-red-400' : 'text-red-500')]">
+            <span :class="['flex', 'items-center', 'gap-1', story.points >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400']">
               <LucideTrendingUp class="w-4 h-4" />
               {{ story.points }}
             </span>
             <a
               href="#comments"
               aria-label="Jump to comments"
-              :class="['flex', 'items-center', 'gap-1', colorMode.value === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-900']"
+              class="flex items-center gap-1 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
             >
               <LucideMessageSquare class="w-4 h-4" />
               {{ commentCount }}
             </a>
-            <span :class="['flex', 'items-center', 'gap-1', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
+            <span class="flex items-center gap-1 text-gray-600 dark:text-gray-400">
               <LucideClock class="w-4 h-4" />
               {{ timeAgo }}
             </span>
           </div>
           <div
-            :class="`${colorMode.value === 'dark' ? 'text-gray-300' : 'text-gray-700'} rich-text reading-measure text-base leading-7 mb-5`"
+            class="rich-text reading-measure mb-5 text-base leading-7 text-gray-700 dark:text-gray-300"
             v-html="sanitizedText"
           ></div>
           <img
@@ -74,16 +73,15 @@
         <aside id="comments" class="min-w-0 scroll-mt-24 lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <div class="comments-toolbar">
             <div class="comments-title-group">
-              <h2 :class="['section-title', 'text-2xl', 'font-semibold', 'mb-0', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">Comments</h2>
-              <span v-if="commentCount > 0" :class="['comments-count', colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600']">
+              <h2 class="section-title mb-0 text-2xl font-semibold text-gray-900 dark:text-gray-100">Comments</h2>
+              <span v-if="commentCount > 0" class="comments-count text-gray-600 dark:text-gray-400">
                 {{ commentCount }}
               </span>
             </div>
             <button
               v-if="hasCollapsedReplies"
               type="button"
-              class="expand-comments-button"
-              :class="colorMode.value === 'dark' ? 'text-gray-300 hover:text-gray-100' : 'text-gray-700 hover:text-gray-900'"
+              class="expand-comments-button text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
               @click="toggleExpandAllComments"
             >
               <LucideChevronsUp v-if="expandAllComments" class="w-4 h-4" />
@@ -119,7 +117,6 @@ import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 
 const route = useRoute();
-const colorMode = useColorMode();
 const expandAllComments = ref(false);
 
 type StoryComment = {

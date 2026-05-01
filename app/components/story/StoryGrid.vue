@@ -1,6 +1,6 @@
 <template>
   <div
-    class="feed-shell min-h-full text-slate-900 dark:text-slate-100"
+    class="feed-shell feed-theme-surface min-h-full text-slate-900 dark:text-slate-100"
     :style="feedThemeStyle"
   >
     <div class="max-w-7xl mx-auto px-4 py-8 md:py-10">
@@ -43,8 +43,7 @@
           <div
             v-for="index in 9"
             :key="`story-skeleton-${endpoint}-${index}`"
-            class="story-card-skeleton flex flex-col rounded-2xl overflow-hidden shadow-lg"
-            :class="colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white'"
+            class="story-card-skeleton seed-palette-surface flex flex-col rounded-2xl overflow-hidden bg-white shadow-lg dark:bg-gray-900"
             :style="skeletonPaletteStyle(index)"
             aria-hidden="true"
           >
@@ -108,15 +107,13 @@ import { LucideRefreshCw } from '@lucide/vue';
 
 const props = defineProps<{ endpoint: FeedEndpoint }>();
 const { stories, hoveredStory, isLoading, isRefreshing, error } = useStories(props.endpoint);
-const colorMode = useColorMode();
-const colorModeName = computed(() => colorMode.value === 'dark' ? 'dark' : 'light');
 const feedTheme = computed(() => getFeedTheme(props.endpoint));
-const feedThemeStyle = computed(() => getFeedThemeStyle(props.endpoint, colorModeName.value));
+const feedThemeStyle = computed(() => getFeedThemeStyle(props.endpoint));
 const title = computed(() => feedTheme.value.title);
 const firstStoryImage = computed(() => stories.value.length > 0 ? stories.value[0].screenshotUrl : 'https://example.com/default-image.png'); // Default image if no stories
 const skeletonTitleWidths = ['82%', '68%', '76%', '58%', '88%'];
 const skeletonPaletteStyle = (index: number) => {
-  return getSeedPaletteStyle(`loading-${props.endpoint}-${index}`, colorMode.value === 'dark' ? 'dark' : 'light');
+  return getSeedPaletteStyle(`loading-${props.endpoint}-${index}`);
 };
 
 useSeoMeta({

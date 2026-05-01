@@ -1,8 +1,15 @@
 import { defineEventHandler, getRequestURL, getRouterParams, createError, useRuntimeConfig } from '#imports'
+import { captureScreenshot } from '../../utils/screenshot/orchestrate'
+import {
+  getR2ScreenshotKey,
+  getSourceUrlHash,
+  readR2Screenshot,
+  writeR2Screenshot,
+  type R2Screenshot,
+} from '../../utils/screenshot/r2Cache'
+import type { ScreenshotEnv, ScreenshotProviderName, ScreenshotResult } from '../../utils/screenshot/types'
 
 const FALLBACK_MEMORY_TTL_MS = 15 * 60 * 1000
-const SCREENSHOT_TIMEOUT_MS = 8000
-const DEFAULT_SCREENSHOT_FETCH_CONCURRENCY = 1
 const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
   255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
@@ -15,97 +22,40 @@ const SCREENSHOT_CACHE_HEADERS = {
   'Cloudflare-CDN-Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400, stale-if-error=86400',
 } as const
 
-const FALLBACK_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=900',
-  'CDN-Cache-Control': 'public, max-age=900, stale-while-revalidate=3600, stale-if-error=3600',
-  'Cloudflare-CDN-Cache-Control': 'public, max-age=900, stale-while-revalidate=3600, stale-if-error=3600',
+const STALE_SCREENSHOT_CACHE_HEADERS = {
+  'Cache-Control': 'public, max-age=3600',
+  'CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=3600, stale-if-error=3600',
+  'Cloudflare-CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=3600, stale-if-error=3600',
 } as const
 
-type ScreenshotQueueTask = {
-  release: (releaseSlot: () => void) => void
+const FALLBACK_CACHE_HEADERS = {
+  'Cache-Control': 'no-store',
+  'CDN-Cache-Control': 'no-store',
+  'Cloudflare-CDN-Cache-Control': 'no-store',
+} as const
+
+type ScreenshotCacheStatus = 'HIT' | 'R2' | 'MISS' | 'STALE' | 'FALLBACK'
+
+type HnFirebaseStory = {
+  url?: unknown
 }
 
-const pendingScreenshotFetches: ScreenshotQueueTask[] = []
-let activeScreenshotFetches = 0
-let maxScreenshotFetchConcurrency = DEFAULT_SCREENSHOT_FETCH_CONCURRENCY
+const getWaitUntil = (event: any) => {
+  const cloudflareContext = event.context.cloudflare?.context
 
-const normalizeConcurrency = (value: unknown) => {
-  const parsedValue = Number(value)
+  return cloudflareContext?.waitUntil?.bind(cloudflareContext)
+    ?? event.waitUntil?.bind(event)
+}
 
-  if (!Number.isFinite(parsedValue)) {
-    return DEFAULT_SCREENSHOT_FETCH_CONCURRENCY
+const runInBackground = (event: any, task: Promise<unknown>) => {
+  const waitUntil = getWaitUntil(event)
+
+  if (waitUntil) {
+    waitUntil(task)
+    return
   }
 
-  return Math.max(1, Math.floor(parsedValue))
-}
-
-const pumpScreenshotQueue = () => {
-  while (
-    activeScreenshotFetches < maxScreenshotFetchConcurrency
-    && pendingScreenshotFetches.length > 0
-  ) {
-    const task = pendingScreenshotFetches.shift()
-
-    if (!task) {
-      continue
-    }
-
-    activeScreenshotFetches += 1
-
-    task.release(() => {
-      activeScreenshotFetches = Math.max(0, activeScreenshotFetches - 1)
-      pumpScreenshotQueue()
-    })
-  }
-}
-
-const acquireScreenshotFetchSlot = async (concurrency: unknown) => {
-  maxScreenshotFetchConcurrency = normalizeConcurrency(concurrency)
-
-  return new Promise<() => void>((resolve) => {
-    pendingScreenshotFetches.push({
-      release: (releaseSlot) => {
-        let hasReleased = false
-
-        resolve(() => {
-          if (hasReleased) {
-            return
-          }
-
-          hasReleased = true
-          releaseSlot()
-        })
-      },
-    })
-    pumpScreenshotQueue()
-  })
-}
-
-const releaseOnStreamEnd = (body: ReadableStream<Uint8Array>, release: () => void) => {
-  const reader = body.getReader()
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read()
-
-        if (done) {
-          release()
-          controller.close()
-          return
-        }
-
-        controller.enqueue(value)
-      } catch (error) {
-        release()
-        controller.error(error)
-      }
-    },
-    cancel(reason) {
-      release()
-      return reader.cancel(reason)
-    },
-  })
+  task.catch(() => {})
 }
 
 const putCacheResponse = (
@@ -118,21 +68,20 @@ const putCacheResponse = (
     return
   }
 
-  const cachePut = cache.put(cacheKey, response.clone())
-  const waitUntil = event.context.cloudflare?.context.waitUntil?.bind(event.context.cloudflare.context)
-    ?? event.waitUntil?.bind(event)
-
-  if (waitUntil) {
-    waitUntil(cachePut)
-    return
-  }
-
-  cachePut.catch(() => {})
+  runInBackground(event, cache.put(cacheKey, response.clone()))
 }
 
-const withScreenshotCacheStatus = (response: Response, status: 'HIT' | 'MISS' | 'FALLBACK') => {
+const withScreenshotCacheStatus = (
+  response: Response,
+  status: ScreenshotCacheStatus,
+  provider?: ScreenshotProviderName,
+) => {
   const headers = new Headers(response.headers)
   headers.set('X-HN42-Screenshot-Cache', status)
+
+  if (provider) {
+    headers.set('X-HN42-Screenshot-Provider', provider)
+  }
 
   return new Response(response.body, {
     status: response.status,
@@ -156,12 +105,7 @@ const hasFreshFallback = (id: string) => {
   return true
 }
 
-const createFallbackResponse = async (
-  event: any,
-  cache?: Cache,
-  cacheKey?: Request,
-  id?: string,
-) => {
+const createFallbackResponse = (id?: string) => {
   if (id) {
     fallbackExpirations.set(id, Date.now() + FALLBACK_MEMORY_TTL_MS)
   }
@@ -177,97 +121,222 @@ const createFallbackResponse = async (
     },
   })
 
-  putCacheResponse(event, cache, cacheKey, response)
-
   return withScreenshotCacheStatus(response, 'FALLBACK')
 }
 
-const fetchWithTimeout = async (url: string, timeoutMs: number) => {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+const createImageResponse = (
+  image: ScreenshotResult | R2Screenshot,
+  storyId: string,
+  sourceUrlHash: string,
+  cacheStatus: ScreenshotCacheStatus,
+  provider?: ScreenshotProviderName,
+) => {
+  const headers = new Headers({
+    'Content-Type': image.contentType,
+    'Content-Length': String(image.bytes.byteLength),
+    'ETag': `W/"hn42-screenshot-${storyId}-${sourceUrlHash.slice(0, 16)}"`,
+    'Accept-Ranges': 'bytes',
+    ...(cacheStatus === 'STALE' ? STALE_SCREENSHOT_CACHE_HEADERS : SCREENSHOT_CACHE_HEADERS),
+  })
+
+  if ('browserSession' in image && image.browserSession) {
+    headers.set('X-HN42-Browser-Session', image.browserSession)
+  }
+
+  return withScreenshotCacheStatus(
+    new Response(image.bytes, { headers }),
+    cacheStatus,
+    provider ?? image.provider,
+  )
+}
+
+const isValidStoryId = (id: unknown): id is string => {
+  return typeof id === 'string' && /^\d+$/.test(id)
+}
+
+const isPrivateIpv4Address = (hostname: string) => {
+  const parts = hostname.split('.')
+
+  if (parts.length !== 4) {
+    return false
+  }
+
+  const octets = parts.map((part) => Number(part))
+
+  if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
+    return false
+  }
+
+  const [first, second] = octets
+
+  return first === 0
+    || first === 10
+    || first === 127
+    || (first === 100 && second >= 64 && second <= 127)
+    || (first === 169 && second === 254)
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168)
+}
+
+const isBlockedHostname = (hostname: string) => {
+  const normalizedHostname = hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1')
+  const isIpv6Literal = normalizedHostname.includes(':')
+
+  return normalizedHostname === 'localhost'
+    || normalizedHostname.endsWith('.localhost')
+    || normalizedHostname.endsWith('.local')
+    || (isIpv6Literal && normalizedHostname === '::1')
+    || (isIpv6Literal && normalizedHostname.startsWith('fc'))
+    || (isIpv6Literal && normalizedHostname.startsWith('fd'))
+    || (isIpv6Literal && normalizedHostname.startsWith('fe80:'))
+    || isPrivateIpv4Address(normalizedHostname)
+}
+
+const normalizeSourceUrl = (input: unknown) => {
+  if (typeof input !== 'string' || input.trim() === '') {
+    return null
+  }
 
   try {
-    return await fetch(url, { signal: controller.signal })
-  } finally {
-    clearTimeout(timeout)
+    const url = new URL(input)
+
+    if (!['http:', 'https:'].includes(url.protocol) || isBlockedHostname(url.hostname)) {
+      return null
+    }
+
+    return url.toString()
+  } catch {
+    return null
   }
+}
+
+const resolveStorySourceUrl = async (id: string) => {
+  const story = await $fetch<HnFirebaseStory>(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+
+  return normalizeSourceUrl(story?.url)
 }
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event)
   const id = params.id
-  if (!id) {
+
+  if (!isValidStoryId(id)) {
     throw createError({
       statusCode: 400,
+      statusMessage: 'Valid story ID is required',
     })
   }
 
-  let releaseScreenshotFetchSlot: (() => void) | null = null
+  const cache = globalThis.caches?.default
+  const cacheKey = cache ? new Request(getRequestURL(event).toString(), { method: 'GET' }) : undefined
+  const cachedResponse = cacheKey ? await cache?.match(cacheKey) : undefined
+
+  if (cachedResponse) {
+    return withScreenshotCacheStatus(cachedResponse, 'HIT')
+  }
 
   try {
-    const cache = globalThis.caches?.default
-    const cacheKey = cache ? new Request(getRequestURL(event).toString(), { method: 'GET' }) : undefined
-    const cachedResponse = cacheKey ? await cache?.match(cacheKey) : undefined
+    const runtimeConfig = useRuntimeConfig(event)
+    const env = event.context.cloudflare?.env as ScreenshotEnv | undefined
+    const sourceUrl = await resolveStorySourceUrl(id)
 
-    if (cachedResponse) {
-      return withScreenshotCacheStatus(cachedResponse, 'HIT')
+    if (!sourceUrl) {
+      return createFallbackResponse(id)
+    }
+
+    const sourceUrlHash = await getSourceUrlHash(sourceUrl)
+    const r2Key = getR2ScreenshotKey(id, sourceUrlHash)
+    const r2Screenshot = await readR2Screenshot(
+      env,
+      r2Key,
+      runtimeConfig.screenshotR2TtlDays,
+    ).catch((error) => {
+      console.warn(`R2 screenshot read failed: ${error instanceof Error ? error.message : String(error)}`)
+      return null
+    })
+
+    if (r2Screenshot?.isFresh) {
+      const response = createImageResponse(
+        r2Screenshot,
+        id,
+        sourceUrlHash,
+        'R2',
+        r2Screenshot.provider,
+      )
+
+      putCacheResponse(event, cache, cacheKey, response)
+
+      return response
     }
 
     if (hasFreshFallback(id)) {
-      return createFallbackResponse(event, cache, cacheKey)
+      if (r2Screenshot) {
+        const response = createImageResponse(
+          r2Screenshot,
+          id,
+          sourceUrlHash,
+          'STALE',
+          r2Screenshot.provider,
+        )
+
+        putCacheResponse(event, cache, cacheKey, response)
+
+        return response
+      }
+
+      return createFallbackResponse()
     }
 
-    // Fetch story details from HN Firebase API
-    const story = await $fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
-    
-    if (!story || !story.url) {
-      return createFallbackResponse(event, cache, cacheKey, id)
-    }
-    // Generate screenshot URL
-    const screenshotUrl = `https://backup15.terasp.net/api/screenshot?url=${encodeURIComponent(
-      story.url
-    )}&resX=1080&resY=1600&outFormat=jpg&waitTime=100&isFullPage=true&dismissModals=true`
-
-    const runtimeConfig = useRuntimeConfig(event)
-    releaseScreenshotFetchSlot = await acquireScreenshotFetchSlot(
-      runtimeConfig.screenshotFetchConcurrency,
+    const screenshot = await captureScreenshot(
+      sourceUrl,
+      runtimeConfig.screenshotProviderOrder,
+      {
+        env,
+        browserConcurrency: runtimeConfig.screenshotBrowserConcurrency,
+        browserKeepAliveMs: runtimeConfig.screenshotBrowserKeepAliveMs,
+        browserReuseSessions: runtimeConfig.screenshotBrowserReuseSessions,
+        backup15Concurrency: runtimeConfig.screenshotFetchConcurrency,
+      },
     )
 
-    // Fetch the image through a small in-memory queue so one Worker isolate does
-    // not fan out many screenshot-generation requests at once.
-    const imageResponse = await fetchWithTimeout(screenshotUrl, SCREENSHOT_TIMEOUT_MS)
-    
-    if (!imageResponse.ok || !imageResponse.body) {
-      releaseScreenshotFetchSlot()
-      releaseScreenshotFetchSlot = null
-      return createFallbackResponse(event, cache, cacheKey, id)
+    if (screenshot) {
+      runInBackground(
+        event,
+        writeR2Screenshot(env, r2Key, sourceUrlHash, screenshot).catch((error) => {
+          console.warn(`R2 screenshot write failed: ${error instanceof Error ? error.message : String(error)}`)
+        }),
+      )
+
+      const response = createImageResponse(
+        screenshot,
+        id,
+        sourceUrlHash,
+        'MISS',
+        screenshot.provider,
+      )
+
+      putCacheResponse(event, cache, cacheKey, response)
+
+      return response
     }
 
-    const headers = new Headers({
-      'Content-Type': imageResponse.headers.get('Content-Type') || 'image/jpeg',
-      'ETag': `W/"hn42-screenshot-${id}"`,
-      'Accept-Ranges': 'bytes',
-      ...SCREENSHOT_CACHE_HEADERS,
-    })
-    const contentLength = imageResponse.headers.get('Content-Length')
+    if (r2Screenshot) {
+      const response = createImageResponse(
+        r2Screenshot,
+        id,
+        sourceUrlHash,
+        'STALE',
+        r2Screenshot.provider,
+      )
 
-    if (contentLength) {
-      headers.set('Content-Length', contentLength)
+      putCacheResponse(event, cache, cacheKey, response)
+
+      return response
     }
 
-    const response = new Response(
-      releaseOnStreamEnd(imageResponse.body, () => {
-        releaseScreenshotFetchSlot?.()
-        releaseScreenshotFetchSlot = null
-      }),
-      { headers },
-    )
-
-    putCacheResponse(event, cache, cacheKey, response)
-    
-    return withScreenshotCacheStatus(response, 'MISS')
-  } catch {
-    releaseScreenshotFetchSlot?.()
-    return createFallbackResponse(event, undefined, undefined, id)
+    return createFallbackResponse(id)
+  } catch (error) {
+    console.warn(`Screenshot route failed: ${error instanceof Error ? error.message : String(error)}`)
+    return createFallbackResponse(id)
   }
 })

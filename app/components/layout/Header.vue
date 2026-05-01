@@ -1,6 +1,6 @@
 <template>
   <nav
-    class="site-header sticky top-0 z-50 border-b backdrop-blur-lg"
+    class="site-header feed-theme-surface sticky top-0 z-50 border-b backdrop-blur-lg"
     :style="currentFeed ? getNavStyle(currentFeed) : undefined"
   >
     <div class="max-w-7xl mx-auto flex h-14 items-center justify-between gap-3 px-3 sm:h-16 sm:gap-5 sm:px-5 lg:px-6">
@@ -20,7 +20,7 @@
             v-for="link in feedThemeList"
             :key="link.key"
             :to="link.path"
-            class="feed-nav-link inline-flex shrink-0 items-center py-1 font-medium transition-colors duration-200"
+            class="feed-nav-link feed-theme-surface inline-flex shrink-0 items-center py-1 font-medium transition-colors duration-200"
             :class="{ 'feed-nav-link-active': currentFeed === link.key }"
             :style="getNavStyle(link.key)"
             :aria-current="currentFeed === link.key ? 'page' : undefined"
@@ -32,11 +32,11 @@
       <button
         type="button"
         class="theme-toggle ml-1 shrink-0 sm:ml-2"
-        :aria-label="colorMode.value === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
-        :title="colorMode.value === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+        :aria-label="isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'"
+        :title="isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'"
         @click="toggleColorMode"
       >
-        <LucideSun v-if="colorMode.value === 'dark'" class="h-4 w-4" aria-hidden="true" />
+        <LucideSun v-if="isDarkMode" class="h-4 w-4" aria-hidden="true" />
         <LucideMoon v-else class="h-4 w-4" aria-hidden="true" />
       </button>
     </div>
@@ -50,20 +50,48 @@ import type { FeedEndpoint } from '~/composables/useFeedTheme';
 const colorMode = useColorMode();
 const route = useRoute();
 const feedNavRef = ref<HTMLElement | null>(null);
+const isDarkMode = ref(false);
+let colorModeObserver: MutationObserver | null = null;
 
-const colorModeName = computed(() => colorMode.value === 'dark' ? 'dark' : 'light');
 const currentFeed = computed(() => {
   const feedCandidate = route.path.split('/')[1];
   return isFeedEndpoint(feedCandidate) ? feedCandidate : null;
 });
 
 const getNavStyle = (feed: FeedEndpoint) => {
-  return getFeedThemeStyle(feed, colorModeName.value);
+  return getFeedThemeStyle(feed);
 };
 
 const toggleColorMode = () => {
-  colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark';
+  colorMode.preference = isDarkMode.value ? 'light' : 'dark';
 };
+
+const syncColorMode = () => {
+  if (!import.meta.client) {
+    isDarkMode.value = colorMode.value === 'dark';
+    return;
+  }
+
+  isDarkMode.value = document.documentElement.classList.contains('dark');
+};
+
+onMounted(() => {
+  syncColorMode();
+  colorModeObserver = new MutationObserver(syncColorMode);
+  colorModeObserver.observe(document.documentElement, {
+    attributeFilter: ['class'],
+    attributes: true,
+  });
+});
+
+onBeforeUnmount(() => {
+  colorModeObserver?.disconnect();
+});
+
+watch(
+  () => colorMode.value,
+  () => nextTick(syncColorMode),
+);
 
 watch(
   currentFeed,

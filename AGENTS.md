@@ -80,7 +80,8 @@ Primary upstreams:
 - Algolia HN Search API for story/feed data.
 - Algolia Items API for story detail and comment trees.
 - Algolia users/search-by-date endpoints for user profiles and activity.
-- `backup15.terasp.net` for article screenshot generation.
+- Cloudflare Browser Run for primary article screenshot generation.
+- `backup15.terasp.net` as the fallback article screenshot generator.
 
 Caching expectations:
 
@@ -88,7 +89,9 @@ Caching expectations:
 - Related stories use longer cache headers because they are derived and less time-sensitive.
 - User profile/activity routes cache briefly.
 - Screenshot responses use long browser/CDN cache headers and Cloudflare `caches.default`.
-- Screenshot fallbacks are transparent GIFs with shorter cache headers; they avoid retry storms when a screenshot cannot be generated.
+- Successful screenshots are persisted temporarily in R2 under `screenshots/v1/story-<id>/<url-hash>.jpg`; R2 lifecycle should delete them after 30 days.
+- Screenshot fallbacks are transparent GIFs with `no-store` headers; the in-memory fallback TTL avoids retry storms without poisoning `caches.default`.
+- Screenshot fallbacks are not written to R2. Stale R2 screenshots can be served briefly when all providers fail.
 - Preserve screenshot cache behavior unless the task is specifically about invalidation or freshness.
 
 ## UI And Interaction Principles
@@ -137,8 +140,14 @@ Story screenshots should render from `/api/screenshot/:id`.
 - Do not use the old `hn42.net/cdn-cgi/image/...` URL; that domain is no longer owned.
 - Do not add `provider="cloudflare"` to `NuxtImg` for screenshots.
 - Current screenshot rendering intentionally uses plain `<img>` tags to avoid Nuxt Image generating CDN proxy URLs.
-- `server/api/screenshot/[id].ts` fetches screenshots from `backup15.terasp.net` with full-page options and modal dismissal.
-- Server-side screenshot fetch concurrency is controlled by `runtimeConfig.screenshotFetchConcurrency`.
+- `server/api/screenshot/[id].ts` resolves the HN story URL, checks `caches.default`, checks R2, then runs the configured provider chain.
+- The default provider chain is Cloudflare Browser Run first, then `backup15.terasp.net`; override with `NUXT_SCREENSHOT_PROVIDER_ORDER=backup15` to fall back to the old behavior.
+- Cloudflare Browser Run uses the `BROWSER` binding and `@cloudflare/puppeteer`; the route still exposes this provider as `cloudflare-browser`.
+- Browser Run sessions are reused by default. The provider connects to a free session when available, captures each screenshot in a fresh browser context, then calls `browser.disconnect()` so the browser remains warm until the configured keep-alive timeout.
+- Successful screenshots are JPEGs stored in R2 through the `SCREENSHOTS_BUCKET` binding.
+- Server-side Browser Run concurrency is controlled by `runtimeConfig.screenshotBrowserConcurrency`.
+- Browser Run keep-alive is controlled by `runtimeConfig.screenshotBrowserKeepAliveMs`; reuse can be disabled with `NUXT_SCREENSHOT_BROWSER_REUSE_SESSIONS=false`.
+- Server-side backup15 fetch concurrency is controlled by `runtimeConfig.screenshotFetchConcurrency`.
 - Client-side image request concurrency is controlled by `runtimeConfig.public.screenshotImageQueueConcurrency`.
 - Keep long shared-cache TTLs unless there is a concrete invalidation need.
 
@@ -178,12 +187,19 @@ Production app URL: `https://hn42.vv42.workers.dev/`.
 - Static assets: `.output/public`
 - Wrangler command: `wrangler deploy`
 - Keep `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml`.
+- Keep the Browser Run binding `BROWSER` and R2 binding `SCREENSHOTS_BUCKET` in `wrangler.toml`.
+- R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.
+- Production screenshot storage expects the R2 bucket `hn42-screenshots`; preview/local Wrangler storage expects `hn42-screenshots-dev`.
+- R2 lifecycle should delete the `screenshots/v1/` prefix after 30 days.
+- Use `npm run cf:screenshots:bootstrap` to create missing screenshot R2 buckets and add the lifecycle rule. The script is intended to be idempotent and can be rerun.
 - Do not switch scripts back to `wrangler pages deploy` or `wrangler pages dev`.
 
 For deployment config changes, verify:
 
 ```bash
+npm run cf:screenshots:bootstrap
 npm run build
+npm run cf-typegen
 npx wrangler deploy --dry-run
 ```
 
@@ -196,13 +212,14 @@ npm run build
 npm run preview
 npm run deploy
 npm run cf-typegen
+npm run cf:screenshots:bootstrap
 npx wrangler deploy --dry-run
 git diff --check
 ```
 
 ## Known Caveats
 
-- The screenshot route can be slow because it proxies external screenshot generation.
+- The screenshot route can be slow on cold misses because it may run Browser Run or fall back to external screenshot generation.
 - Browser verification should use the in-app browser against `http://localhost:3000` or the actual Nuxt dev port.
 - The dev server may need a restart after dependency or Nuxt/Nitro preset changes; hot reload can leave the app shell blank.
 - Screenshot latency is expected and should not be treated as a UI regression unless the task is specifically about screenshots.

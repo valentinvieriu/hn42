@@ -2,10 +2,15 @@
 import { defineNuxtConfig } from 'nuxt/config'
 
 export default defineNuxtConfig({
-  compatibilityDate: '2024-10-22',
+  compatibilityDate: '2025-09-15',
   devtools: { enabled: false },
   runtimeConfig: {
     screenshotFetchConcurrency: '1',
+    screenshotProviderOrder: 'cloudflare-browser,backup15',
+    screenshotBrowserConcurrency: '2',
+    screenshotBrowserKeepAliveMs: '600000',
+    screenshotBrowserReuseSessions: 'true',
+    screenshotR2TtlDays: '30',
     public: {
       screenshotImageQueueConcurrency: '1',
     },
@@ -133,5 +138,12 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/': { redirect: '/top' },
-  }
+  },
+  vite: {
+    optimizeDeps: {
+      include: [
+        '@lucide/vue',
+      ],
+    },
+  },
 })

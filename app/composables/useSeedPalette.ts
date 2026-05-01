@@ -37,18 +37,12 @@ export const getSeedHue = (
   return normalizeHue(contextHue + offset + jitter)
 }
 
-export const getSeedPaletteStyle = (
-  seed: string | number | null | undefined,
-  mode: SeedPaletteMode = 'light',
-  contextSeed: string | number | null | undefined = DEFAULT_CONTEXT_SEED,
-): SeedPaletteStyle => {
-  const hue = getSeedHue(seed, contextSeed)
+const getSeedPaletteTokens = (hue: number, mode: SeedPaletteMode): SeedPaletteStyle => {
   const isDark = mode === 'dark'
 
   // Text colors use conservative lightness/chroma bands; the more saturated
   // tokens are reserved for decoration so arbitrary seeds do not compromise contrast.
   return {
-    '--seed-hue': `${hue}`,
     '--seed-accent': isDark ? oklch(76, 0.14, hue) : oklch(50, 0.115, hue),
     '--seed-accent-strong': isDark ? oklch(84, 0.14, hue) : oklch(31, 0.09, hue),
     '--seed-accent-soft': isDark ? oklch(31, 0.04, hue, 0.6) : oklch(96, 0.018, hue, 0.74),
@@ -70,4 +64,27 @@ export const getSeedPaletteStyle = (
     '--seed-overlay-mid': isDark ? oklch(50, 0.1, hue, 0.28) : oklch(52, 0.06, hue, 0.18),
     '--seed-overlay-edge': isDark ? oklch(34, 0.085, hue, 0.44) : oklch(38, 0.05, hue, 0.26),
   }
+}
+
+export const getSeedPaletteStyle = (
+  seed: string | number | null | undefined,
+  _mode: SeedPaletteMode = 'light',
+  contextSeed: string | number | null | undefined = DEFAULT_CONTEXT_SEED,
+): SeedPaletteStyle => {
+  const hue = getSeedHue(seed, contextSeed)
+  const lightTokens = getSeedPaletteTokens(hue, 'light')
+  const darkTokens = getSeedPaletteTokens(hue, 'dark')
+  const style: SeedPaletteStyle = {
+    '--seed-hue': `${hue}`,
+  }
+
+  Object.entries(lightTokens).forEach(([token, value]) => {
+    style[`${token}-light`] = value
+  })
+
+  Object.entries(darkTokens).forEach(([token, value]) => {
+    style[`${token}-dark`] = value
+  })
+
+  return style
 }

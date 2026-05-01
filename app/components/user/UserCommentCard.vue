@@ -1,5 +1,5 @@
 <template>
-  <article class="user-comment-card" :style="commentPaletteStyle">
+  <article class="user-comment-card seed-palette-surface" :style="commentPaletteStyle">
     <div class="comment-card-header">
       <NuxtLink
         v-if="comment.story_id"
@@ -67,13 +67,11 @@ const props = defineProps<{
   comment: UserComment
 }>()
 
-const colorMode = useColorMode()
 const { sanitize } = useSanitizer()
 
 const commentPaletteStyle = computed(() => {
   return getSeedPaletteStyle(
     props.comment.story_id || props.comment.objectID,
-    colorMode.value === 'dark' ? 'dark' : 'light',
   )
 })
 

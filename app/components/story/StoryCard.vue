@@ -6,9 +6,8 @@
     ref="cardRef"
     :data-screenshot-state="imageState"
     :data-screenshot-requested="queuedImageSrc ? 'started' : 'pending'"
-    class="story-card group flex flex-col rounded-2xl overflow-hidden transition-[border-color,box-shadow,transform] duration-300" 
+    class="story-card seed-palette-surface group flex flex-col overflow-hidden rounded-2xl bg-white transition-[border-color,box-shadow,transform] duration-300 dark:bg-gray-900"
     :class="[
-      colorMode.value === 'dark' ? 'bg-gray-900' : 'bg-white', 
       { 'pointer-events-none': isScrolling }
     ]" 
     :style="cardPaletteStyle">
@@ -189,10 +188,8 @@ const formatCompactDistanceToNow = (dateValue: string): string => {
   return `${Math.floor(diffSeconds / year)}y ago`
 }
 
-const colorMode = useColorMode()
-
 const cardPaletteStyle = computed(() => {
-  return getSeedPaletteStyle(props.story.objectID, colorMode.value === 'dark' ? 'dark' : 'light')
+  return getSeedPaletteStyle(props.story.objectID)
 })
 
 const externalStoryUrl = computed(() => props.story.url || getHnItemUrl(props.story.objectID))
@@ -275,26 +272,26 @@ const radialGradientStyle = computed(() => ({
 
 const pointsToneClass = computed(() => {
   if (props.story.points < 100 && props.story.num_comments < 50) {
-    return colorMode.value === 'dark' ? 'text-slate-400' : 'text-slate-600'
+    return 'story-card-tone-muted'
   }
 
   if (props.story.points >= 100 && props.story.num_comments < 50) {
-    return colorMode.value === 'dark' ? 'text-amber-300' : 'text-amber-800'
+    return 'story-card-tone-points'
   }
 
   if (props.story.points < 100 && props.story.num_comments >= 50) {
-    return colorMode.value === 'dark' ? 'text-red-400' : 'text-red-700'
+    return 'story-card-tone-comments'
   }
 
-  return colorMode.value === 'dark' ? 'text-emerald-300' : 'text-emerald-700'
+  return 'story-card-tone-active'
 })
 
 const commentsToneClass = computed(() => {
   if (props.story.num_comments < 50) {
-    return colorMode.value === 'dark' ? 'text-slate-400' : 'text-slate-600'
+    return 'story-card-tone-muted'
   }
 
-  return colorMode.value === 'dark' ? 'text-red-400' : 'text-red-700'
+  return 'story-card-tone-comments'
 })
 
 const router = useRouter()
@@ -890,6 +887,38 @@ onBeforeUnmount(() => {
 
 .story-card-metric svg {
   flex: 0 0 auto;
+}
+
+.story-card-tone-muted {
+  color: rgb(71 85 105);
+}
+
+.dark .story-card-tone-muted {
+  color: rgb(148 163 184);
+}
+
+.story-card-tone-points {
+  color: rgb(146 64 14);
+}
+
+.dark .story-card-tone-points {
+  color: rgb(252 211 77);
+}
+
+.story-card-tone-comments {
+  color: rgb(185 28 28);
+}
+
+.dark .story-card-tone-comments {
+  color: rgb(248 113 113);
+}
+
+.story-card-tone-active {
+  color: rgb(4 120 87);
+}
+
+.dark .story-card-tone-active {
+  color: rgb(110 231 183);
 }
 
 .story-card-metric-label {

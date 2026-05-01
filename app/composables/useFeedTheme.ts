@@ -61,10 +61,7 @@ export const isFeedEndpoint = (value: string | undefined): value is FeedEndpoint
 
 export const getFeedTheme = (feed: FeedEndpoint) => feedThemes[feed]
 
-export const getFeedThemeStyle = (
-  feed: FeedEndpoint,
-  mode: FeedThemeMode = 'light',
-): Record<string, string> => {
+const getFeedThemeTokens = (feed: FeedEndpoint, mode: FeedThemeMode): Record<string, string> => {
   const [hueA, hueB, hueC] = feedThemes[feed].hues
   const isDark = mode === 'dark'
 
@@ -85,4 +82,22 @@ export const getFeedThemeStyle = (
     '--feed-nav-text': isDark ? oklch(12, 0.018, hueA) : oklch(99, 0.01, hueA),
     '--feed-swatch': `linear-gradient(135deg, ${oklch(67, 0.16, hueA)} 0%, ${oklch(70, 0.13, hueB)} 58%, ${oklch(64, 0.13, hueC)} 100%)`,
   }
+}
+
+export const getFeedThemeStyle = (
+  feed: FeedEndpoint,
+): Record<string, string> => {
+  const lightTokens = getFeedThemeTokens(feed, 'light')
+  const darkTokens = getFeedThemeTokens(feed, 'dark')
+  const style: Record<string, string> = {}
+
+  Object.entries(lightTokens).forEach(([token, value]) => {
+    style[`${token}-light`] = value
+  })
+
+  Object.entries(darkTokens).forEach(([token, value]) => {
+    style[`${token}-dark`] = value
+  })
+
+  return style
 }

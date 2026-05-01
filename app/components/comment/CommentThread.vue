@@ -1,5 +1,5 @@
 <template>
-  <article :class="commentContainerClasses" :style="commentPaletteStyle" :data-author="comment.author">
+  <article class="seed-palette-surface" :class="commentContainerClasses" :style="commentPaletteStyle" :data-author="comment.author">
     <div class="comment-panel">
       <div :class="`comment-header ${headerTextColor} flex items-center`">
         <span class="author-chip">
@@ -99,10 +99,8 @@ const authorCommentCounts = computed(() => props.authorCommentCounts || {})
 const authorCommentCount = computed(() => authorCommentCounts.value[props.comment.author] || 1)
 const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
 
-const colorMode = useColorMode()
-
 const commentPaletteStyle = computed(() => ({
-  ...getSeedPaletteStyle(props.comment.author, colorMode.value === 'dark' ? 'dark' : 'light'),
+  ...getSeedPaletteStyle(props.comment.author),
 }))
 
 const timeAgo = computed(() => {
@@ -110,15 +108,15 @@ const timeAgo = computed(() => {
 })
 
 const replyLinkColor = computed(() => {
-  return colorMode.value === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-600 hover:text-gray-800'
+  return 'text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300'
 })
 
 const headerTextColor = computed(() => {
-  return colorMode.value === 'dark' ? 'text-gray-400' : 'text-gray-600'
+  return 'text-gray-600 dark:text-gray-400'
 })
 
 const textColor = computed(() => {
-  return colorMode.value === 'dark' ? 'text-gray-200' : 'text-gray-800'
+  return 'text-gray-800 dark:text-gray-200'
 })
 
 const commentContainerClasses = computed(() => {

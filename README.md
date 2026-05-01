@@ -112,12 +112,45 @@ The Worker entry and static asset output are configured in `wrangler.toml`:
 
 - Worker entry: `.output/server/index.mjs`
 - Static assets: `.output/public`
+- Browser Run binding: `BROWSER`
+- Screenshot R2 binding: `SCREENSHOTS_BUCKET`
 
 Before deployment, use:
 
 ```bash
+npm run cf:screenshots:bootstrap
 npm run build
+npm run cf-typegen
 npx wrangler deploy --dry-run
+```
+
+Article screenshots use Cloudflare Browser Run through `@cloudflare/puppeteer`
+first, then fall back to `backup15.terasp.net`. Enable R2 on the Cloudflare account before deployment.
+Browser Run sessions are reused by default: the screenshot route connects to a
+free session when possible, uses a fresh browser context per screenshot, then
+disconnects so the browser can stay warm for up to
+`NUXT_SCREENSHOT_BROWSER_KEEP_ALIVE_MS` milliseconds. Set
+`NUXT_SCREENSHOT_BROWSER_REUSE_SESSIONS=false` to disable reuse during
+debugging.
+Successful JPEG screenshots are stored temporarily in R2 under
+`screenshots/v1/`. The bootstrap script creates `hn42-screenshots` and
+`hn42-screenshots-dev` if missing, then adds a 30-day lifecycle rule for that
+prefix. Use `NUXT_SCREENSHOT_PROVIDER_ORDER=backup15` as a kill switch to use
+only the legacy fallback provider.
+
+Screenshot storage bootstrap can be rerun safely:
+
+```bash
+npm run cf:screenshots:bootstrap
+```
+
+Optional overrides:
+
+```bash
+HN42_SCREENSHOT_BUCKET=my-prod-bucket \
+HN42_SCREENSHOT_PREVIEW_BUCKET=my-dev-bucket \
+HN42_SCREENSHOT_EXPIRE_DAYS=14 \
+npm run cf:screenshots:bootstrap
 ```
 
 ## Data Sources

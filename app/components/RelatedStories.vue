@@ -1,6 +1,6 @@
 <template>
   <div class="mt-10">
-    <h2 :class="['section-title', 'text-xl', 'font-semibold', 'mb-4', colorMode.value === 'dark' ? 'text-gray-100' : 'text-gray-900']">
+    <h2 class="section-title mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">
       Related Stories
     </h2>
     <div v-if="status === 'pending'" class="text-gray-500">
@@ -17,7 +17,7 @@
         v-for="story in stories"
         :key="story.objectID"
         :to="`/item/${story.objectID}`"
-        class="related-story-card"
+        class="related-story-card seed-palette-surface"
         :style="relatedPaletteStyle(story)"
       >
         <h3 class="related-story-title">{{ story.title }}</h3>
@@ -54,9 +54,8 @@ interface RelatedStory {
   url: string
 }
 
-const colorMode = useColorMode()
 const relatedPaletteStyle = (story: RelatedStory) => {
-  return getSeedPaletteStyle(story.objectID, colorMode.value === 'dark' ? 'dark' : 'light')
+  return getSeedPaletteStyle(story.objectID)
 }
 const { data: stories, status, error } = await useFetch<RelatedStory[]>(
   () => `/api/related/${props.storyId}`,

@@ -1,5 +1,5 @@
 <template>
-  <div class="user-shell min-h-full text-slate-900 dark:text-slate-100" :style="userPaletteStyle">
+  <div class="user-shell seed-palette-surface min-h-full text-slate-900 dark:text-slate-100" :style="userPaletteStyle">
     <div class="mx-auto max-w-7xl px-4 py-8 md:py-10">
       <div v-if="pageError" class="mt-20 text-center">
         <h1 class="mb-4 text-3xl font-display font-semibold">User not found</h1>
@@ -214,7 +214,6 @@ type ActivityTab = 'comments' | 'posts'
 const PAGE_SIZE = 30
 
 const route = useRoute()
-const colorMode = useColorMode()
 const { sanitize } = useSanitizer()
 const numberFormatter = new Intl.NumberFormat('en-US')
 
@@ -486,7 +485,7 @@ const pageError = computed(() => {
 })
 
 const displayUsername = computed(() => profile.value?.username || username.value)
-const userPaletteStyle = computed(() => getSeedPaletteStyle(displayUsername.value, colorMode.value === 'dark' ? 'dark' : 'light'))
+const userPaletteStyle = computed(() => getSeedPaletteStyle(displayUsername.value))
 const hnUserUrl = computed(() => `https://news.ycombinator.com/user?id=${encodeURIComponent(displayUsername.value)}`)
 const formattedKarma = computed(() => `${numberFormatter.format(profile.value?.karma || 0)} karma`)
 const formattedPostTotal = computed(() => numberFormatter.format(postTotal.value))
