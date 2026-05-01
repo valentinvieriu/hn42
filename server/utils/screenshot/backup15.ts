@@ -2,6 +2,7 @@ import { createConcurrencyLimiter } from './concurrency'
 import type { ScreenshotResult } from './types'
 
 const SCREENSHOT_TIMEOUT_MS = 8000
+const MAX_QUEUE_WAIT_MS = 1_000
 const backup15Limiter = createConcurrencyLimiter(1)
 
 const fetchWithTimeout = async (url: string, timeoutMs: number) => {
@@ -19,7 +20,10 @@ export const captureWithBackup15 = async (
   sourceUrl: string,
   concurrency: unknown,
 ): Promise<ScreenshotResult> => {
-  const release = await backup15Limiter.acquire(concurrency)
+  const release = await backup15Limiter.acquire(concurrency, {
+    label: 'backup15',
+    maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
+  })
 
   try {
     const screenshotUrl = `https://backup15.terasp.net/api/screenshot?url=${encodeURIComponent(
@@ -41,4 +45,3 @@ export const captureWithBackup15 = async (
     release()
   }
 }
-

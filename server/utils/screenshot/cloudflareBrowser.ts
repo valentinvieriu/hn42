@@ -6,6 +6,7 @@ const VIEWPORT_HEIGHT = 1600
 const MAX_CAPTURE_HEIGHT = 6000
 const DEFAULT_KEEP_ALIVE_MS = 600_000
 const MAX_KEEP_ALIVE_MS = 600_000
+const MAX_QUEUE_WAIT_MS = 2_000
 const browserLimiter = createConcurrencyLimiter(1)
 
 const OVERLAY_SUPPRESSION_CSS = `
@@ -153,7 +154,10 @@ export const captureWithCloudflareBrowser = async (
     throw new Error('Cloudflare Browser binding BROWSER is not available')
   }
 
-  const release = await browserLimiter.acquire(concurrency)
+  const release = await browserLimiter.acquire(concurrency, {
+    label: 'Browser Run',
+    maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
+  })
   let browser: any
   let shouldCloseBrowser = false
 

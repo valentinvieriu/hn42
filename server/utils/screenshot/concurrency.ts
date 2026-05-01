@@ -1,5 +1,17 @@
 type QueueTask = {
+  clearQueueTimeout: () => void
+  reject: (error: Error) => void
   release: (releaseSlot: () => void) => void
+  settled: boolean
+}
+
+const DEFAULT_MAX_QUEUE_WAIT_MS = 2_000
+
+export class ScreenshotConcurrencyTimeoutError extends Error {
+  constructor(label: string, timeoutMs: number) {
+    super(`${label} concurrency queue timed out after ${timeoutMs}ms`)
+    this.name = 'ScreenshotConcurrencyTimeoutError'
+  }
 }
 
 const normalizeConcurrency = (value: unknown, fallback: number) => {
@@ -7,6 +19,16 @@ const normalizeConcurrency = (value: unknown, fallback: number) => {
 
   if (!Number.isFinite(parsedValue)) {
     return fallback
+  }
+
+  return Math.max(1, Math.floor(parsedValue))
+}
+
+const normalizeQueueTimeout = (value: unknown) => {
+  const parsedValue = Number(value)
+
+  if (!Number.isFinite(parsedValue)) {
+    return DEFAULT_MAX_QUEUE_WAIT_MS
   }
 
   return Math.max(1, Math.floor(parsedValue))
@@ -25,6 +47,12 @@ export const createConcurrencyLimiter = (defaultConcurrency: number) => {
         continue
       }
 
+      if (task.settled) {
+        continue
+      }
+
+      task.settled = true
+      task.clearQueueTimeout()
       activeTasks += 1
 
       task.release(() => {
@@ -34,11 +62,18 @@ export const createConcurrencyLimiter = (defaultConcurrency: number) => {
     }
   }
 
-  const acquire = async (concurrency: unknown) => {
+  const acquire = async (
+    concurrency: unknown,
+    options: { label?: string, maxQueueWaitMs?: unknown } = {},
+  ) => {
     maxConcurrency = normalizeConcurrency(concurrency, defaultConcurrency)
+    const maxQueueWaitMs = normalizeQueueTimeout(options.maxQueueWaitMs)
+    const label = options.label ?? 'Screenshot'
 
-    return new Promise<() => void>((resolve) => {
-      pendingTasks.push({
+    return new Promise<() => void>((resolve, reject) => {
+      const task: QueueTask = {
+        clearQueueTimeout: () => {},
+        reject,
         release: (releaseSlot) => {
           let hasReleased = false
 
@@ -51,7 +86,29 @@ export const createConcurrencyLimiter = (defaultConcurrency: number) => {
             releaseSlot()
           })
         },
-      })
+        settled: false,
+      }
+
+      const timeout = setTimeout(() => {
+        if (task.settled) {
+          return
+        }
+
+        task.settled = true
+        const taskIndex = pendingTasks.indexOf(task)
+
+        if (taskIndex !== -1) {
+          pendingTasks.splice(taskIndex, 1)
+        }
+
+        task.reject(new ScreenshotConcurrencyTimeoutError(label, maxQueueWaitMs))
+      }, maxQueueWaitMs)
+
+      task.clearQueueTimeout = () => {
+        clearTimeout(timeout)
+      }
+
+      pendingTasks.push(task)
       pumpQueue()
     })
   }
@@ -60,4 +117,3 @@ export const createConcurrencyLimiter = (defaultConcurrency: number) => {
     acquire,
   }
 }
-
