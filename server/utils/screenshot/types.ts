@@ -12,6 +12,7 @@ export type ScreenshotSkipReason =
   | 'blocked-hostname'
   | 'invalid-url'
   | 'known-blocked-host'
+  | 'non-html-content'
   | 'pdf-content'
   | 'pdf-url'
 
@@ -41,6 +42,7 @@ export type ThumbnailRuntimeConfig = {
   jpegQuality: unknown
   maxInputBytes: unknown
   maxInputPixels: unknown
+  queueTimeoutMs: unknown
   timeoutMs: unknown
   width: unknown
 }

@@ -853,6 +853,7 @@ export default defineEventHandler(async (event) => {
           jpegQuality: runtimeConfig.screenshotThumbnailJpegQuality,
           maxInputBytes: runtimeConfig.screenshotThumbnailMaxInputBytes,
           maxInputPixels: runtimeConfig.screenshotThumbnailMaxInputPixels,
+          queueTimeoutMs: runtimeConfig.screenshotThumbnailProcessingQueueTimeoutMs,
           timeoutMs: runtimeConfig.screenshotThumbnailProcessingTimeoutMs,
           width: runtimeConfig.screenshotThumbnailWidth,
         },

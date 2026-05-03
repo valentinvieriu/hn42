@@ -22,6 +22,7 @@ export default defineNuxtConfig({
     screenshotThumbnailMaxInputBytes: '6000000',
     screenshotThumbnailMaxInputPixels: '8000000',
     screenshotThumbnailProcessingConcurrency: '1',
+    screenshotThumbnailProcessingQueueTimeoutMs: '15000',
     screenshotThumbnailProcessingTimeoutMs: '5000',
     screenshotThumbnailWidth: '720',
     screenshotXCancelBaseUrl: 'https://xcancel.com',

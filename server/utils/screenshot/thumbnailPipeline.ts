@@ -59,6 +59,7 @@ const createAndPersistCloudflareImagesThumbnail = (
     concurrency: options.config.concurrency,
     height: options.config.height,
     quality: options.config.jpegQuality,
+    queueTimeoutMs: options.config.queueTimeoutMs,
     timeoutMs: options.config.timeoutMs,
     width: options.config.width,
   })
@@ -96,6 +97,7 @@ const createAndPersistWasmThumbnail = (
     jpegQuality: options.config.jpegQuality,
     maxInputBytes: options.config.maxInputBytes,
     maxInputPixels: options.config.maxInputPixels,
+    queueTimeoutMs: options.config.queueTimeoutMs,
     timeoutMs: options.config.timeoutMs,
     width: options.config.width,
   })

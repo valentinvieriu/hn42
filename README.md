@@ -145,9 +145,10 @@ and obvious PDF query shapes, and skip a small default list of known paywall or
 bot-check domains (`nytimes.com`, `wsj.com`, `bloomberg.com`, `ft.com`,
 `economist.com`, and `washingtonpost.com`, including subdomains). After R2
 misses, the route also runs a bounded HEAD probe before capture and skips URLs
-that declare `application/pdf` or a PDF filename in `Content-Disposition`.
-Skipped screenshots return the transparent fallback and include policy headers
-instead of calling backup15.
+that declare `application/pdf`, a PDF filename in `Content-Disposition`, or
+obvious non-HTML downloads/media such as audio, video, archives, Office files,
+and generic binary streams. Skipped screenshots return the transparent fallback
+and include policy headers instead of calling backup15.
 
 Feed cards request the `thumbnail` variant. The thumbnail is derived inside the
 Worker from the original JPEG. R2 lookup prefers the canonical Cloudflare Images
@@ -171,6 +172,8 @@ one Worker isolate does not fan out many generation or image-processing tasks at
 once. Tune the defaults with
 `NUXT_SCREENSHOT_FETCH_CONCURRENCY`,
 `NUXT_SCREENSHOT_THUMBNAIL_PROCESSING_CONCURRENCY`,
+`NUXT_SCREENSHOT_THUMBNAIL_PROCESSING_QUEUE_TIMEOUT_MS`,
+`NUXT_SCREENSHOT_THUMBNAIL_PROCESSING_TIMEOUT_MS`,
 `NUXT_SCREENSHOT_THUMBNAIL_WIDTH`,
 `NUXT_SCREENSHOT_THUMBNAIL_HEIGHT`,
 `NUXT_SCREENSHOT_THUMBNAIL_MAX_INPUT_PIXELS`,

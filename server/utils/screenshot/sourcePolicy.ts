@@ -15,6 +15,25 @@ const DEFAULT_BLOCKED_HOSTS = [
   'economist.com',
   'washingtonpost.com',
 ]
+const BINARY_CONTENT_TYPES = new Set([
+  'application/epub+zip',
+  'application/gzip',
+  'application/msword',
+  'application/octet-stream',
+  'application/vnd.ms-excel',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/x-7z-compressed',
+  'application/x-bzip2',
+  'application/x-gzip',
+  'application/x-rar-compressed',
+  'application/x-tar',
+  'application/x-zip-compressed',
+  'application/zip',
+])
+const BINARY_FILENAME_PATTERN = /\.(?:7z|avi|bz2|doc|docx|epub|gz|m4a|m4v|mkv|mov|mp3|mp4|ppt|pptx|rar|tar|tgz|wav|webm|xls|xlsx|xz|zip)(?:["']|$|;)/i
 
 type ScreenshotCaptureStrategy = Exclude<ScreenshotSourceStrategy, 'skip-pdf' | 'skip-known-blocked'>
 
@@ -310,6 +329,21 @@ const isPdfResponse = (headers: Headers) => {
     || /filename\*?=[^;]*\.pdf(?:["']|$|;)/i.test(contentDisposition)
 }
 
+const isNonHtmlBinaryResponse = (headers: Headers) => {
+  const contentType = headers.get('Content-Type')?.toLowerCase().split(';')[0].trim()
+  const contentDisposition = headers.get('Content-Disposition')?.toLowerCase() ?? ''
+
+  if (!contentType) {
+    return BINARY_FILENAME_PATTERN.test(contentDisposition)
+  }
+
+  return contentType.startsWith('audio/')
+    || contentType.startsWith('font/')
+    || contentType.startsWith('video/')
+    || BINARY_CONTENT_TYPES.has(contentType)
+    || BINARY_FILENAME_PATTERN.test(contentDisposition)
+}
+
 const fetchHeadWithTimeout = async (url: string, timeoutMs: number) => {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
@@ -350,6 +384,10 @@ export const probeCaptureUrlContent = async (
 
     if (isPdfResponse(response.headers)) {
       return { policy: 'skip', skipReason: 'pdf-content' }
+    }
+
+    if (isNonHtmlBinaryResponse(response.headers)) {
+      return { policy: 'skip', skipReason: 'non-html-content' }
     }
 
     if (!isRedirectStatus(response.status)) {

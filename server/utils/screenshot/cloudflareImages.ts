@@ -4,6 +4,7 @@ import type { ScreenshotResult } from './types'
 const DEFAULT_WIDTH = 720
 const DEFAULT_HEIGHT = 1440
 const DEFAULT_QUALITY = 78
+const DEFAULT_QUEUE_TIMEOUT_MS = 15000
 const DEFAULT_TIMEOUT_MS = 5000
 const MIN_THUMBNAIL_BYTES = 512
 const imagesTransformLimiter = createConcurrencyLimiter(1)
@@ -12,6 +13,7 @@ type ImagesThumbnailOptions = {
   concurrency?: unknown
   height?: unknown
   quality?: unknown
+  queueTimeoutMs?: unknown
   timeoutMs?: unknown
   width?: unknown
 }
@@ -124,12 +126,13 @@ export const createThumbnailWithCloudflareImages = async (
     concurrency: options.concurrency,
     height: normalizePositiveInteger(options.height, DEFAULT_HEIGHT),
     quality: normalizeQuality(options.quality),
+    queueTimeoutMs: normalizePositiveInteger(options.queueTimeoutMs, DEFAULT_QUEUE_TIMEOUT_MS),
     timeoutMs: normalizePositiveInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS),
     width: normalizePositiveInteger(options.width, DEFAULT_WIDTH),
   }
   const release = await imagesTransformLimiter.acquire(normalizedOptions.concurrency, {
     label: 'Cloudflare Images thumbnail transformation',
-    maxQueueWaitMs: normalizedOptions.timeoutMs,
+    maxQueueWaitMs: normalizedOptions.queueTimeoutMs,
   })
 
   try {

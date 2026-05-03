@@ -97,7 +97,7 @@ Caching expectations:
 - Screenshot fallbacks are transparent GIFs with `no-store` headers; the in-memory fallback TTL avoids retry storms without poisoning `caches.default`.
 - Screenshot fallbacks are not written to R2. Stale R2 screenshots can be served briefly when backup15 fails.
 - Deterministic screenshot skips return transparent fallbacks and should not call backup15. Current policy skips generic PDFs and a small known-blocked host list, transforms X/Twitter status URLs through XCancel, and transforms `arxiv.org/pdf/...` links to `arxiv.org/abs/...`.
-- After R2 misses, the screenshot route runs a short HEAD probe before browser capture. Skip `application/pdf` or PDF `Content-Disposition` responses and write/use a short-lived failure marker when no stale screenshot exists.
+- After R2 misses, the screenshot route runs a short HEAD probe before browser capture. Skip `application/pdf`, PDF `Content-Disposition`, and obvious non-HTML download/media responses; write/use a short-lived failure marker when no stale screenshot exists.
 - Screenshot responses expose `X-HN42-Screenshot-Policy`, `X-HN42-Screenshot-Source-Strategy`, and `X-HN42-Screenshot-Skip-Reason` for debugging.
 - Preserve screenshot cache behavior unless the task is specifically about invalidation or freshness.
 
@@ -152,7 +152,7 @@ Story screenshots should render from `/api/screenshot/:id?variant=thumbnail` on 
 - Successful originals are JPEGs stored in R2 through the `SCREENSHOTS_BUCKET` binding. Successful thumbnails may be WebP from Cloudflare Images or JPEG from the WASM fallback; callers must trust the response `Content-Type`, not the thumbnail variant URL.
 - Server-side backup15 fetch concurrency is controlled by `runtimeConfig.screenshotFetchConcurrency` and should remain queued so the screenshot service is not overwhelmed.
 - Source policy runtime config includes `screenshotPolicyHeadProbeTimeoutMs`, `screenshotXCancelBaseUrl`, and `screenshotPolicyBlockedHosts`; the host list extends the default blocked hosts.
-- Server-side Cloudflare Images and WASM thumbnail processing concurrency is controlled by `runtimeConfig.screenshotThumbnailProcessingConcurrency`; thumbnail pre-decode pixel safety is controlled by `runtimeConfig.screenshotThumbnailMaxInputPixels` for the WASM fallback.
+- Server-side Cloudflare Images and WASM thumbnail processing concurrency is controlled by `runtimeConfig.screenshotThumbnailProcessingConcurrency`; thumbnail queue wait and per-transform timeouts are controlled by `runtimeConfig.screenshotThumbnailProcessingQueueTimeoutMs` and `runtimeConfig.screenshotThumbnailProcessingTimeoutMs`; thumbnail pre-decode pixel safety is controlled by `runtimeConfig.screenshotThumbnailMaxInputPixels` for the WASM fallback.
 - Concurrent backup15 captures for the same source URL are coalesced, concurrent thumbnail processing for the same thumbnail key is coalesced, short per-isolate R2 miss memory avoids repeated R2 reads during fallback cooldowns, and failed captures write short-lived R2 failure markers instead of reusable screenshots. Thumbnail processing writes a failure marker only when Cloudflare Images was actually attempted and the WASM fallback also failed; do not mark a source failed just because Images quota was exhausted.
 - Client-side image request concurrency is controlled by `runtimeConfig.public.screenshotImageQueueConcurrency`.
 - Keep long shared-cache TTLs unless there is a concrete invalidation need.

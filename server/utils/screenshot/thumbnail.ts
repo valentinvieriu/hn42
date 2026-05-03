@@ -9,9 +9,16 @@ const DEFAULT_HEIGHT = 1440
 const DEFAULT_QUALITY = 78
 const DEFAULT_MAX_INPUT_BYTES = 6_000_000
 const DEFAULT_MAX_INPUT_PIXELS = 8_000_000
+const DEFAULT_QUEUE_TIMEOUT_MS = 15000
 const DEFAULT_TIMEOUT_MS = 5000
 const thumbnailProcessingLimiter = createConcurrencyLimiter(1)
 let wasmReady: Promise<void> | null = null
+
+const JSQUASH_WASM_MODULES = {
+  jpegDecode: '@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm',
+  jpegEncode: '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm',
+  resize: '@jsquash/resize/lib/resize/pkg/squoosh_resize_bg.wasm',
+} as const
 
 type ThumbnailOptions = {
   concurrency?: unknown
@@ -19,6 +26,7 @@ type ThumbnailOptions = {
   jpegQuality?: unknown
   maxInputBytes?: unknown
   maxInputPixels?: unknown
+  queueTimeoutMs?: unknown
   timeoutMs?: unknown
   width?: unknown
 }
@@ -70,10 +78,6 @@ const runWithTimeout = async <T>(
     }
   }
 }
-
-const isCloudflareWorkerRuntime = () => (
-  !import.meta.dev && typeof caches !== 'undefined' && caches.default !== undefined
-)
 
 const isStartOfFrameMarker = (marker: number) => (
   marker >= 0xc0
@@ -158,18 +162,39 @@ const ensureImageData = () => {
   } as typeof ImageData
 }
 
-const initializeWasmRuntime = async () => {
-  ensureImageData()
+const loadWasmModuleFromNodeFile = async (specifier: string) => {
+  const [
+    { readFile },
+    { createRequire },
+  ] = await Promise.all([
+    import('node:fs/promises'),
+    import('node:module'),
+  ])
+  const require = createRequire(import.meta.url)
+  const bytes = await readFile(require.resolve(specifier))
 
-  if (!isCloudflareWorkerRuntime()) {
-    await Promise.all([
-      initJpegDecode(),
-      initJpegEncode(),
-      initResize(),
-    ])
-    return
+  return WebAssembly.compile(bytes)
+}
+
+const loadNodeWasmModules = async () => {
+  const [
+    jpegDecodeWasm,
+    jpegEncodeWasm,
+    resizeWasm,
+  ] = await Promise.all([
+    loadWasmModuleFromNodeFile(JSQUASH_WASM_MODULES.jpegDecode),
+    loadWasmModuleFromNodeFile(JSQUASH_WASM_MODULES.jpegEncode),
+    loadWasmModuleFromNodeFile(JSQUASH_WASM_MODULES.resize),
+  ])
+
+  return {
+    jpegDecodeWasm,
+    jpegEncodeWasm,
+    resizeWasm,
   }
+}
 
+const loadBundledWasmModules = async () => {
   const [
     { default: jpegDecodeWasm },
     { default: jpegEncodeWasm },
@@ -179,6 +204,28 @@ const initializeWasmRuntime = async () => {
     import('@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?module'),
     import('@jsquash/resize/lib/resize/pkg/squoosh_resize_bg.wasm?module'),
   ])
+
+  if (!jpegDecodeWasm || !jpegEncodeWasm || !resizeWasm) {
+    throw new Error('Bundled JPEG thumbnail WASM modules are unavailable')
+  }
+
+  return {
+    jpegDecodeWasm,
+    jpegEncodeWasm,
+    resizeWasm,
+  }
+}
+
+const initializeWasmRuntime = async () => {
+  ensureImageData()
+
+  const {
+    jpegDecodeWasm,
+    jpegEncodeWasm,
+    resizeWasm,
+  } = import.meta.dev
+    ? await loadNodeWasmModules()
+    : await loadBundledWasmModules()
 
   await Promise.all([
     initJpegDecode(jpegDecodeWasm),
@@ -294,12 +341,13 @@ export const createThumbnailFromJpeg = async (
     jpegQuality: normalizeJpegQuality(options.jpegQuality),
     maxInputBytes: normalizePositiveInteger(options.maxInputBytes, DEFAULT_MAX_INPUT_BYTES),
     maxInputPixels: normalizePositiveInteger(options.maxInputPixels, DEFAULT_MAX_INPUT_PIXELS),
+    queueTimeoutMs: normalizePositiveInteger(options.queueTimeoutMs, DEFAULT_QUEUE_TIMEOUT_MS),
     timeoutMs: normalizePositiveInteger(options.timeoutMs, DEFAULT_TIMEOUT_MS),
     width: normalizePositiveInteger(options.width, DEFAULT_WIDTH),
   }
   const release = await thumbnailProcessingLimiter.acquire(normalizedOptions.concurrency, {
     label: 'thumbnail processing',
-    maxQueueWaitMs: normalizedOptions.timeoutMs,
+    maxQueueWaitMs: normalizedOptions.queueTimeoutMs,
   })
 
   try {
