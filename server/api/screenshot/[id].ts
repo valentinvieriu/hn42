@@ -1,20 +1,26 @@
 import { defineEventHandler, getRequestURL, getRouterParams, createError, useRuntimeConfig } from '#imports'
-import { captureScreenshot } from '../../utils/screenshot/orchestrate'
+import { captureWithBackup15 } from '../../utils/screenshot/backup15'
 import {
   getR2ScreenshotKey,
   getSourceUrlHash,
+  isR2ScreenshotFailure,
   readR2Screenshot,
   writeR2Screenshot,
+  writeR2ScreenshotFailure,
   type R2Screenshot,
+  type R2ScreenshotFailure,
 } from '../../utils/screenshot/r2Cache'
 import type { ScreenshotEnv, ScreenshotProviderName, ScreenshotResult } from '../../utils/screenshot/types'
 
 const FALLBACK_MEMORY_TTL_MS = 15 * 60 * 1000
+const R2_MISS_MEMORY_TTL_MS = 2 * 60 * 1000
 const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
   255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
 ])
 const fallbackExpirations = new Map<string, number>()
+const r2MissExpirations = new Map<string, number>()
+const pendingScreenshotCaptures = new Map<string, Promise<ScreenshotResult>>()
 
 const SCREENSHOT_CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=604800',
@@ -35,6 +41,7 @@ const FALLBACK_CACHE_HEADERS = {
 } as const
 
 type ScreenshotCacheStatus = 'HIT' | 'R2' | 'MISS' | 'STALE' | 'FALLBACK'
+const R2_READ_FAILED = Symbol('R2_READ_FAILED')
 
 type HnFirebaseStory = {
   url?: unknown
@@ -105,6 +112,29 @@ const hasFreshFallback = (id: string) => {
   return true
 }
 
+const hasFreshR2Miss = (key: string) => {
+  const expiresAt = r2MissExpirations.get(key)
+
+  if (!expiresAt) {
+    return false
+  }
+
+  if (expiresAt <= Date.now()) {
+    r2MissExpirations.delete(key)
+    return false
+  }
+
+  return true
+}
+
+const noteR2Miss = (key: string) => {
+  r2MissExpirations.set(key, Date.now() + R2_MISS_MEMORY_TTL_MS)
+}
+
+const forgetR2Miss = (key: string) => {
+  r2MissExpirations.delete(key)
+}
+
 const createFallbackResponse = (id?: string) => {
   if (id) {
     fallbackExpirations.set(id, Date.now() + FALLBACK_MEMORY_TTL_MS)
@@ -139,15 +169,64 @@ const createImageResponse = (
     ...(cacheStatus === 'STALE' ? STALE_SCREENSHOT_CACHE_HEADERS : SCREENSHOT_CACHE_HEADERS),
   })
 
-  if ('browserSession' in image && image.browserSession) {
-    headers.set('X-HN42-Browser-Session', image.browserSession)
-  }
-
   return withScreenshotCacheStatus(
     new Response(image.bytes, { headers }),
     cacheStatus,
     provider ?? image.provider,
   )
+}
+
+const captureAndPersistScreenshot = (
+  event: any,
+  env: ScreenshotEnv | undefined,
+  r2Key: string,
+  sourceUrlHash: string,
+  sourceUrl: string,
+  concurrency: unknown,
+  writeFailureMarker: boolean,
+) => {
+  const pendingCapture = pendingScreenshotCaptures.get(r2Key)
+
+  if (pendingCapture) {
+    return pendingCapture
+  }
+
+  const capture = captureWithBackup15(sourceUrl, concurrency)
+    .then((screenshot) => {
+      forgetR2Miss(r2Key)
+      runInBackground(
+        event,
+        writeR2Screenshot(env, r2Key, sourceUrlHash, screenshot).catch((error) => {
+          console.warn(`R2 screenshot write failed: ${error instanceof Error ? error.message : String(error)}`)
+        }),
+      )
+
+      return screenshot
+    })
+    .catch((error) => {
+      if (writeFailureMarker) {
+        runInBackground(
+          event,
+          writeR2ScreenshotFailure(
+            env,
+            r2Key,
+            sourceUrlHash,
+            error instanceof Error ? error.message : String(error),
+          ).catch((writeError) => {
+            console.warn(`R2 screenshot failure write failed: ${writeError instanceof Error ? writeError.message : String(writeError)}`)
+          }),
+        )
+      }
+
+      throw error
+    })
+    .finally(() => {
+      pendingScreenshotCaptures.delete(r2Key)
+    })
+
+  pendingScreenshotCaptures.set(r2Key, capture)
+
+  return capture
 }
 
 const isValidStoryId = (id: unknown): id is string => {
@@ -238,6 +317,11 @@ export default defineEventHandler(async (event) => {
   try {
     const runtimeConfig = useRuntimeConfig(event)
     const env = event.context.cloudflare?.env as ScreenshotEnv | undefined
+
+    if (hasFreshFallback(id)) {
+      return createFallbackResponse()
+    }
+
     const sourceUrl = await resolveStorySourceUrl(id)
 
     if (!sourceUrl) {
@@ -246,14 +330,33 @@ export default defineEventHandler(async (event) => {
 
     const sourceUrlHash = await getSourceUrlHash(sourceUrl)
     const r2Key = getR2ScreenshotKey(id, sourceUrlHash)
-    const r2Screenshot = await readR2Screenshot(
-      env,
-      r2Key,
-      runtimeConfig.screenshotR2TtlDays,
-    ).catch((error) => {
-      console.warn(`R2 screenshot read failed: ${error instanceof Error ? error.message : String(error)}`)
-      return null
-    })
+    const r2Result: R2Screenshot | R2ScreenshotFailure | null | typeof R2_READ_FAILED = hasFreshR2Miss(r2Key)
+      ? null
+      : await readR2Screenshot(
+          env,
+          r2Key,
+          runtimeConfig.screenshotR2TtlDays,
+          runtimeConfig.screenshotFailureTtlMinutes,
+        ).catch((error) => {
+          console.warn(`R2 screenshot read failed: ${error instanceof Error ? error.message : String(error)}`)
+          return R2_READ_FAILED
+        })
+
+    if (r2Result === null) {
+      noteR2Miss(r2Key)
+    }
+
+    if (r2Result && r2Result !== R2_READ_FAILED && isR2ScreenshotFailure(r2Result)) {
+      if (r2Result.isFresh) {
+        return createFallbackResponse(id)
+      }
+
+      noteR2Miss(r2Key)
+    }
+
+    const r2Screenshot = r2Result && r2Result !== R2_READ_FAILED && !isR2ScreenshotFailure(r2Result)
+      ? r2Result
+      : null
 
     if (r2Screenshot?.isFresh) {
       const response = createImageResponse(
@@ -269,42 +372,15 @@ export default defineEventHandler(async (event) => {
       return response
     }
 
-    if (hasFreshFallback(id)) {
-      if (r2Screenshot) {
-        const response = createImageResponse(
-          r2Screenshot,
-          id,
-          sourceUrlHash,
-          'STALE',
-          r2Screenshot.provider,
-        )
-
-        putCacheResponse(event, cache, cacheKey, response)
-
-        return response
-      }
-
-      return createFallbackResponse()
-    }
-
-    const screenshot = await captureScreenshot(
-      sourceUrl,
-      runtimeConfig.screenshotProviderOrder,
-      {
-        env,
-        browserConcurrency: runtimeConfig.screenshotBrowserConcurrency,
-        browserKeepAliveMs: runtimeConfig.screenshotBrowserKeepAliveMs,
-        browserReuseSessions: runtimeConfig.screenshotBrowserReuseSessions,
-        backup15Concurrency: runtimeConfig.screenshotFetchConcurrency,
-      },
-    )
-
-    if (screenshot) {
-      runInBackground(
+    try {
+      const screenshot = await captureAndPersistScreenshot(
         event,
-        writeR2Screenshot(env, r2Key, sourceUrlHash, screenshot).catch((error) => {
-          console.warn(`R2 screenshot write failed: ${error instanceof Error ? error.message : String(error)}`)
-        }),
+        env,
+        r2Key,
+        sourceUrlHash,
+        sourceUrl,
+        runtimeConfig.screenshotFetchConcurrency,
+        r2Result !== R2_READ_FAILED && !r2Screenshot,
       )
 
       const response = createImageResponse(
@@ -318,6 +394,8 @@ export default defineEventHandler(async (event) => {
       putCacheResponse(event, cache, cacheKey, response)
 
       return response
+    } catch (error) {
+      console.warn(`backup15 screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`)
     }
 
     if (r2Screenshot) {

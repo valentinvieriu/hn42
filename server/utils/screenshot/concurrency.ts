@@ -5,8 +5,6 @@ type QueueTask = {
   settled: boolean
 }
 
-const DEFAULT_MAX_QUEUE_WAIT_MS = 2_000
-
 export class ScreenshotConcurrencyTimeoutError extends Error {
   constructor(label: string, timeoutMs: number) {
     super(`${label} concurrency queue timed out after ${timeoutMs}ms`)
@@ -24,11 +22,15 @@ const normalizeConcurrency = (value: unknown, fallback: number) => {
   return Math.max(1, Math.floor(parsedValue))
 }
 
-const normalizeQueueTimeout = (value: unknown) => {
+const normalizeQueueTimeout = (value: unknown): number | null => {
+  if (value === null || value === false) {
+    return null
+  }
+
   const parsedValue = Number(value)
 
   if (!Number.isFinite(parsedValue)) {
-    return DEFAULT_MAX_QUEUE_WAIT_MS
+    return null
   }
 
   return Math.max(1, Math.floor(parsedValue))
@@ -89,23 +91,25 @@ export const createConcurrencyLimiter = (defaultConcurrency: number) => {
         settled: false,
       }
 
-      const timeout = setTimeout(() => {
-        if (task.settled) {
-          return
+      if (maxQueueWaitMs !== null) {
+        const timeout = setTimeout(() => {
+          if (task.settled) {
+            return
+          }
+
+          task.settled = true
+          const taskIndex = pendingTasks.indexOf(task)
+
+          if (taskIndex !== -1) {
+            pendingTasks.splice(taskIndex, 1)
+          }
+
+          task.reject(new ScreenshotConcurrencyTimeoutError(label, maxQueueWaitMs))
+        }, maxQueueWaitMs)
+
+        task.clearQueueTimeout = () => {
+          clearTimeout(timeout)
         }
-
-        task.settled = true
-        const taskIndex = pendingTasks.indexOf(task)
-
-        if (taskIndex !== -1) {
-          pendingTasks.splice(taskIndex, 1)
-        }
-
-        task.reject(new ScreenshotConcurrencyTimeoutError(label, maxQueueWaitMs))
-      }, maxQueueWaitMs)
-
-      task.clearQueueTimeout = () => {
-        clearTimeout(timeout)
       }
 
       pendingTasks.push(task)

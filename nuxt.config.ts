@@ -5,14 +5,11 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-09-15',
   devtools: { enabled: false },
   runtimeConfig: {
-    screenshotFetchConcurrency: '2',
-    screenshotProviderOrder: 'cloudflare-browser,backup15',
-    screenshotBrowserConcurrency: '6',
-    screenshotBrowserKeepAliveMs: '600000',
-    screenshotBrowserReuseSessions: 'true',
+    screenshotFetchConcurrency: '1',
+    screenshotFailureTtlMinutes: '360',
     screenshotR2TtlDays: '30',
     public: {
-      screenshotImageQueueConcurrency: '4',
+      screenshotImageQueueConcurrency: '1',
     },
   },
   nitro: {

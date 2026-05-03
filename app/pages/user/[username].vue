@@ -94,6 +94,7 @@
         <section v-show="activeTab === 'posts'" role="tabpanel" aria-label="Posts">
           <div
             v-if="postsInitialLoading && posts.length === 0"
+            key="posts-loading"
             class="grid grid-cols-1 gap-6 md:gap-7 sm:grid-cols-2 lg:grid-cols-3"
             aria-busy="true"
           >
@@ -112,11 +113,11 @@
             </div>
           </div>
 
-          <div v-else-if="posts.length === 0" class="activity-empty">
+          <div v-else-if="posts.length === 0" key="posts-empty" class="activity-empty">
             No posts found.
           </div>
 
-          <div v-else class="grid grid-cols-1 gap-6 md:gap-7 sm:grid-cols-2 lg:grid-cols-3">
+          <div v-else key="posts-grid" class="grid grid-cols-1 gap-6 md:gap-7 sm:grid-cols-2 lg:grid-cols-3">
             <StoryCard
               v-for="post in posts"
               :key="post.objectID"
@@ -145,6 +146,7 @@
         <section v-show="activeTab === 'comments'" role="tabpanel" aria-label="Comments">
           <div
             v-if="commentsInitialLoading && comments.length === 0"
+            key="comments-loading"
             class="space-y-4"
             aria-busy="true"
           >
@@ -160,11 +162,11 @@
             </div>
           </div>
 
-          <div v-else-if="comments.length === 0" class="activity-empty">
+          <div v-else-if="comments.length === 0" key="comments-empty" class="activity-empty">
             No comments found.
           </div>
 
-          <div v-else class="space-y-4">
+          <div v-else key="comments-list" class="space-y-4">
             <UserCommentCard
               v-for="comment in comments"
               :key="comment.objectID"
@@ -250,60 +252,68 @@ const profileDataKey = computed(() => `user-profile:${username.value || 'missing
 const postsDataKey = computed(() => `user-posts:${username.value || 'missing'}:${PAGE_SIZE}`)
 const commentsDataKey = computed(() => `user-comments:${username.value || 'missing'}:${PAGE_SIZE}`)
 
-const { data: profile, pending: profilePending, error: profileFetchError } = useAsyncData<HNUserProfile | null>(
-  profileDataKey,
-  async () => {
-    if (!username.value) {
-      return null
-    }
+const [
+  profileAsyncData,
+  initialPostsAsyncData,
+  initialCommentsAsyncData,
+] = await Promise.all([
+  useAsyncData<HNUserProfile | null>(
+    profileDataKey,
+    async () => {
+      if (!username.value) {
+        return null
+      }
 
-    return await $fetch<HNUserProfile>(`/api/user/${encodedUsername.value}`)
-  },
-  {
-    default: () => null,
-    watch: [username],
-  },
-)
+      return await $fetch<HNUserProfile>(`/api/user/${encodedUsername.value}`)
+    },
+    {
+      default: () => null,
+      watch: [username],
+    },
+  ),
+  useAsyncData<UserActivityPage<UserPost> | null>(
+    postsDataKey,
+    async () => {
+      if (!username.value) {
+        return null
+      }
 
-const { data: initialPostsData, pending: postsPending, error: postsFetchError } = useAsyncData<UserActivityPage<UserPost> | null>(
-  postsDataKey,
-  async () => {
-    if (!username.value) {
-      return null
-    }
+      return await $fetch<UserActivityPage<UserPost>>(`/api/user/${encodedUsername.value}/stories`, {
+        query: {
+          hitsPerPage: PAGE_SIZE,
+          page: 0,
+        },
+      })
+    },
+    {
+      default: () => null,
+      watch: [username],
+    },
+  ),
+  useAsyncData<UserActivityPage<UserComment> | null>(
+    commentsDataKey,
+    async () => {
+      if (!username.value) {
+        return null
+      }
 
-    return await $fetch<UserActivityPage<UserPost>>(`/api/user/${encodedUsername.value}/stories`, {
-      query: {
-        hitsPerPage: PAGE_SIZE,
-        page: 0,
-      },
-    })
-  },
-  {
-    default: () => null,
-    watch: [username],
-  },
-)
+      return await $fetch<UserActivityPage<UserComment>>(`/api/user/${encodedUsername.value}/comments`, {
+        query: {
+          hitsPerPage: PAGE_SIZE,
+          page: 0,
+        },
+      })
+    },
+    {
+      default: () => null,
+      watch: [username],
+    },
+  ),
+])
 
-const { data: initialCommentsData, pending: commentsPending, error: commentsFetchError } = useAsyncData<UserActivityPage<UserComment> | null>(
-  commentsDataKey,
-  async () => {
-    if (!username.value) {
-      return null
-    }
-
-    return await $fetch<UserActivityPage<UserComment>>(`/api/user/${encodedUsername.value}/comments`, {
-      query: {
-        hitsPerPage: PAGE_SIZE,
-        page: 0,
-      },
-    })
-  },
-  {
-    default: () => null,
-    watch: [username],
-  },
-)
+const { data: profile, pending: profilePending, error: profileFetchError } = profileAsyncData
+const { data: initialPostsData, pending: postsPending, error: postsFetchError } = initialPostsAsyncData
+const { data: initialCommentsData, pending: commentsPending, error: commentsFetchError } = initialCommentsAsyncData
 
 const mergeByObjectId = <T extends { objectID: string }>(currentItems: T[], incomingItems: T[]) => {
   const seen = new Set(currentItems.map((item) => item.objectID))

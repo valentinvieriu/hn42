@@ -112,7 +112,6 @@ The Worker entry and static asset output are configured in `wrangler.toml`:
 
 - Worker entry: `.output/server/index.mjs`
 - Static assets: `.output/public`
-- Browser Run binding: `BROWSER`
 - Screenshot R2 binding: `SCREENSHOTS_BUCKET`
 
 Before deployment, use:
@@ -124,32 +123,26 @@ npm run cf-typegen
 npx wrangler deploy --dry-run
 ```
 
-Article screenshots use Cloudflare Browser Run through `@cloudflare/puppeteer`
-first, then fall back to `backup15.terasp.net`. Enable R2 on the Cloudflare account before deployment.
-Browser Run sessions are reused by default: the screenshot route connects to a
-free session when possible, uses a fresh browser context per screenshot, then
-disconnects so the browser can stay warm for up to
-`NUXT_SCREENSHOT_BROWSER_KEEP_ALIVE_MS` milliseconds. Set
-`NUXT_SCREENSHOT_BROWSER_REUSE_SESSIONS=false` to disable reuse during
-debugging.
+Article screenshots are generated through `backup15.terasp.net` and proxied
+through `/api/screenshot/:id`. The route checks Cloudflare `caches.default`,
+then R2, then generates a fresh screenshot through backup15 on a miss.
 Successful JPEG screenshots are stored temporarily in R2 under
-`screenshots/v1/`. The bootstrap script creates `hn42-screenshots` and
+`screenshots/v1/`; the bootstrap script creates `hn42-screenshots` and
 `hn42-screenshots-dev` if missing, then adds a 30-day lifecycle rule for that
-prefix. Use `NUXT_SCREENSHOT_PROVIDER_ORDER=backup15` as a kill switch to use
-only the legacy fallback provider.
+prefix. Screenshot fetches use a server-side queue so one Worker isolate does
+not fan out many generation requests at once. The default server and client
+screenshot queue concurrency is `1`; tune them with
+`NUXT_SCREENSHOT_FETCH_CONCURRENCY` and
+`NUXT_PUBLIC_SCREENSHOT_IMAGE_QUEUE_CONCURRENCY` if needed. The route also
+coalesces concurrent captures for the same story and briefly remembers R2 misses
+after failed captures to avoid repeated R2 reads during retry cooldowns. Failed
+captures write a short-lived R2 failure marker at the screenshot key, so the app
+does not repeatedly ask backup15 to regenerate a known-failing URL. Tune that
+marker TTL with `NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`.
 
 Screenshot storage bootstrap can be rerun safely:
 
 ```bash
-npm run cf:screenshots:bootstrap
-```
-
-Optional overrides:
-
-```bash
-HN42_SCREENSHOT_BUCKET=my-prod-bucket \
-HN42_SCREENSHOT_PREVIEW_BUCKET=my-dev-bucket \
-HN42_SCREENSHOT_EXPIRE_DAYS=14 \
 npm run cf:screenshots:bootstrap
 ```
 

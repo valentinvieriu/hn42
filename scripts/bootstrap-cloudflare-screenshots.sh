@@ -56,4 +56,3 @@ ensure_lifecycle_rule "$PROD_BUCKET"
 ensure_lifecycle_rule "$PREVIEW_BUCKET"
 
 echo "Cloudflare screenshot storage is ready."
-

@@ -6,9 +6,6 @@ compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public", binding = "ASSETS" }
 
-[browser]
-binding = "BROWSER"
-
 [[r2_buckets]]
 binding = "SCREENSHOTS_BUCKET"
 bucket_name = "hn42-screenshots"

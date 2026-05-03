@@ -2,7 +2,7 @@ import { createConcurrencyLimiter } from './concurrency'
 import type { ScreenshotResult } from './types'
 
 const SCREENSHOT_TIMEOUT_MS = 8000
-const MAX_QUEUE_WAIT_MS = 1_000
+const MIN_SCREENSHOT_BYTES = 1024
 const backup15Limiter = createConcurrencyLimiter(1)
 
 const fetchWithTimeout = async (url: string, timeoutMs: number) => {
@@ -16,13 +16,18 @@ const fetchWithTimeout = async (url: string, timeoutMs: number) => {
   }
 }
 
+const isJpeg = (bytes: ArrayBuffer) => {
+  const view = new Uint8Array(bytes)
+
+  return view.length >= 3 && view[0] === 0xff && view[1] === 0xd8 && view[2] === 0xff
+}
+
 export const captureWithBackup15 = async (
   sourceUrl: string,
   concurrency: unknown,
 ): Promise<ScreenshotResult> => {
   const release = await backup15Limiter.acquire(concurrency, {
     label: 'backup15',
-    maxQueueWaitMs: MAX_QUEUE_WAIT_MS,
   })
 
   try {
@@ -36,9 +41,15 @@ export const captureWithBackup15 = async (
       throw new Error(`backup15 returned ${response.status}`)
     }
 
+    const bytes = await response.arrayBuffer()
+
+    if (bytes.byteLength < MIN_SCREENSHOT_BYTES || !isJpeg(bytes)) {
+      throw new Error('backup15 returned an invalid JPEG screenshot')
+    }
+
     return {
-      bytes: await response.arrayBuffer(),
-      contentType: response.headers.get('Content-Type') || 'image/jpeg',
+      bytes,
+      contentType: 'image/jpeg',
       provider: 'backup15',
     }
   } finally {
