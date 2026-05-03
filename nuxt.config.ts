@@ -1,6 +1,13 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { defineNuxtConfig } from 'nuxt/config'
 
+const jsquashWasmModuleIds = new Set([
+  '@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm?module',
+  '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?module',
+  '@jsquash/resize/lib/resize/pkg/squoosh_resize_bg.wasm?module',
+])
+const jsquashWasmDevStubId = '\0hn42-jsquash-wasm-dev-stub'
+
 export default defineNuxtConfig({
   compatibilityDate: '2025-09-15',
   devtools: { enabled: false },
@@ -8,6 +15,13 @@ export default defineNuxtConfig({
     screenshotFetchConcurrency: '1',
     screenshotFailureTtlMinutes: '360',
     screenshotR2TtlDays: '30',
+    screenshotThumbnailHeight: '1440',
+    screenshotThumbnailJpegQuality: '78',
+    screenshotThumbnailMaxInputBytes: '6000000',
+    screenshotThumbnailMaxInputPixels: '8000000',
+    screenshotThumbnailProcessingConcurrency: '1',
+    screenshotThumbnailProcessingTimeoutMs: '5000',
+    screenshotThumbnailWidth: '720',
     public: {
       screenshotImageQueueConcurrency: '1',
     },
@@ -16,6 +30,13 @@ export default defineNuxtConfig({
     preset: "cloudflare-module",
     cloudflare: {
       nodeCompat: true,
+    },
+    experimental: {
+      wasm: true,
+    },
+    wasm: {
+      esmImport: true,
+      lazy: false,
     },
   },
   modules: [
@@ -137,6 +158,21 @@ export default defineNuxtConfig({
     '/': { redirect: '/top' },
   },
   vite: {
+    plugins: [
+      {
+        name: 'hn42-jsquash-wasm-dev-stub',
+        enforce: 'pre',
+        apply: 'serve',
+        resolveId(id) {
+          return jsquashWasmModuleIds.has(id) ? jsquashWasmDevStubId : null
+        },
+        load(id) {
+          return id === jsquashWasmDevStubId
+            ? 'export default undefined'
+            : null
+        },
+      },
+    ],
     optimizeDeps: {
       include: [
         '@lucide/vue',

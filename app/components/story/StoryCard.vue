@@ -258,7 +258,7 @@ const fallbackPanels = computed(() => {
   })
 })
 
-const screenshotSrc = computed(() => `/api/screenshot/${props.story.objectID}`)
+const screenshotSrc = computed(() => `/api/screenshot/${props.story.objectID}?variant=thumbnail`)
 
 // Define the radial gradient style using OKLCH CSS variables
 const radialGradientStyle = computed(() => ({

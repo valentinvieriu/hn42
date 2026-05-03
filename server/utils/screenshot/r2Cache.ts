@@ -1,8 +1,11 @@
-import type { ScreenshotProviderName, ScreenshotResult, ScreenshotEnv } from './types'
+import type { ScreenshotProviderName, ScreenshotResult, ScreenshotEnv, ScreenshotVariant } from './types'
 
-const R2_PREFIX = 'screenshots/v1'
+const R2_PREFIX = 'screenshots/v2'
 const DEFAULT_R2_TTL_DAYS = 30
 const DEFAULT_FAILURE_TTL_MINUTES = 6 * 60
+const DEFAULT_THUMBNAIL_WIDTH = 720
+const DEFAULT_THUMBNAIL_HEIGHT = 1440
+const DEFAULT_THUMBNAIL_QUALITY = 78
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
 const TRANSPARENT_GIF = Uint8Array.from([
@@ -17,6 +20,7 @@ type R2ScreenshotMetadata = {
   reason?: string
   sourceUrlHash?: string
   status?: 'ok' | 'failed'
+  variant?: ScreenshotVariant
 }
 
 export type R2Screenshot = {
@@ -26,6 +30,7 @@ export type R2Screenshot = {
   isFresh: boolean
   key: string
   provider?: ScreenshotProviderName
+  variant?: ScreenshotVariant
 }
 
 export type R2ScreenshotFailure = {
@@ -34,6 +39,7 @@ export type R2ScreenshotFailure = {
   isFresh: boolean
   key: string
   reason?: string
+  variant?: ScreenshotVariant
 }
 
 const normalizeTtlDays = (value: unknown) => {
@@ -66,8 +72,31 @@ export const getSourceUrlHash = async (sourceUrl: string) => {
   return toHex(digest)
 }
 
-export const getR2ScreenshotKey = (storyId: string, sourceUrlHash: string) => {
-  return `${R2_PREFIX}/story-${storyId}/${sourceUrlHash}.jpg`
+const normalizePositiveInteger = (value: unknown, fallback: number) => {
+  const parsedValue = Number(value)
+
+  if (!Number.isFinite(parsedValue)) {
+    return fallback
+  }
+
+  return Math.max(1, Math.floor(parsedValue))
+}
+
+export const getR2OriginalScreenshotKey = (sourceUrlHash: string) => {
+  return `${R2_PREFIX}/${sourceUrlHash}/original.jpg`
+}
+
+export const getR2ThumbnailScreenshotKey = (
+  sourceUrlHash: string,
+  width: unknown = DEFAULT_THUMBNAIL_WIDTH,
+  height: unknown = DEFAULT_THUMBNAIL_HEIGHT,
+  quality: unknown = DEFAULT_THUMBNAIL_QUALITY,
+) => {
+  const normalizedWidth = normalizePositiveInteger(width, DEFAULT_THUMBNAIL_WIDTH)
+  const normalizedHeight = normalizePositiveInteger(height, DEFAULT_THUMBNAIL_HEIGHT)
+  const normalizedQuality = normalizePositiveInteger(quality, DEFAULT_THUMBNAIL_QUALITY)
+
+  return `${R2_PREFIX}/${sourceUrlHash}/thumbnail-${normalizedWidth}x${normalizedHeight}-q${normalizedQuality}.jpg`
 }
 
 const getCapturedAt = (metadata: R2ScreenshotMetadata) => {
@@ -124,6 +153,7 @@ export const readR2Screenshot = async (
       isFresh: isFreshFailure(capturedAt, failureTtlMinutes),
       key,
       reason: metadata.reason,
+      variant: metadata.variant,
     }
   }
 
@@ -136,6 +166,7 @@ export const readR2Screenshot = async (
     isFresh: isFresh(capturedAt, ttlDays),
     key,
     provider: metadata.provider,
+    variant: metadata.variant,
   }
 }
 
@@ -150,6 +181,7 @@ export const writeR2Screenshot = async (
   key: string,
   sourceUrlHash: string,
   result: ScreenshotResult,
+  variant: ScreenshotVariant,
 ) => {
   const bucket = env?.SCREENSHOTS_BUCKET
 
@@ -168,6 +200,7 @@ export const writeR2Screenshot = async (
       provider: result.provider,
       sourceUrlHash,
       status: 'ok',
+      variant,
     },
   })
 }
@@ -177,6 +210,7 @@ export const writeR2ScreenshotFailure = async (
   key: string,
   sourceUrlHash: string,
   reason: string,
+  variant: ScreenshotVariant,
 ) => {
   const bucket = env?.SCREENSHOTS_BUCKET
 
@@ -195,6 +229,7 @@ export const writeR2ScreenshotFailure = async (
       reason: reason.slice(0, 200),
       sourceUrlHash,
       status: 'failed',
+      variant,
     },
   })
 }

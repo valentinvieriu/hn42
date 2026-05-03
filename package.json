@@ -10,9 +10,12 @@
     "postinstall": "nuxt prepare",
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types --include-runtime false",
-    "cf:screenshots:bootstrap": "bash scripts/bootstrap-cloudflare-screenshots.sh"
+    "cf:screenshots:bootstrap": "bash scripts/bootstrap-cloudflare-screenshots.sh",
+    "cf:screenshots:reset-cache": "node scripts/reset-cloudflare-screenshot-cache.mjs"
   },
   "dependencies": {
+    "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/resize": "^2.1.1",
     "@lucide/vue": "^1.14.0",
     "@nuxt/image": "^2.0.0",
     "@nuxtjs/color-mode": "^4.0.0",

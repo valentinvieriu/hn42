@@ -83,6 +83,8 @@ npm run build        # Build for production
 npm run preview      # Build and preview with Wrangler
 npm run deploy       # Build and deploy to Cloudflare Workers
 npm run cf-typegen   # Generate Cloudflare Worker types
+npm run cf:screenshots:bootstrap   # Create screenshot buckets/lifecycle rule
+npm run cf:screenshots:reset-cache # Delete old screenshots/v1 objects
 ```
 
 Use `npm run build` as the baseline check before shipping changes.
@@ -124,27 +126,54 @@ npx wrangler deploy --dry-run
 ```
 
 Article screenshots are generated through `backup15.terasp.net` and proxied
-through `/api/screenshot/:id`. The route checks Cloudflare `caches.default`,
-then R2, then generates a fresh screenshot through backup15 on a miss.
-Successful JPEG screenshots are stored temporarily in R2 under
-`screenshots/v1/`; the bootstrap script creates `hn42-screenshots` and
-`hn42-screenshots-dev` if missing, then adds a 30-day lifecycle rule for that
-prefix. Screenshot fetches use a server-side queue so one Worker isolate does
-not fan out many generation requests at once. The default server and client
-screenshot queue concurrency is `1`; tune them with
-`NUXT_SCREENSHOT_FETCH_CONCURRENCY` and
-`NUXT_PUBLIC_SCREENSHOT_IMAGE_QUEUE_CONCURRENCY` if needed. The route also
-coalesces concurrent captures for the same story and briefly remembers R2 misses
-after failed captures to avoid repeated R2 reads during retry cooldowns. Failed
-captures write a short-lived R2 failure marker at the screenshot key, so the app
-does not repeatedly ask backup15 to regenerate a known-failing URL. Tune that
-marker TTL with `NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`.
+through `/api/screenshot/:id?variant=original|thumbnail`. The route checks
+Cloudflare `caches.default`, then R2, then generates a fresh original JPEG
+through backup15 on a miss. Successful JPEG originals and thumbnails are stored
+temporarily in R2 under `screenshots/v2/<source-url-hash>/`, keyed by normalized
+source URL so repeated HN submissions of the same link reuse the same objects.
+The bootstrap script creates `hn42-screenshots` and `hn42-screenshots-dev` if
+missing, then adds a 30-day lifecycle rule for the `screenshots/v2/` prefix.
+
+Feed cards request the `thumbnail` variant. The thumbnail is derived inside the
+Worker from the original JPEG using WASM-backed JPEG decode/resize/encode, then
+stored separately as `thumbnail-720x1440-q78.jpg`. Story detail pages request the
+`original` variant. To stay within Worker memory limits, thumbnail processing
+checks JPEG dimensions before decoding and falls back to the original JPEG when
+the source image is too large to safely expand to RGBA. Screenshot fetches and
+thumbnail processing each use their own server-side queue so one Worker isolate
+does not fan out many generation or image-processing tasks at once. Tune the
+defaults with
+`NUXT_SCREENSHOT_FETCH_CONCURRENCY`,
+`NUXT_SCREENSHOT_THUMBNAIL_PROCESSING_CONCURRENCY`,
+`NUXT_SCREENSHOT_THUMBNAIL_WIDTH`,
+`NUXT_SCREENSHOT_THUMBNAIL_HEIGHT`,
+`NUXT_SCREENSHOT_THUMBNAIL_MAX_INPUT_PIXELS`,
+`NUXT_SCREENSHOT_THUMBNAIL_JPEG_QUALITY`, and
+`NUXT_PUBLIC_SCREENSHOT_IMAGE_QUEUE_CONCURRENCY` if needed.
+
+The route coalesces concurrent captures for the same source URL and briefly
+remembers R2 misses after failed captures to avoid repeated R2 reads during
+retry cooldowns. Failed captures and failed thumbnail processing write
+short-lived R2 failure markers at the relevant variant key, so the app does not
+repeatedly regenerate known-failing URLs. Tune that marker TTL with
+`NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`.
 
 Screenshot storage bootstrap can be rerun safely:
 
 ```bash
 npm run cf:screenshots:bootstrap
 ```
+
+The old v1 cache can be deleted after deploying the v2 screenshot route:
+
+```bash
+npm run cf:screenshots:reset-cache
+```
+
+The reset script deletes only `screenshots/v1/` objects and requires R2 S3
+credentials in `CLOUDFLARE_ACCOUNT_ID` plus
+`R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` or the equivalent AWS environment
+variables.
 
 ## Data Sources
 

@@ -17,6 +17,7 @@ export const fetchStories = async (baseUrl: string, queryParams: Record<string, 
           num_comments: hit.num_comments || 0,
           created_at: hit.created_at || '',
           objectID: hit.objectID,
+          screenshotUrl: `/api/screenshot/${hit.objectID}?variant=thumbnail`,
         };
       });
 

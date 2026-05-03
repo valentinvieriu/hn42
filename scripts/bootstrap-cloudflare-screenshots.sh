@@ -3,8 +3,8 @@ set -euo pipefail
 
 PROD_BUCKET="${HN42_SCREENSHOT_BUCKET:-hn42-screenshots}"
 PREVIEW_BUCKET="${HN42_SCREENSHOT_PREVIEW_BUCKET:-hn42-screenshots-dev}"
-RULE_ID="${HN42_SCREENSHOT_LIFECYCLE_RULE:-delete-screenshots-v1-after-30-days}"
-PREFIX="${HN42_SCREENSHOT_PREFIX:-screenshots/v1/}"
+RULE_ID="${HN42_SCREENSHOT_LIFECYCLE_RULE:-delete-screenshots-v2-after-30-days}"
+PREFIX="${HN42_SCREENSHOT_PREFIX:-screenshots/v2/}"
 EXPIRE_DAYS="${HN42_SCREENSHOT_EXPIRE_DAYS:-30}"
 
 WRANGLER=(npx wrangler)

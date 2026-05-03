@@ -88,7 +88,9 @@ Caching expectations:
 - Related stories use longer cache headers because they are derived and less time-sensitive.
 - User profile/activity routes cache briefly.
 - Screenshot responses use long browser/CDN cache headers and Cloudflare `caches.default`.
-- Successful screenshots are persisted temporarily in R2 under `screenshots/v1/story-<id>/<url-hash>.jpg`; R2 lifecycle should delete them after 30 days.
+- Successful screenshots are persisted temporarily in R2 under `screenshots/v2/<source-url-hash>/`; originals use `original.jpg` and feed thumbnails use `thumbnail-720x1440-q78.jpg`.
+- Feed cards request `/api/screenshot/:id?variant=thumbnail`; story detail pages request `/api/screenshot/:id?variant=original`.
+- Thumbnails are JPEGs derived inside the Worker from the original JPEG using WASM-backed JPEG decode, resize/crop, and encode. Keep thumbnail processing queued and bounded, and skip pre-decode images whose dimensions exceed the configured pixel limit so Worker memory is not exhausted.
 - Screenshot fallbacks are transparent GIFs with `no-store` headers; the in-memory fallback TTL avoids retry storms without poisoning `caches.default`.
 - Screenshot fallbacks are not written to R2. Stale R2 screenshots can be served briefly when backup15 fails.
 - Preserve screenshot cache behavior unless the task is specifically about invalidation or freshness.
@@ -134,15 +136,16 @@ Nested comments render to a limited depth by default. `app/pages/item/[id].vue` 
 
 ## Images And Screenshots
 
-Story screenshots should render from `/api/screenshot/:id`.
+Story screenshots should render from `/api/screenshot/:id?variant=thumbnail` on cards and `/api/screenshot/:id?variant=original` on detail pages.
 
 - Do not use the old `hn42.net/cdn-cgi/image/...` URL; that domain is no longer owned.
 - Do not add `provider="cloudflare"` to `NuxtImg` for screenshots.
 - Current screenshot rendering intentionally uses plain `<img>` tags to avoid Nuxt Image generating CDN proxy URLs.
-- `server/api/screenshot/[id].ts` resolves the HN story URL, checks `caches.default`, checks R2, then fetches a full-page JPEG screenshot from `backup15.terasp.net` on a miss.
-- Successful screenshots are JPEGs stored in R2 through the `SCREENSHOTS_BUCKET` binding.
+- `server/api/screenshot/[id].ts` resolves the HN story URL, checks `caches.default`, checks R2, then fetches a full-page original JPEG screenshot from `backup15.terasp.net` on an original miss.
+- Successful originals and thumbnails are JPEGs stored in R2 through the `SCREENSHOTS_BUCKET` binding.
 - Server-side backup15 fetch concurrency is controlled by `runtimeConfig.screenshotFetchConcurrency` and should remain queued so the screenshot service is not overwhelmed.
-- Concurrent backup15 captures for the same R2 key are coalesced, short per-isolate R2 miss memory avoids repeated R2 reads during fallback cooldowns, and failed captures write a short-lived R2 failure marker instead of a reusable screenshot.
+- Server-side thumbnail processing concurrency is controlled by `runtimeConfig.screenshotThumbnailProcessingConcurrency`; thumbnail pre-decode pixel safety is controlled by `runtimeConfig.screenshotThumbnailMaxInputPixels`.
+- Concurrent backup15 captures for the same source URL are coalesced, concurrent thumbnail processing for the same thumbnail key is coalesced, short per-isolate R2 miss memory avoids repeated R2 reads during fallback cooldowns, and failed captures or thumbnail processing write short-lived R2 failure markers instead of reusable screenshots.
 - Client-side image request concurrency is controlled by `runtimeConfig.public.screenshotImageQueueConcurrency`.
 - Keep long shared-cache TTLs unless there is a concrete invalidation need.
 
@@ -185,8 +188,9 @@ Production app URL: `https://hn42.vv42.workers.dev/`.
 - Keep the R2 binding `SCREENSHOTS_BUCKET` in `wrangler.toml`.
 - R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.
 - Production screenshot storage expects the R2 bucket `hn42-screenshots`; preview/local Wrangler storage expects `hn42-screenshots-dev`.
-- R2 lifecycle should delete the `screenshots/v1/` prefix after 30 days.
+- R2 lifecycle should delete the `screenshots/v2/` prefix after 30 days.
 - Use `npm run cf:screenshots:bootstrap` to create missing screenshot R2 buckets and add the lifecycle rule. The script is intended to be idempotent and can be rerun.
+- Use `npm run cf:screenshots:reset-cache` only when intentionally deleting old cached objects under `screenshots/v1/`.
 - Do not switch scripts back to `wrangler pages deploy` or `wrangler pages dev`.
 
 For deployment config changes, verify:
@@ -208,6 +212,7 @@ npm run preview
 npm run deploy
 npm run cf-typegen
 npm run cf:screenshots:bootstrap
+npm run cf:screenshots:reset-cache
 npx wrangler deploy --dry-run
 git diff --check
 ```

@@ -185,7 +185,7 @@ const error = computed(() => {
   return null
 })
 const isLoading = computed(() => pending.value)
-const screenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}` : '')
+const screenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=original` : '')
 
 // Use the sanitizer
 const { sanitize } = useSanitizer();
