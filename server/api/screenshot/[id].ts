@@ -8,10 +8,6 @@ import {
 } from '#imports'
 import { captureWithBackup15 } from '../../utils/screenshot/backup15'
 import {
-  createThumbnailWithCloudflareImages,
-  isCloudflareImagesQuotaError,
-} from '../../utils/screenshot/cloudflareImages'
-import {
   getR2OriginalScreenshotKey,
   getR2ThumbnailScreenshotKey,
   getSourceUrlHash,
@@ -22,18 +18,18 @@ import {
   type R2Screenshot,
   type R2ScreenshotFailure,
 } from '../../utils/screenshot/r2Cache'
-import { createThumbnailFromJpeg } from '../../utils/screenshot/thumbnail'
+import { createAndPersistThumbnailWithPipeline } from '../../utils/screenshot/thumbnailPipeline'
 import type {
   ScreenshotEnv,
   ScreenshotProcessorName,
   ScreenshotProviderName,
   ScreenshotResult,
   ScreenshotVariant,
+  ThumbnailRuntimeConfig,
 } from '../../utils/screenshot/types'
 
 const FALLBACK_MEMORY_TTL_MS = 15 * 60 * 1000
 const R2_MISS_MEMORY_TTL_MS = 2 * 60 * 1000
-const IMAGES_QUOTA_COOLDOWN_MS = 30 * 60 * 1000
 const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
   255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
@@ -41,8 +37,6 @@ const TRANSPARENT_GIF = Uint8Array.from([
 const fallbackExpirations = new Map<string, number>()
 const r2MissExpirations = new Map<string, number>()
 const pendingOriginalCaptures = new Map<string, Promise<ScreenshotResult>>()
-const pendingThumbnailProcesses = new Map<string, Promise<ScreenshotResult>>()
-let imagesQuotaCooldownExpiresAt = 0
 
 const SCREENSHOT_CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=604800',
@@ -70,16 +64,6 @@ type HnFirebaseStory = {
 }
 
 type R2ReadResult = R2Screenshot | R2ScreenshotFailure | null | typeof R2_READ_FAILED
-
-type ThumbnailRuntimeConfig = {
-  concurrency: unknown
-  height: unknown
-  jpegQuality: unknown
-  maxInputBytes: unknown
-  maxInputPixels: unknown
-  timeoutMs: unknown
-  width: unknown
-}
 
 const getWaitUntil = (event: any) => {
   const cloudflareContext = event.context.cloudflare?.context
@@ -179,19 +163,6 @@ const noteR2Miss = (key: string) => {
 
 const forgetR2Miss = (key: string) => {
   r2MissExpirations.delete(key)
-}
-
-const shouldSkipCloudflareImages = () => {
-  if (imagesQuotaCooldownExpiresAt <= Date.now()) {
-    imagesQuotaCooldownExpiresAt = 0
-    return false
-  }
-
-  return true
-}
-
-const noteCloudflareImagesQuotaExhausted = () => {
-  imagesQuotaCooldownExpiresAt = Date.now() + IMAGES_QUOTA_COOLDOWN_MS
 }
 
 const createFallbackResponse = (fallbackKey?: string, variant: ScreenshotVariant = 'original') => {
@@ -372,90 +343,6 @@ const captureAndPersistOriginal = (
   pendingOriginalCaptures.set(originalKey, capture)
 
   return capture
-}
-
-const createAndPersistCloudflareImagesThumbnail = (
-  event: any,
-  env: ScreenshotEnv | undefined,
-  thumbnailKey: string,
-  sourceUrlHash: string,
-  original: ScreenshotResult,
-  config: ThumbnailRuntimeConfig,
-) => {
-  const pendingProcess = pendingThumbnailProcesses.get(thumbnailKey)
-
-  if (pendingProcess) {
-    return pendingProcess
-  }
-
-  const process = createThumbnailWithCloudflareImages(env?.IMAGES, original, {
-    concurrency: config.concurrency,
-    height: config.height,
-    quality: config.jpegQuality,
-    timeoutMs: config.timeoutMs,
-    width: config.width,
-  })
-    .then((thumbnail) => {
-      forgetR2Miss(thumbnailKey)
-      runInBackground(
-        event,
-        writeR2Screenshot(env, thumbnailKey, sourceUrlHash, thumbnail, 'thumbnail').catch((error) => {
-          console.warn(`R2 WebP thumbnail screenshot write failed: ${error instanceof Error ? error.message : String(error)}`)
-        }),
-      )
-
-      return thumbnail
-    })
-    .finally(() => {
-      pendingThumbnailProcesses.delete(thumbnailKey)
-    })
-
-  pendingThumbnailProcesses.set(thumbnailKey, process)
-
-  return process
-}
-
-const createAndPersistWasmThumbnail = (
-  event: any,
-  env: ScreenshotEnv | undefined,
-  thumbnailKey: string,
-  sourceUrlHash: string,
-  original: ScreenshotResult,
-  config: ThumbnailRuntimeConfig,
-) => {
-  const pendingProcess = pendingThumbnailProcesses.get(thumbnailKey)
-
-  if (pendingProcess) {
-    return pendingProcess
-  }
-
-  const process = createThumbnailFromJpeg(original, {
-    concurrency: config.concurrency,
-    height: config.height,
-    jpegQuality: config.jpegQuality,
-    maxInputBytes: config.maxInputBytes,
-    maxInputPixels: config.maxInputPixels,
-    timeoutMs: config.timeoutMs,
-    width: config.width,
-  })
-    .then((thumbnail) => {
-      forgetR2Miss(thumbnailKey)
-      runInBackground(
-        event,
-        writeR2Screenshot(env, thumbnailKey, sourceUrlHash, thumbnail, 'thumbnail').catch((error) => {
-          console.warn(`R2 thumbnail screenshot write failed: ${error instanceof Error ? error.message : String(error)}`)
-        }),
-      )
-
-      return thumbnail
-    })
-    .finally(() => {
-      pendingThumbnailProcesses.delete(thumbnailKey)
-    })
-
-  pendingThumbnailProcesses.set(thumbnailKey, process)
-
-  return process
 }
 
 const isValidStoryId = (id: unknown): id is string => {
@@ -775,53 +662,19 @@ const serveThumbnail = async (
   }
 
   if (!webpThumbnailFailure?.isFresh) {
-    let imagesError: unknown = null
-    let imagesAttempted = false
-    let imagesQuotaExhausted = false
+    const thumbnail = await createAndPersistThumbnailWithPipeline({
+      config: options.thumbnailConfig,
+      env: options.env,
+      forgetR2Miss,
+      jpegKey: options.thumbnailJpegKey,
+      original,
+      scheduleBackground: (task) => runInBackground(event, task),
+      sourceUrlHash: options.sourceUrlHash,
+      webpKey: options.thumbnailWebpKey,
+      writeFailureMarker: webpThumbnailResult !== R2_READ_FAILED && !webpThumbnailScreenshot && !jpegThumbnailScreenshot,
+    })
 
-    if (options.env?.IMAGES && !shouldSkipCloudflareImages()) {
-      try {
-        imagesAttempted = true
-        const thumbnail = await createAndPersistCloudflareImagesThumbnail(
-          event,
-          options.env,
-          options.thumbnailWebpKey,
-          options.sourceUrlHash,
-          original,
-          options.thumbnailConfig,
-        )
-        const response = createImageResponse(
-          thumbnail,
-          options.sourceUrlHash,
-          'thumbnail',
-          originalCacheStatus === 'MISS' ? 'MISS' : 'R2',
-          thumbnail.provider,
-        )
-
-        putCacheResponse(event, options.cache, options.cacheKey, response)
-
-        return response
-      } catch (error) {
-        imagesError = error
-
-        if (isCloudflareImagesQuotaError(error)) {
-          imagesQuotaExhausted = true
-          noteCloudflareImagesQuotaExhausted()
-        }
-
-        console.warn(`Cloudflare Images thumbnail processing failed: ${error instanceof Error ? error.message : String(error)}`)
-      }
-    }
-
-    try {
-      const thumbnail = await createAndPersistWasmThumbnail(
-        event,
-        options.env,
-        options.thumbnailJpegKey,
-        options.sourceUrlHash,
-        original,
-        options.thumbnailConfig,
-      )
+    if (thumbnail) {
       const response = createImageResponse(
         thumbnail,
         options.sourceUrlHash,
@@ -833,36 +686,6 @@ const serveThumbnail = async (
       putCacheResponse(event, options.cache, options.cacheKey, response)
 
       return response
-    } catch (error) {
-      console.warn(`JPEG thumbnail processing failed: ${error instanceof Error ? error.message : String(error)}`)
-
-      if (
-        imagesAttempted
-        && !imagesQuotaExhausted
-        && webpThumbnailResult !== R2_READ_FAILED
-        && !webpThumbnailScreenshot
-        && !jpegThumbnailScreenshot
-      ) {
-        const imagesReason = imagesError instanceof Error
-          ? imagesError.message
-          : imagesError
-            ? String(imagesError)
-            : 'Cloudflare Images was unavailable or skipped'
-        const wasmReason = error instanceof Error ? error.message : String(error)
-
-        runInBackground(
-          event,
-          writeR2ScreenshotFailure(
-            options.env,
-            options.thumbnailWebpKey,
-            options.sourceUrlHash,
-            `Images: ${imagesReason}; WASM: ${wasmReason}`,
-            'thumbnail',
-          ).catch((writeError) => {
-            console.warn(`R2 thumbnail failure write failed: ${writeError instanceof Error ? writeError.message : String(writeError)}`)
-          }),
-        )
-      }
     }
   }
 

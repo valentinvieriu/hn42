@@ -140,11 +140,13 @@ WebP thumbnail at `thumbnail-720x1440-q78.webp`, then falls back to the legacy
 WASM-generated JPEG at `thumbnail-720x1440-q78.jpg`, then falls back to serving
 the original JPEG for the thumbnail response if no safe thumbnail can be created.
 Story detail pages request the `original` variant. Cloudflare Images
-transformations run only on thumbnail misses through the `IMAGES` binding; if
-that binding is absent, exhausted, over limit, or times out, the existing
-WASM-backed JPEG decode/resize/encode path is used. The route uses response
-`Content-Type` and `X-HN42-Screenshot-Format`/`X-HN42-Screenshot-Processor`
-headers to identify WebP, JPEG, or original fallback responses.
+transformations run only on thumbnail misses through the `IMAGES` binding in
+built Worker runtimes; Nuxt dev explicitly skips Images and uses the WASM path
+so local development does not require the Images service. If Images is absent,
+exhausted, over limit, or times out, the existing WASM-backed JPEG
+decode/resize/encode path is used. The route uses response `Content-Type` and
+`X-HN42-Screenshot-Format`/`X-HN42-Screenshot-Processor` headers to identify
+WebP, JPEG, or original fallback responses.
 
 To stay within Worker memory limits, WASM thumbnail processing checks JPEG
 dimensions before decoding and falls back to the original JPEG when the source

@@ -14,3 +14,13 @@ export type ScreenshotResult = {
   provider: ScreenshotProviderName
   variant?: ScreenshotVariant
 }
+
+export type ThumbnailRuntimeConfig = {
+  concurrency: unknown
+  height: unknown
+  jpegQuality: unknown
+  maxInputBytes: unknown
+  maxInputPixels: unknown
+  timeoutMs: unknown
+  width: unknown
+}
