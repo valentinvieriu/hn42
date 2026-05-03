@@ -57,6 +57,29 @@
               {{ timeAgo }}
             </span>
           </div>
+          <a
+            v-if="storyExternalUrl"
+            :href="storyExternalUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="compact-source-preview mb-6 block lg:hidden"
+            :aria-label="`Open ${storyDomain} externally`"
+            data-testid="compact-source-preview"
+          >
+            <img
+              :alt="`Preview of ${story.title}`"
+              width="720"
+              height="450"
+              :src="thumbnailScreenshotSrc"
+              loading="eager"
+              decoding="async"
+              class="compact-source-preview-image"
+            />
+            <span class="compact-source-preview-chip meta-text">
+              <span>{{ storyDomain }}</span>
+              <LucideExternalLink class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            </span>
+          </a>
           <div
             class="rich-text reading-measure mb-5 text-base leading-7 text-gray-700 dark:text-gray-300"
             v-html="sanitizedText"
@@ -64,10 +87,10 @@
           <img
             :alt="story.title"
             width="600"
-            :src="screenshotSrc"
+            :src="originalScreenshotSrc"
             loading="lazy"
             decoding="async"
-            class="hidden md:block w-full h-auto rounded-lg shadow-md mb-8"
+            class="hidden lg:block w-full h-auto rounded-lg shadow-md mb-8"
           />
         </article>
         <aside id="comments" class="min-w-0 scroll-mt-24 lg:col-start-2 lg:row-start-1 lg:row-span-2">
@@ -185,7 +208,20 @@ const error = computed(() => {
   return null
 })
 const isLoading = computed(() => pending.value)
-const screenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=original` : '')
+const thumbnailScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=thumbnail` : '')
+const originalScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=original` : '')
+const storyExternalUrl = computed(() => story.value?.url || '')
+const storyDomain = computed(() => {
+  if (!storyExternalUrl.value) {
+    return 'source'
+  }
+
+  try {
+    return new URL(storyExternalUrl.value).hostname.replace(/^www\./, '')
+  } catch {
+    return 'source'
+  }
+})
 
 // Use the sanitizer
 const { sanitize } = useSanitizer();
@@ -253,6 +289,81 @@ useSeoMeta({
 </script>
 
 <style scoped>
+.compact-source-preview {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border: 1px solid rgb(148 163 184 / 0.26);
+  border-radius: 0.75rem;
+  background: rgb(15 23 42 / 0.05);
+  box-shadow: 0 18px 40px -32px rgb(15 23 42 / 0.55);
+}
+
+.compact-source-preview::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 42%;
+  content: "";
+  background: linear-gradient(to top, rgb(15 23 42 / 0.36), transparent);
+  pointer-events: none;
+}
+
+.compact-source-preview-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  transition: transform 0.25s ease;
+}
+
+.compact-source-preview:hover .compact-source-preview-image,
+.compact-source-preview:focus-visible .compact-source-preview-image {
+  transform: scale(1.015);
+}
+
+.compact-source-preview-chip {
+  position: absolute;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
+  z-index: 1;
+  display: inline-flex;
+  width: max-content;
+  max-width: calc(100% - 1.5rem);
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.42rem 0.58rem;
+  border: 1px solid rgb(255 255 255 / 0.68);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.88);
+  color: rgb(31 41 55);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 8px 22px -16px rgb(15 23 42 / 0.75);
+  backdrop-filter: blur(12px);
+}
+
+.compact-source-preview-chip span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dark .compact-source-preview {
+  border-color: rgb(148 163 184 / 0.28);
+  background: rgb(15 23 42 / 0.84);
+  box-shadow: 0 18px 40px -32px rgb(0 0 0 / 0.8);
+}
+
+.dark .compact-source-preview-chip {
+  border-color: rgb(255 255 255 / 0.16);
+  background: rgb(15 23 42 / 0.78);
+  color: rgb(226 232 240);
+}
+
 .comments-toolbar {
   display: flex;
   align-items: center;
