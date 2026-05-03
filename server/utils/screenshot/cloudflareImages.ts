@@ -106,6 +106,7 @@ const transformThumbnail = async (
     contentType,
     processor: 'images',
     provider: original.provider,
+    sourceStrategy: original.sourceStrategy,
     variant: 'thumbnail',
   }
 }

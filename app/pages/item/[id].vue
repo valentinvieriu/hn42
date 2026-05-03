@@ -62,10 +62,24 @@
             :href="storyExternalUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="compact-source-preview mb-6 block lg:hidden"
+            class="compact-source-preview seed-palette-surface mb-6 block lg:hidden"
+            :data-screenshot-state="thumbnailPreviewState"
+            :style="screenshotPreviewStyle"
             :aria-label="`Open ${storyDomain} externally`"
             data-testid="compact-source-preview"
           >
+            <div class="source-preview-fallback" aria-hidden="true">
+              <div class="source-preview-fallback-panels">
+                <span
+                  v-for="panel in screenshotFallbackPanels"
+                  :key="panel.key"
+                  class="source-preview-fallback-panel"
+                  :class="panel.variant"
+                  :style="panel.style"
+                ></span>
+              </div>
+              <div class="source-preview-fallback-mark">{{ screenshotFallbackInitials }}</div>
+            </div>
             <img
               :alt="`Preview of ${story.title}`"
               width="720"
@@ -74,6 +88,9 @@
               loading="eager"
               decoding="async"
               class="compact-source-preview-image"
+              :class="{ 'is-loaded': thumbnailPreviewState === 'loaded' }"
+              @load="handleThumbnailPreviewLoad"
+              @error="handleThumbnailPreviewError"
             />
             <span class="compact-source-preview-chip meta-text">
               <span>{{ storyDomain }}</span>
@@ -84,14 +101,35 @@
             class="rich-text reading-measure mb-5 text-base leading-7 text-gray-700 dark:text-gray-300"
             v-html="sanitizedText"
           ></div>
-          <img
-            :alt="story.title"
-            width="600"
-            :src="originalScreenshotSrc"
-            loading="lazy"
-            decoding="async"
-            class="hidden lg:block w-full h-auto rounded-lg shadow-md mb-8"
-          />
+          <div
+            class="source-screenshot-preview seed-palette-surface hidden lg:block mb-8"
+            :data-screenshot-state="originalPreviewState"
+            :style="screenshotPreviewStyle"
+          >
+            <div class="source-preview-fallback" aria-hidden="true">
+              <div class="source-preview-fallback-panels">
+                <span
+                  v-for="panel in screenshotFallbackPanels"
+                  :key="`desktop-${panel.key}`"
+                  class="source-preview-fallback-panel"
+                  :class="panel.variant"
+                  :style="panel.style"
+                ></span>
+              </div>
+              <div class="source-preview-fallback-mark">{{ screenshotFallbackInitials }}</div>
+            </div>
+            <img
+              :alt="story.title"
+              width="600"
+              :src="originalScreenshotSrc"
+              loading="lazy"
+              decoding="async"
+              class="source-screenshot-preview-image"
+              :class="{ 'is-loaded': originalPreviewState === 'loaded' }"
+              @load="handleOriginalPreviewLoad"
+              @error="handleOriginalPreviewError"
+            />
+          </div>
         </article>
         <aside id="comments" class="min-w-0 scroll-mt-24 lg:col-start-2 lg:row-start-1 lg:row-span-2">
           <div class="comments-toolbar">
@@ -134,10 +172,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp } from '@lucide/vue';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
+import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
 
 const route = useRoute();
 const expandAllComments = ref(false);
@@ -211,6 +250,9 @@ const isLoading = computed(() => pending.value)
 const thumbnailScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=thumbnail` : '')
 const originalScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=original` : '')
 const storyExternalUrl = computed(() => story.value?.url || '')
+type ScreenshotPreviewState = 'loading' | 'loaded' | 'failed'
+const thumbnailPreviewState = ref<ScreenshotPreviewState>('loading')
+const originalPreviewState = ref<ScreenshotPreviewState>('loading')
 const storyDomain = computed(() => {
   if (!storyExternalUrl.value) {
     return 'source'
@@ -221,6 +263,98 @@ const storyDomain = computed(() => {
   } catch {
     return 'source'
   }
+})
+
+const screenshotPreviewSeed = computed(() => `${storyId.value ?? 'story'}:${story.value?.title ?? ''}:${storyExternalUrl.value}`)
+
+const hashSeed = (seed: string): number => {
+  let hash = 2166136261
+
+  for (const character of seed) {
+    hash ^= character.codePointAt(0) ?? 0
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return hash >>> 0
+}
+
+const seededRange = (salt: string, min: number, max: number): number => {
+  const hash = hashSeed(`${screenshotPreviewSeed.value}:${salt}`)
+  return min + (hash % (max - min + 1))
+}
+
+const screenshotFallbackInitials = computed(() => {
+  const domainLabel = storyDomain.value.replace(/^www\./, '').split('.')[0] || story.value?.title || 'HN'
+  const compactLabel = domainLabel.replace(/[^a-z0-9]/gi, '')
+
+  return (compactLabel.slice(0, 2) || 'HN').toUpperCase()
+})
+
+const screenshotPreviewStyle = computed(() => {
+  const angle = seededRange('angle', -28, 28)
+
+  return {
+    ...getSeedPaletteStyle(screenshotPreviewSeed.value),
+    '--fallback-angle': `${angle}deg`,
+    '--fallback-grid': `${seededRange('grid', 28, 48)}px`,
+    '--fallback-sweep': `${seededRange('sweep', 22, 74)}%`,
+    '--fallback-cut': `${seededRange('cut', 24, 68)}%`,
+  }
+})
+
+const screenshotFallbackPanels = computed(() => {
+  return Array.from({ length: 8 }, (_, index) => {
+    const panelSeed = `panel-${index}`
+    const width = seededRange(`${panelSeed}-width`, 18, 44)
+    const height = seededRange(`${panelSeed}-height`, 5, 14)
+    const left = seededRange(`${panelSeed}-left`, -6, 86)
+    const top = seededRange(`${panelSeed}-top`, 12, 82)
+    const rotate = seededRange(`${panelSeed}-rotate`, -20, 20)
+    const opacity = seededRange(`${panelSeed}-opacity`, 32, 68) / 100
+
+    return {
+      key: `${storyId.value ?? 'story'}-${index}`,
+      variant: index % 3 === 0 ? 'source-preview-fallback-panel-strong' : index % 3 === 1 ? 'source-preview-fallback-panel-soft' : 'source-preview-fallback-panel-line',
+      style: {
+        width: `${width}%`,
+        height: `${height}%`,
+        left: `${left}%`,
+        top: `${top}%`,
+        opacity,
+        transform: `rotate(${rotate}deg)`,
+      },
+    }
+  })
+})
+
+const getPreviewStateFromImage = (event: Event): ScreenshotPreviewState => {
+  const image = event.target as HTMLImageElement
+
+  return image.naturalWidth > 1 && image.naturalHeight > 1 ? 'loaded' : 'failed'
+}
+
+const handleThumbnailPreviewLoad = (event: Event) => {
+  thumbnailPreviewState.value = getPreviewStateFromImage(event)
+}
+
+const handleThumbnailPreviewError = () => {
+  thumbnailPreviewState.value = 'failed'
+}
+
+const handleOriginalPreviewLoad = (event: Event) => {
+  originalPreviewState.value = getPreviewStateFromImage(event)
+}
+
+const handleOriginalPreviewError = () => {
+  originalPreviewState.value = 'failed'
+}
+
+watch(thumbnailScreenshotSrc, () => {
+  thumbnailPreviewState.value = 'loading'
+})
+
+watch(originalScreenshotSrc, () => {
+  originalPreviewState.value = 'loading'
 })
 
 // Use the sanitizer
@@ -293,10 +427,12 @@ useSeoMeta({
   position: relative;
   overflow: hidden;
   aspect-ratio: 16 / 10;
-  border: 1px solid rgb(148 163 184 / 0.26);
+  border: 1px solid color-mix(in oklch, var(--seed-border) 74%, rgb(148 163 184 / 0.26));
   border-radius: 0.75rem;
-  background: rgb(15 23 42 / 0.05);
-  box-shadow: 0 18px 40px -32px rgb(15 23 42 / 0.55);
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 54%, transparent), transparent 32%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
+  box-shadow: 0 18px 40px -32px var(--seed-shadow-strong);
 }
 
 .compact-source-preview::after {
@@ -309,12 +445,19 @@ useSeoMeta({
 }
 
 .compact-source-preview-image {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  transition: transform 0.25s ease;
+  opacity: 0;
+  transition: opacity 0.28s ease, transform 0.25s ease;
+}
+
+.compact-source-preview-image.is-loaded {
+  opacity: 1;
 }
 
 .compact-source-preview:hover .compact-source-preview-image,
@@ -352,10 +495,116 @@ useSeoMeta({
   white-space: nowrap;
 }
 
+.source-screenshot-preview {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid color-mix(in oklch, var(--seed-border) 72%, rgb(148 163 184 / 0.26));
+  border-radius: 0.75rem;
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 54%, transparent), transparent 32%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
+  box-shadow: 0 18px 40px -32px var(--seed-shadow-strong);
+}
+
+.source-screenshot-preview[data-screenshot-state="loading"],
+.source-screenshot-preview[data-screenshot-state="failed"] {
+  aspect-ratio: 4 / 3;
+}
+
+.source-screenshot-preview-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: auto;
+  opacity: 0;
+  transition: opacity 0.28s ease;
+}
+
+.source-screenshot-preview[data-screenshot-state="loading"] .source-screenshot-preview-image,
+.source-screenshot-preview[data-screenshot-state="failed"] .source-screenshot-preview-image {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  object-fit: cover;
+}
+
+.source-screenshot-preview-image.is-loaded {
+  opacity: 1;
+}
+
+.source-preview-fallback {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, transparent 0 var(--fallback-cut), var(--seed-ring) var(--fallback-cut) calc(var(--fallback-cut) + 1px), transparent calc(var(--fallback-cut) + 1px)),
+    radial-gradient(circle at 18% 18%, var(--seed-accent-soft), transparent 30%),
+    linear-gradient(150deg, var(--seed-surface-strong) 0%, var(--seed-overlay-mid) var(--fallback-sweep), var(--seed-overlay-edge) 100%);
+}
+
+.source-preview-fallback::before {
+  position: absolute;
+  inset: -18%;
+  content: "";
+  background-image:
+    linear-gradient(color-mix(in oklch, var(--seed-border) 64%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklch, var(--seed-border) 52%, transparent) 1px, transparent 1px);
+  background-size: var(--fallback-grid) var(--fallback-grid);
+  opacity: 0.48;
+  transform: rotate(var(--fallback-angle));
+}
+
+.source-preview-fallback-panels {
+  position: absolute;
+  inset: 0;
+}
+
+.source-preview-fallback-panel {
+  position: absolute;
+  display: block;
+  border-radius: 0.5rem;
+}
+
+.source-preview-fallback-panel-strong {
+  border: 1px solid var(--seed-border);
+  background: color-mix(in oklch, var(--seed-surface-raised) 74%, white 10%);
+  box-shadow: 0 12px 26px -20px var(--seed-shadow-strong);
+}
+
+.source-preview-fallback-panel-soft {
+  background: var(--seed-accent-soft);
+}
+
+.source-preview-fallback-panel-line {
+  height: 2px !important;
+  background: var(--seed-accent);
+}
+
+.source-preview-fallback-mark {
+  position: absolute;
+  right: 1.15rem;
+  bottom: 1rem;
+  color: var(--seed-accent-strong);
+  font-family: var(--font-display, inherit);
+  font-size: clamp(2rem, 8vw, 4.75rem);
+  font-weight: 700;
+  line-height: 0.9;
+  opacity: 0.28;
+}
+
 .dark .compact-source-preview {
-  border-color: rgb(148 163 184 / 0.28);
-  background: rgb(15 23 42 / 0.84);
-  box-shadow: 0 18px 40px -32px rgb(0 0 0 / 0.8);
+  border-color: color-mix(in oklch, var(--seed-border) 82%, rgb(148 163 184 / 0.28));
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 50%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
+}
+
+.dark .source-screenshot-preview {
+  border-color: color-mix(in oklch, var(--seed-border) 82%, rgb(148 163 184 / 0.28));
+  background:
+    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 50%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
 }
 
 .dark .compact-source-preview-chip {

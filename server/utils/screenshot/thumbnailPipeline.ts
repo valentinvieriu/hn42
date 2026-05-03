@@ -161,6 +161,10 @@ export const createAndPersistThumbnailWithPipeline = async (
           options.sourceUrlHash,
           `Images: ${imagesReason}; WASM: ${wasmReason}`,
           'thumbnail',
+          {
+            policy: 'capture',
+            sourceStrategy: options.original.sourceStrategy,
+          },
         ).catch((writeError) => {
           console.warn(`R2 thumbnail failure write failed: ${getErrorMessage(writeError)}`)
         }),

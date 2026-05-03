@@ -127,12 +127,27 @@ npx wrangler deploy --dry-run
 
 Article screenshots are generated through `backup15.terasp.net` and proxied
 through `/api/screenshot/:id?variant=original|thumbnail`. The route checks
-Cloudflare `caches.default`, then R2, then generates a fresh original JPEG
-through backup15 on a miss. Successful originals and generated thumbnails are stored
-temporarily in R2 under `screenshots/v2/<source-url-hash>/`, keyed by normalized
-source URL so repeated HN submissions of the same link reuse the same objects.
+Cloudflare `caches.default`, resolves the story URL, applies a screenshot source
+policy, checks R2, then generates a fresh original JPEG through backup15 on a
+miss. Successful originals and generated thumbnails are stored temporarily in R2
+under `screenshots/v2/<source-url-hash>/`. Direct captures keep using the
+normalized story URL as the hash input so repeated HN submissions of the same
+link reuse the same objects; transformed captures scope the hash to the source
+strategy and transformed capture URL.
 The bootstrap script creates `hn42-screenshots` and `hn42-screenshots-dev` if
 missing, then adds a 30-day lifecycle rule for the `screenshots/v2/` prefix.
+
+The source policy keeps source links unchanged for readers but can choose a
+different capture target or skip capture before spending a browser API call.
+Current rules transform X/Twitter status URLs through XCancel, transform
+`arxiv.org/pdf/...` links to their `arxiv.org/abs/...` page, skip generic PDFs
+and obvious PDF query shapes, and skip a small default list of known paywall or
+bot-check domains (`nytimes.com`, `wsj.com`, `bloomberg.com`, `ft.com`,
+`economist.com`, and `washingtonpost.com`, including subdomains). After R2
+misses, the route also runs a bounded HEAD probe before capture and skips URLs
+that declare `application/pdf` or a PDF filename in `Content-Disposition`.
+Skipped screenshots return the transparent fallback and include policy headers
+instead of calling backup15.
 
 Feed cards request the `thumbnail` variant. The thumbnail is derived inside the
 Worker from the original JPEG. R2 lookup prefers the canonical Cloudflare Images
@@ -160,7 +175,11 @@ once. Tune the defaults with
 `NUXT_SCREENSHOT_THUMBNAIL_HEIGHT`,
 `NUXT_SCREENSHOT_THUMBNAIL_MAX_INPUT_PIXELS`,
 `NUXT_SCREENSHOT_THUMBNAIL_JPEG_QUALITY`, and
-`NUXT_PUBLIC_SCREENSHOT_IMAGE_QUEUE_CONCURRENCY` if needed.
+`NUXT_PUBLIC_SCREENSHOT_IMAGE_QUEUE_CONCURRENCY` if needed. Tune screenshot
+policy behavior with `NUXT_SCREENSHOT_POLICY_HEAD_PROBE_TIMEOUT_MS`,
+`NUXT_SCREENSHOT_X_CANCEL_BASE_URL`, and
+`NUXT_SCREENSHOT_POLICY_BLOCKED_HOSTS`; the blocked-host setting extends the
+default list with comma-separated hostnames.
 
 The route coalesces concurrent captures for the same source URL and briefly
 remembers R2 misses after failed captures to avoid repeated R2 reads during
@@ -168,7 +187,11 @@ retry cooldowns. Failed captures write short-lived R2 failure markers at the
 relevant variant key. Thumbnail processing writes a marker only when Cloudflare
 Images is actually attempted and the WASM fallback also fails, so quota
 exhaustion does not poison future thumbnail generation. Tune that marker TTL
-with `NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`.
+with `NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`. Responses include
+`X-HN42-Screenshot-Policy`, `X-HN42-Screenshot-Source-Strategy`, and, for
+skips, `X-HN42-Screenshot-Skip-Reason`; this keeps the current public image API
+stable while leaving a provider extension point for future lawful or authorized
+capture providers.
 
 Screenshot storage bootstrap can be rerun safely:
 

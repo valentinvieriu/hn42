@@ -1,8 +1,12 @@
 import type {
+  ScreenshotPolicyMetadata,
+  ScreenshotPolicyName,
   ScreenshotProcessorName,
   ScreenshotProviderName,
   ScreenshotResult,
   ScreenshotEnv,
+  ScreenshotSkipReason,
+  ScreenshotSourceStrategy,
   ScreenshotVariant,
 } from './types'
 
@@ -22,10 +26,13 @@ const TRANSPARENT_GIF = Uint8Array.from([
 type R2ScreenshotMetadata = {
   capturedAt?: string
   contentType?: string
+  policy?: ScreenshotPolicyName
   processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
   reason?: string
+  skipReason?: ScreenshotSkipReason
   sourceUrlHash?: string
+  sourceStrategy?: ScreenshotSourceStrategy
   status?: 'ok' | 'failed'
   variant?: ScreenshotVariant
 }
@@ -36,8 +43,11 @@ export type R2Screenshot = {
   capturedAt: Date | null
   isFresh: boolean
   key: string
+  policy?: ScreenshotPolicyName
   processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
+  skipReason?: ScreenshotSkipReason
+  sourceStrategy?: ScreenshotSourceStrategy
   variant?: ScreenshotVariant
 }
 
@@ -46,7 +56,10 @@ export type R2ScreenshotFailure = {
   isFailure: true
   isFresh: boolean
   key: string
+  policy?: ScreenshotPolicyName
   reason?: string
+  skipReason?: ScreenshotSkipReason
+  sourceStrategy?: ScreenshotSourceStrategy
   variant?: ScreenshotVariant
 }
 
@@ -118,6 +131,12 @@ const getCapturedAt = (metadata: R2ScreenshotMetadata) => {
   return Number.isNaN(capturedAt.getTime()) ? null : capturedAt
 }
 
+const toCustomMetadata = (metadata: R2ScreenshotMetadata) => {
+  return Object.fromEntries(
+    Object.entries(metadata).filter((entry): entry is [string, string] => typeof entry[1] === 'string'),
+  )
+}
+
 const isFresh = (capturedAt: Date | null, ttlDays: unknown) => {
   if (!capturedAt) {
     return false
@@ -161,7 +180,10 @@ export const readR2Screenshot = async (
       isFailure: true,
       isFresh: isFreshFailure(capturedAt, failureTtlMinutes),
       key,
+      policy: metadata.policy,
       reason: metadata.reason,
+      skipReason: metadata.skipReason,
+      sourceStrategy: metadata.sourceStrategy,
       variant: metadata.variant,
     }
   }
@@ -174,8 +196,11 @@ export const readR2Screenshot = async (
     capturedAt,
     isFresh: isFresh(capturedAt, ttlDays),
     key,
+    policy: metadata.policy,
     processor: metadata.processor,
     provider: metadata.provider,
+    skipReason: metadata.skipReason,
+    sourceStrategy: metadata.sourceStrategy,
     variant: metadata.variant,
   }
 }
@@ -192,6 +217,7 @@ export const writeR2Screenshot = async (
   sourceUrlHash: string,
   result: ScreenshotResult,
   variant: ScreenshotVariant,
+  metadata: ScreenshotPolicyMetadata = {},
 ) => {
   const bucket = env?.SCREENSHOTS_BUCKET
 
@@ -202,8 +228,10 @@ export const writeR2Screenshot = async (
   const customMetadata: R2ScreenshotMetadata = {
     capturedAt: new Date().toISOString(),
     contentType: result.contentType,
+    policy: metadata.policy ?? 'capture',
     provider: result.provider,
     sourceUrlHash,
+    sourceStrategy: metadata.sourceStrategy ?? result.sourceStrategy,
     status: 'ok',
     variant,
   }
@@ -212,12 +240,16 @@ export const writeR2Screenshot = async (
     customMetadata.processor = result.processor
   }
 
+  if (metadata.skipReason) {
+    customMetadata.skipReason = metadata.skipReason
+  }
+
   await bucket.put(key, result.bytes, {
     httpMetadata: {
       contentType: result.contentType,
       cacheControl: 'public, max-age=86400',
     },
-    customMetadata,
+    customMetadata: toCustomMetadata(customMetadata),
   })
 }
 
@@ -227,6 +259,7 @@ export const writeR2ScreenshotFailure = async (
   sourceUrlHash: string,
   reason: string,
   variant: ScreenshotVariant,
+  metadata: ScreenshotPolicyMetadata = {},
 ) => {
   const bucket = env?.SCREENSHOTS_BUCKET
 
@@ -239,13 +272,16 @@ export const writeR2ScreenshotFailure = async (
       contentType: 'image/gif',
       cacheControl: 'no-store',
     },
-    customMetadata: {
+    customMetadata: toCustomMetadata({
       capturedAt: new Date().toISOString(),
       contentType: 'image/gif',
+      policy: metadata.policy ?? 'capture',
       reason: reason.slice(0, 200),
+      skipReason: metadata.skipReason,
       sourceUrlHash,
+      sourceStrategy: metadata.sourceStrategy,
       status: 'failed',
       variant,
-    },
+    }),
   })
 }

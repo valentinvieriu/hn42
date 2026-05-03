@@ -279,6 +279,7 @@ const processThumbnail = async (
     contentType: 'image/jpeg',
     processor: 'wasm',
     provider: original.provider,
+    sourceStrategy: original.sourceStrategy,
     variant: 'thumbnail',
   }
 }

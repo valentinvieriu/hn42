@@ -14,6 +14,8 @@ export default defineNuxtConfig({
   runtimeConfig: {
     screenshotFetchConcurrency: '1',
     screenshotFailureTtlMinutes: '360',
+    screenshotPolicyBlockedHosts: '',
+    screenshotPolicyHeadProbeTimeoutMs: '1200',
     screenshotR2TtlDays: '30',
     screenshotThumbnailHeight: '1440',
     screenshotThumbnailJpegQuality: '78',
@@ -22,6 +24,7 @@ export default defineNuxtConfig({
     screenshotThumbnailProcessingConcurrency: '1',
     screenshotThumbnailProcessingTimeoutMs: '5000',
     screenshotThumbnailWidth: '720',
+    screenshotXCancelBaseUrl: 'https://xcancel.com',
     public: {
       screenshotImageQueueConcurrency: '1',
     },

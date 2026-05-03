@@ -58,6 +58,7 @@ Server/API:
 - `server/api/item/[id].ts`: fetch story details and comment tree from Algolia Items API.
 - `server/api/related/[id].ts`: build related-story candidates from title, URL, comments, and Algolia search results.
 - `server/api/screenshot/[id].ts`: screenshot proxy and cache layer.
+- `server/utils/screenshot/sourcePolicy.ts`: URL policy for screenshot capture targets, deterministic skips, and bounded content probing.
 - `server/api/user/[username].ts`: user profile from Algolia.
 - `server/api/user/[username]/comments.ts` and `stories.ts`: paginated user activity using Algolia search-by-date.
 - `server/utils/fetchStories.ts`: common Algolia story normalization.
@@ -81,6 +82,7 @@ Primary upstreams:
 - Algolia Items API for story detail and comment trees.
 - Algolia users/search-by-date endpoints for user profiles and activity.
 - `backup15.terasp.net` for article screenshot generation.
+- XCancel as a best-effort capture target for public X/Twitter status URLs.
 
 Caching expectations:
 
@@ -89,10 +91,14 @@ Caching expectations:
 - User profile/activity routes cache briefly.
 - Screenshot responses use long browser/CDN cache headers and Cloudflare `caches.default`.
 - Successful screenshots are persisted temporarily in R2 under `screenshots/v2/<source-url-hash>/`; originals use `original.jpg`, Cloudflare Images thumbnails use `thumbnail-720x1440-q78.webp`, and WASM fallback thumbnails use `thumbnail-720x1440-q78.jpg`.
+- Direct screenshot captures hash the normalized story URL exactly as before. Transformed captures hash `hn42:<source-strategy>:<capture-url>` so alternate provider targets do not poison direct URL cache entries.
 - Feed cards request `/api/screenshot/:id?variant=thumbnail`; story detail pages request `/api/screenshot/:id?variant=original`.
 - Thumbnail misses in built Worker runtimes try the Cloudflare Images `IMAGES` binding first to produce canonical WebP. Nuxt dev explicitly skips Images and uses the WASM path so local development does not require the Images service. If Images is unavailable, quota-exhausted, over limit, or times out, the route falls back to the existing WASM-backed JPEG decode, resize/crop, and encode path. Keep thumbnail processing queued and bounded, and skip pre-decode images whose dimensions exceed the configured pixel limit so Worker memory is not exhausted.
 - Screenshot fallbacks are transparent GIFs with `no-store` headers; the in-memory fallback TTL avoids retry storms without poisoning `caches.default`.
 - Screenshot fallbacks are not written to R2. Stale R2 screenshots can be served briefly when backup15 fails.
+- Deterministic screenshot skips return transparent fallbacks and should not call backup15. Current policy skips generic PDFs and a small known-blocked host list, transforms X/Twitter status URLs through XCancel, and transforms `arxiv.org/pdf/...` links to `arxiv.org/abs/...`.
+- After R2 misses, the screenshot route runs a short HEAD probe before browser capture. Skip `application/pdf` or PDF `Content-Disposition` responses and write/use a short-lived failure marker when no stale screenshot exists.
+- Screenshot responses expose `X-HN42-Screenshot-Policy`, `X-HN42-Screenshot-Source-Strategy`, and `X-HN42-Screenshot-Skip-Reason` for debugging.
 - Preserve screenshot cache behavior unless the task is specifically about invalidation or freshness.
 
 ## UI And Interaction Principles
@@ -141,9 +147,11 @@ Story screenshots should render from `/api/screenshot/:id?variant=thumbnail` on 
 - Do not use the old `hn42.net/cdn-cgi/image/...` URL; that domain is no longer owned.
 - Do not add `provider="cloudflare"` to `NuxtImg` for screenshots.
 - Current screenshot rendering intentionally uses plain `<img>` tags to avoid Nuxt Image generating CDN proxy URLs.
-- `server/api/screenshot/[id].ts` resolves the HN story URL, checks `caches.default`, checks R2, then fetches a full-page original JPEG screenshot from `backup15.terasp.net` on an original miss.
+- `server/api/screenshot/[id].ts` checks `caches.default`, resolves the HN story URL, applies `sourcePolicy.ts`, checks R2, then fetches a full-page original JPEG screenshot from `backup15.terasp.net` on an original miss.
+- `sourcePolicy.ts` may keep the direct URL, transform the capture target, or skip capture. Keep source links in the UI pointed at the original HN story URL.
 - Successful originals are JPEGs stored in R2 through the `SCREENSHOTS_BUCKET` binding. Successful thumbnails may be WebP from Cloudflare Images or JPEG from the WASM fallback; callers must trust the response `Content-Type`, not the thumbnail variant URL.
 - Server-side backup15 fetch concurrency is controlled by `runtimeConfig.screenshotFetchConcurrency` and should remain queued so the screenshot service is not overwhelmed.
+- Source policy runtime config includes `screenshotPolicyHeadProbeTimeoutMs`, `screenshotXCancelBaseUrl`, and `screenshotPolicyBlockedHosts`; the host list extends the default blocked hosts.
 - Server-side Cloudflare Images and WASM thumbnail processing concurrency is controlled by `runtimeConfig.screenshotThumbnailProcessingConcurrency`; thumbnail pre-decode pixel safety is controlled by `runtimeConfig.screenshotThumbnailMaxInputPixels` for the WASM fallback.
 - Concurrent backup15 captures for the same source URL are coalesced, concurrent thumbnail processing for the same thumbnail key is coalesced, short per-isolate R2 miss memory avoids repeated R2 reads during fallback cooldowns, and failed captures write short-lived R2 failure markers instead of reusable screenshots. Thumbnail processing writes a failure marker only when Cloudflare Images was actually attempted and the WASM fallback also failed; do not mark a source failed just because Images quota was exhausted.
 - Client-side image request concurrency is controlled by `runtimeConfig.public.screenshotImageQueueConcurrency`.

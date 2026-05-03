@@ -6,7 +6,7 @@ import {
   createError,
   useRuntimeConfig,
 } from '#imports'
-import { captureWithBackup15 } from '../../utils/screenshot/backup15'
+import { captureScreenshotWithProvider } from '../../utils/screenshot/providers'
 import {
   getR2OriginalScreenshotKey,
   getR2ThumbnailScreenshotKey,
@@ -18,9 +18,18 @@ import {
   type R2Screenshot,
   type R2ScreenshotFailure,
 } from '../../utils/screenshot/r2Cache'
+import {
+  createScreenshotSourceDecision,
+  isScreenshotPolicySkipError,
+  normalizeSourceUrl,
+  probeCaptureUrlContent,
+  ScreenshotPolicySkipError,
+  type ScreenshotCaptureDecision,
+} from '../../utils/screenshot/sourcePolicy'
 import { createAndPersistThumbnailWithPipeline } from '../../utils/screenshot/thumbnailPipeline'
 import type {
   ScreenshotEnv,
+  ScreenshotPolicyMetadata,
   ScreenshotProcessorName,
   ScreenshotProviderName,
   ScreenshotResult,
@@ -34,7 +43,7 @@ const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
   255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
 ])
-const fallbackExpirations = new Map<string, number>()
+const fallbackExpirations = new Map<string, { expiresAt: number, metadata: ScreenshotPolicyMetadata }>()
 const r2MissExpirations = new Map<string, number>()
 const pendingOriginalCaptures = new Map<string, Promise<ScreenshotResult>>()
 
@@ -102,6 +111,7 @@ const withScreenshotCacheStatus = (
   provider?: ScreenshotProviderName,
   variant?: ScreenshotVariant,
   processor?: ScreenshotProcessorName,
+  metadata: ScreenshotPolicyMetadata = {},
 ) => {
   const headers = new Headers(response.headers)
   headers.set('X-HN42-Screenshot-Cache', status)
@@ -118,6 +128,18 @@ const withScreenshotCacheStatus = (
     headers.set('X-HN42-Screenshot-Processor', processor)
   }
 
+  if (metadata.policy) {
+    headers.set('X-HN42-Screenshot-Policy', metadata.policy)
+  }
+
+  if (metadata.sourceStrategy) {
+    headers.set('X-HN42-Screenshot-Source-Strategy', metadata.sourceStrategy)
+  }
+
+  if (metadata.skipReason) {
+    headers.set('X-HN42-Screenshot-Skip-Reason', metadata.skipReason)
+  }
+
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -127,19 +149,19 @@ const withScreenshotCacheStatus = (
 
 const getFallbackKey = (id: string, variant: ScreenshotVariant) => `${id}:${variant}`
 
-const hasFreshFallback = (fallbackKey: string) => {
-  const expiresAt = fallbackExpirations.get(fallbackKey)
+const getFreshFallbackMetadata = (fallbackKey: string) => {
+  const fallback = fallbackExpirations.get(fallbackKey)
 
-  if (!expiresAt) {
-    return false
+  if (!fallback) {
+    return null
   }
 
-  if (expiresAt <= Date.now()) {
+  if (fallback.expiresAt <= Date.now()) {
     fallbackExpirations.delete(fallbackKey)
-    return false
+    return null
   }
 
-  return true
+  return fallback.metadata
 }
 
 const hasFreshR2Miss = (key: string) => {
@@ -165,9 +187,16 @@ const forgetR2Miss = (key: string) => {
   r2MissExpirations.delete(key)
 }
 
-const createFallbackResponse = (fallbackKey?: string, variant: ScreenshotVariant = 'original') => {
+const createFallbackResponse = (
+  fallbackKey?: string,
+  variant: ScreenshotVariant = 'original',
+  metadata: ScreenshotPolicyMetadata = {},
+) => {
   if (fallbackKey) {
-    fallbackExpirations.set(fallbackKey, Date.now() + FALLBACK_MEMORY_TTL_MS)
+    fallbackExpirations.set(fallbackKey, {
+      expiresAt: Date.now() + FALLBACK_MEMORY_TTL_MS,
+      metadata,
+    })
   }
 
   const response = new Response(TRANSPARENT_GIF, {
@@ -182,7 +211,7 @@ const createFallbackResponse = (fallbackKey?: string, variant: ScreenshotVariant
     },
   })
 
-  return withScreenshotCacheStatus(response, 'FALLBACK', undefined, variant)
+  return withScreenshotCacheStatus(response, 'FALLBACK', undefined, variant, undefined, metadata)
 }
 
 const getImageFormat = (contentType: string) => {
@@ -211,7 +240,7 @@ const createImageResponse = (
   variant: ScreenshotVariant,
   cacheStatus: ScreenshotCacheStatus,
   provider?: ScreenshotProviderName,
-  options: { thumbnailFallback?: boolean } = {},
+  options: { metadata?: ScreenshotPolicyMetadata, thumbnailFallback?: boolean } = {},
 ) => {
   const format = getImageFormat(image.contentType)
   const processor = getScreenshotProcessor(image, variant, options.thumbnailFallback)
@@ -235,6 +264,7 @@ const createImageResponse = (
     provider ?? image.provider,
     variant,
     processor,
+    options.metadata,
   )
 }
 
@@ -281,16 +311,40 @@ const toScreenshotResult = (
     contentType: image.contentType,
     processor: image.processor,
     provider: image.provider ?? 'backup15',
+    sourceStrategy: image.sourceStrategy,
     variant,
   }
 }
+
+const getCaptureMetadata = (decision: ScreenshotCaptureDecision): ScreenshotPolicyMetadata => ({
+  policy: 'capture',
+  sourceStrategy: decision.sourceStrategy,
+})
+
+const getFailureMetadata = (
+  failure: R2ScreenshotFailure,
+  decision: ScreenshotCaptureDecision,
+): ScreenshotPolicyMetadata => ({
+  policy: failure.policy ?? (failure.skipReason ? 'skip' : 'capture'),
+  skipReason: failure.skipReason,
+  sourceStrategy: failure.sourceStrategy ?? decision.sourceStrategy,
+})
+
+const getSkipErrorMetadata = (
+  error: ScreenshotPolicySkipError,
+): ScreenshotPolicyMetadata => ({
+  policy: 'skip',
+  skipReason: error.skipReason,
+  sourceStrategy: error.sourceStrategy,
+})
 
 const captureAndPersistOriginal = (
   event: any,
   env: ScreenshotEnv | undefined,
   originalKey: string,
   sourceUrlHash: string,
-  sourceUrl: string,
+  sourceDecision: ScreenshotCaptureDecision,
+  runtimeConfig: any,
   concurrency: unknown,
   writeFailureMarker: boolean,
 ) => {
@@ -300,18 +354,30 @@ const captureAndPersistOriginal = (
     return pendingCapture
   }
 
-  const capture = captureWithBackup15(sourceUrl, concurrency)
+  const capture = probeCaptureUrlContent(sourceDecision.captureUrl, runtimeConfig)
+    .then((probeResult) => {
+      if (probeResult.policy === 'skip') {
+        throw new ScreenshotPolicySkipError(probeResult.skipReason, sourceDecision.sourceStrategy)
+      }
+
+      return captureScreenshotWithProvider(
+        sourceDecision.captureProvider,
+        sourceDecision.captureUrl,
+        concurrency,
+      )
+    })
     .then((screenshot) => {
       const original: ScreenshotResult = {
         ...screenshot,
         processor: 'original',
+        sourceStrategy: sourceDecision.sourceStrategy,
         variant: 'original',
       }
 
       forgetR2Miss(originalKey)
       runInBackground(
         event,
-        writeR2Screenshot(env, originalKey, sourceUrlHash, original, 'original').catch((error) => {
+        writeR2Screenshot(env, originalKey, sourceUrlHash, original, 'original', getCaptureMetadata(sourceDecision)).catch((error) => {
           console.warn(`R2 original screenshot write failed: ${error instanceof Error ? error.message : String(error)}`)
         }),
       )
@@ -320,6 +386,10 @@ const captureAndPersistOriginal = (
     })
     .catch((error) => {
       if (writeFailureMarker) {
+        const metadata = isScreenshotPolicySkipError(error)
+          ? getSkipErrorMetadata(error)
+          : getCaptureMetadata(sourceDecision)
+
         runInBackground(
           event,
           writeR2ScreenshotFailure(
@@ -328,6 +398,7 @@ const captureAndPersistOriginal = (
             sourceUrlHash,
             error instanceof Error ? error.message : String(error),
             'original',
+            metadata,
           ).catch((writeError) => {
             console.warn(`R2 original failure write failed: ${writeError instanceof Error ? writeError.message : String(writeError)}`)
           }),
@@ -367,62 +438,6 @@ const getRequestedVariant = (event: any): ScreenshotVariant => {
   })
 }
 
-const isPrivateIpv4Address = (hostname: string) => {
-  const parts = hostname.split('.')
-
-  if (parts.length !== 4) {
-    return false
-  }
-
-  const octets = parts.map((part) => Number(part))
-
-  if (octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) {
-    return false
-  }
-
-  const [first, second] = octets
-
-  return first === 0
-    || first === 10
-    || first === 127
-    || (first === 100 && second >= 64 && second <= 127)
-    || (first === 169 && second === 254)
-    || (first === 172 && second >= 16 && second <= 31)
-    || (first === 192 && second === 168)
-}
-
-const isBlockedHostname = (hostname: string) => {
-  const normalizedHostname = hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1')
-  const isIpv6Literal = normalizedHostname.includes(':')
-
-  return normalizedHostname === 'localhost'
-    || normalizedHostname.endsWith('.localhost')
-    || normalizedHostname.endsWith('.local')
-    || (isIpv6Literal && normalizedHostname === '::1')
-    || (isIpv6Literal && normalizedHostname.startsWith('fc'))
-    || (isIpv6Literal && normalizedHostname.startsWith('fd'))
-    || (isIpv6Literal && normalizedHostname.startsWith('fe80:'))
-    || isPrivateIpv4Address(normalizedHostname)
-}
-
-const normalizeSourceUrl = (input: unknown) => {
-  if (typeof input !== 'string' || input.trim() === '') {
-    return null
-  }
-
-  try {
-    const url = new URL(input)
-
-    if (!['http:', 'https:'].includes(url.protocol) || isBlockedHostname(url.hostname)) {
-      return null
-    }
-
-    return url.toString()
-  } catch {
-    return null
-  }
-}
-
 const resolveStorySourceUrl = async (id: string) => {
   const story = await $fetch<HnFirebaseStory>(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
 
@@ -439,10 +454,11 @@ const serveOriginal = async (
     id: string
     originalKey: string
     runtimeConfig: any
-    sourceUrl: string
+    sourceDecision: ScreenshotCaptureDecision
     sourceUrlHash: string
   },
 ) => {
+  const captureMetadata = getCaptureMetadata(options.sourceDecision)
   const originalResult = await readR2Cache(
     options.env,
     options.originalKey,
@@ -453,7 +469,7 @@ const serveOriginal = async (
 
   if (originalFailure) {
     if (originalFailure.isFresh) {
-      return createFallbackResponse(options.fallbackKey, 'original')
+      return createFallbackResponse(options.fallbackKey, 'original', getFailureMetadata(originalFailure, options.sourceDecision))
     }
 
     noteR2Miss(options.originalKey)
@@ -468,6 +484,7 @@ const serveOriginal = async (
       'original',
       'R2',
       originalScreenshot.provider,
+      { metadata: captureMetadata },
     )
 
     putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -481,7 +498,8 @@ const serveOriginal = async (
       options.env,
       options.originalKey,
       options.sourceUrlHash,
-      options.sourceUrl,
+      options.sourceDecision,
+      options.runtimeConfig,
       options.runtimeConfig.screenshotFetchConcurrency,
       originalResult !== R2_READ_FAILED && !originalScreenshot,
     )
@@ -491,13 +509,33 @@ const serveOriginal = async (
       'original',
       'MISS',
       screenshot.provider,
+      { metadata: captureMetadata },
     )
 
     putCacheResponse(event, options.cache, options.cacheKey, response)
 
     return response
   } catch (error) {
-    console.warn(`backup15 screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`)
+    if (isScreenshotPolicySkipError(error)) {
+      if (originalScreenshot) {
+        const response = createImageResponse(
+          originalScreenshot,
+          options.sourceUrlHash,
+          'original',
+          'STALE',
+          originalScreenshot.provider,
+          { metadata: getSkipErrorMetadata(error) },
+        )
+
+        putCacheResponse(event, options.cache, options.cacheKey, response)
+
+        return response
+      }
+
+      return createFallbackResponse(options.fallbackKey, 'original', getSkipErrorMetadata(error))
+    }
+
+    console.warn(`screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`)
   }
 
   if (originalScreenshot) {
@@ -507,6 +545,7 @@ const serveOriginal = async (
       'original',
       'STALE',
       originalScreenshot.provider,
+      { metadata: captureMetadata },
     )
 
     putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -514,7 +553,7 @@ const serveOriginal = async (
     return response
   }
 
-  return createFallbackResponse(options.fallbackKey, 'original')
+  return createFallbackResponse(options.fallbackKey, 'original', captureMetadata)
 }
 
 const serveThumbnail = async (
@@ -527,13 +566,14 @@ const serveThumbnail = async (
     id: string
     originalKey: string
     runtimeConfig: any
-    sourceUrl: string
+    sourceDecision: ScreenshotCaptureDecision
     sourceUrlHash: string
     thumbnailConfig: ThumbnailRuntimeConfig
     thumbnailJpegKey: string
     thumbnailWebpKey: string
   },
 ) => {
+  const captureMetadata = getCaptureMetadata(options.sourceDecision)
   const webpThumbnailResult = await readR2Cache(
     options.env,
     options.thumbnailWebpKey,
@@ -555,6 +595,7 @@ const serveThumbnail = async (
       'thumbnail',
       'R2',
       webpThumbnailScreenshot.provider,
+      { metadata: captureMetadata },
     )
 
     putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -583,6 +624,7 @@ const serveThumbnail = async (
       'thumbnail',
       'R2',
       jpegThumbnailScreenshot.provider,
+      { metadata: captureMetadata },
     )
 
     putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -602,6 +644,8 @@ const serveThumbnail = async (
 
   if (originalFailure) {
     if (originalFailure.isFresh) {
+      const failureMetadata = getFailureMetadata(originalFailure, options.sourceDecision)
+
       if (staleThumbnailScreenshot) {
         const response = createImageResponse(
           staleThumbnailScreenshot,
@@ -609,6 +653,7 @@ const serveThumbnail = async (
           'thumbnail',
           'STALE',
           staleThumbnailScreenshot.provider,
+          { metadata: failureMetadata },
         )
 
         putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -616,7 +661,7 @@ const serveThumbnail = async (
         return response
       }
 
-      return createFallbackResponse(options.fallbackKey, 'thumbnail')
+      return createFallbackResponse(options.fallbackKey, 'thumbnail', failureMetadata)
     }
 
     noteR2Miss(options.originalKey)
@@ -633,13 +678,33 @@ const serveThumbnail = async (
         options.env,
         options.originalKey,
         options.sourceUrlHash,
-        options.sourceUrl,
+        options.sourceDecision,
+        options.runtimeConfig,
         options.runtimeConfig.screenshotFetchConcurrency,
-        originalResult !== R2_READ_FAILED,
+        originalResult !== R2_READ_FAILED && !originalScreenshot,
       )
       originalCacheStatus = 'MISS'
     } catch (error) {
-      console.warn(`backup15 screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`)
+      if (isScreenshotPolicySkipError(error)) {
+        if (staleThumbnailScreenshot) {
+          const response = createImageResponse(
+            staleThumbnailScreenshot,
+            options.sourceUrlHash,
+            'thumbnail',
+            'STALE',
+            staleThumbnailScreenshot.provider,
+            { metadata: getSkipErrorMetadata(error) },
+          )
+
+          putCacheResponse(event, options.cache, options.cacheKey, response)
+
+          return response
+        }
+
+        return createFallbackResponse(options.fallbackKey, 'thumbnail', getSkipErrorMetadata(error))
+      }
+
+      console.warn(`screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`)
     }
   }
 
@@ -651,6 +716,7 @@ const serveThumbnail = async (
         'thumbnail',
         'STALE',
         staleThumbnailScreenshot.provider,
+        { metadata: captureMetadata },
       )
 
       putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -658,7 +724,7 @@ const serveThumbnail = async (
       return response
     }
 
-    return createFallbackResponse(options.fallbackKey, 'thumbnail')
+    return createFallbackResponse(options.fallbackKey, 'thumbnail', captureMetadata)
   }
 
   if (!webpThumbnailFailure?.isFresh) {
@@ -681,6 +747,7 @@ const serveThumbnail = async (
         'thumbnail',
         originalCacheStatus === 'MISS' ? 'MISS' : 'R2',
         thumbnail.provider,
+        { metadata: captureMetadata },
       )
 
       putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -695,7 +762,7 @@ const serveThumbnail = async (
     'thumbnail',
     'STALE',
     original.provider,
-    { thumbnailFallback: true },
+    { metadata: captureMetadata, thumbnailFallback: true },
   )
 
   putCacheResponse(event, options.cache, options.cacheKey, response)
@@ -728,17 +795,32 @@ export default defineEventHandler(async (event) => {
     const runtimeConfig = useRuntimeConfig(event)
     const env = event.context.cloudflare?.env as ScreenshotEnv | undefined
 
-    if (hasFreshFallback(fallbackKey)) {
-      return createFallbackResponse(undefined, variant)
+    const fallbackMetadata = getFreshFallbackMetadata(fallbackKey)
+
+    if (fallbackMetadata) {
+      return createFallbackResponse(undefined, variant, fallbackMetadata)
     }
 
     const sourceUrl = await resolveStorySourceUrl(id)
 
     if (!sourceUrl) {
-      return createFallbackResponse(fallbackKey, variant)
+      return createFallbackResponse(fallbackKey, variant, {
+        policy: 'skip',
+        skipReason: 'invalid-url',
+      })
     }
 
-    const sourceUrlHash = await getSourceUrlHash(sourceUrl)
+    const sourceDecision = createScreenshotSourceDecision(sourceUrl, runtimeConfig)
+
+    if (sourceDecision.policy === 'skip') {
+      return createFallbackResponse(fallbackKey, variant, {
+        policy: 'skip',
+        skipReason: sourceDecision.skipReason,
+        sourceStrategy: sourceDecision.sourceStrategy,
+      })
+    }
+
+    const sourceUrlHash = await getSourceUrlHash(sourceDecision.cacheIdentityUrl)
     const originalKey = getR2OriginalScreenshotKey(sourceUrlHash)
     const thumbnailWebpKey = getR2ThumbnailScreenshotKey(
       sourceUrlHash,
@@ -763,7 +845,7 @@ export default defineEventHandler(async (event) => {
         id,
         originalKey,
         runtimeConfig,
-        sourceUrl,
+        sourceDecision,
         sourceUrlHash,
         thumbnailConfig: {
           concurrency: runtimeConfig.screenshotThumbnailProcessingConcurrency,
@@ -787,7 +869,7 @@ export default defineEventHandler(async (event) => {
       id,
       originalKey,
       runtimeConfig,
-      sourceUrl,
+      sourceDecision,
       sourceUrlHash,
     })
   } catch (error) {
