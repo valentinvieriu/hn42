@@ -277,6 +277,7 @@ const processThumbnail = async (
   return {
     bytes,
     contentType: 'image/jpeg',
+    processor: 'wasm',
     provider: original.provider,
     variant: 'thumbnail',
   }

@@ -11,6 +11,9 @@ binding = "SCREENSHOTS_BUCKET"
 bucket_name = "hn42-screenshots"
 preview_bucket_name = "hn42-screenshots-dev"
 
+[images]
+binding = "IMAGES"
+
 [observability]
 enabled = true
 

@@ -1,4 +1,10 @@
-import type { ScreenshotProviderName, ScreenshotResult, ScreenshotEnv, ScreenshotVariant } from './types'
+import type {
+  ScreenshotProcessorName,
+  ScreenshotProviderName,
+  ScreenshotResult,
+  ScreenshotEnv,
+  ScreenshotVariant,
+} from './types'
 
 const R2_PREFIX = 'screenshots/v2'
 const DEFAULT_R2_TTL_DAYS = 30
@@ -16,6 +22,7 @@ const TRANSPARENT_GIF = Uint8Array.from([
 type R2ScreenshotMetadata = {
   capturedAt?: string
   contentType?: string
+  processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
   reason?: string
   sourceUrlHash?: string
@@ -29,6 +36,7 @@ export type R2Screenshot = {
   capturedAt: Date | null
   isFresh: boolean
   key: string
+  processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
   variant?: ScreenshotVariant
 }
@@ -91,12 +99,13 @@ export const getR2ThumbnailScreenshotKey = (
   width: unknown = DEFAULT_THUMBNAIL_WIDTH,
   height: unknown = DEFAULT_THUMBNAIL_HEIGHT,
   quality: unknown = DEFAULT_THUMBNAIL_QUALITY,
+  format: 'jpg' | 'webp' = 'jpg',
 ) => {
   const normalizedWidth = normalizePositiveInteger(width, DEFAULT_THUMBNAIL_WIDTH)
   const normalizedHeight = normalizePositiveInteger(height, DEFAULT_THUMBNAIL_HEIGHT)
   const normalizedQuality = normalizePositiveInteger(quality, DEFAULT_THUMBNAIL_QUALITY)
 
-  return `${R2_PREFIX}/${sourceUrlHash}/thumbnail-${normalizedWidth}x${normalizedHeight}-q${normalizedQuality}.jpg`
+  return `${R2_PREFIX}/${sourceUrlHash}/thumbnail-${normalizedWidth}x${normalizedHeight}-q${normalizedQuality}.${format}`
 }
 
 const getCapturedAt = (metadata: R2ScreenshotMetadata) => {
@@ -165,6 +174,7 @@ export const readR2Screenshot = async (
     capturedAt,
     isFresh: isFresh(capturedAt, ttlDays),
     key,
+    processor: metadata.processor,
     provider: metadata.provider,
     variant: metadata.variant,
   }
@@ -189,19 +199,25 @@ export const writeR2Screenshot = async (
     return
   }
 
+  const customMetadata: R2ScreenshotMetadata = {
+    capturedAt: new Date().toISOString(),
+    contentType: result.contentType,
+    provider: result.provider,
+    sourceUrlHash,
+    status: 'ok',
+    variant,
+  }
+
+  if (result.processor) {
+    customMetadata.processor = result.processor
+  }
+
   await bucket.put(key, result.bytes, {
     httpMetadata: {
       contentType: result.contentType,
       cacheControl: 'public, max-age=86400',
     },
-    customMetadata: {
-      capturedAt: new Date().toISOString(),
-      contentType: result.contentType,
-      provider: result.provider,
-      sourceUrlHash,
-      status: 'ok',
-      variant,
-    },
+    customMetadata,
   })
 }
 

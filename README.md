@@ -128,21 +128,30 @@ npx wrangler deploy --dry-run
 Article screenshots are generated through `backup15.terasp.net` and proxied
 through `/api/screenshot/:id?variant=original|thumbnail`. The route checks
 Cloudflare `caches.default`, then R2, then generates a fresh original JPEG
-through backup15 on a miss. Successful JPEG originals and thumbnails are stored
+through backup15 on a miss. Successful originals and generated thumbnails are stored
 temporarily in R2 under `screenshots/v2/<source-url-hash>/`, keyed by normalized
 source URL so repeated HN submissions of the same link reuse the same objects.
 The bootstrap script creates `hn42-screenshots` and `hn42-screenshots-dev` if
 missing, then adds a 30-day lifecycle rule for the `screenshots/v2/` prefix.
 
 Feed cards request the `thumbnail` variant. The thumbnail is derived inside the
-Worker from the original JPEG using WASM-backed JPEG decode/resize/encode, then
-stored separately as `thumbnail-720x1440-q78.jpg`. Story detail pages request the
-`original` variant. To stay within Worker memory limits, thumbnail processing
-checks JPEG dimensions before decoding and falls back to the original JPEG when
-the source image is too large to safely expand to RGBA. Screenshot fetches and
-thumbnail processing each use their own server-side queue so one Worker isolate
-does not fan out many generation or image-processing tasks at once. Tune the
-defaults with
+Worker from the original JPEG. R2 lookup prefers the canonical Cloudflare Images
+WebP thumbnail at `thumbnail-720x1440-q78.webp`, then falls back to the legacy
+WASM-generated JPEG at `thumbnail-720x1440-q78.jpg`, then falls back to serving
+the original JPEG for the thumbnail response if no safe thumbnail can be created.
+Story detail pages request the `original` variant. Cloudflare Images
+transformations run only on thumbnail misses through the `IMAGES` binding; if
+that binding is absent, exhausted, over limit, or times out, the existing
+WASM-backed JPEG decode/resize/encode path is used. The route uses response
+`Content-Type` and `X-HN42-Screenshot-Format`/`X-HN42-Screenshot-Processor`
+headers to identify WebP, JPEG, or original fallback responses.
+
+To stay within Worker memory limits, WASM thumbnail processing checks JPEG
+dimensions before decoding and falls back to the original JPEG when the source
+image is too large to safely expand to RGBA. Screenshot fetches, Cloudflare
+Images transforms, and WASM thumbnail processing each use server-side queues so
+one Worker isolate does not fan out many generation or image-processing tasks at
+once. Tune the defaults with
 `NUXT_SCREENSHOT_FETCH_CONCURRENCY`,
 `NUXT_SCREENSHOT_THUMBNAIL_PROCESSING_CONCURRENCY`,
 `NUXT_SCREENSHOT_THUMBNAIL_WIDTH`,
@@ -153,10 +162,11 @@ defaults with
 
 The route coalesces concurrent captures for the same source URL and briefly
 remembers R2 misses after failed captures to avoid repeated R2 reads during
-retry cooldowns. Failed captures and failed thumbnail processing write
-short-lived R2 failure markers at the relevant variant key, so the app does not
-repeatedly regenerate known-failing URLs. Tune that marker TTL with
-`NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`.
+retry cooldowns. Failed captures write short-lived R2 failure markers at the
+relevant variant key. Thumbnail processing writes a marker only when Cloudflare
+Images is actually attempted and the WASM fallback also fails, so quota
+exhaustion does not poison future thumbnail generation. Tune that marker TTL
+with `NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`.
 
 Screenshot storage bootstrap can be rerun safely:
 

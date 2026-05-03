@@ -88,9 +88,9 @@ Caching expectations:
 - Related stories use longer cache headers because they are derived and less time-sensitive.
 - User profile/activity routes cache briefly.
 - Screenshot responses use long browser/CDN cache headers and Cloudflare `caches.default`.
-- Successful screenshots are persisted temporarily in R2 under `screenshots/v2/<source-url-hash>/`; originals use `original.jpg` and feed thumbnails use `thumbnail-720x1440-q78.jpg`.
+- Successful screenshots are persisted temporarily in R2 under `screenshots/v2/<source-url-hash>/`; originals use `original.jpg`, Cloudflare Images thumbnails use `thumbnail-720x1440-q78.webp`, and WASM fallback thumbnails use `thumbnail-720x1440-q78.jpg`.
 - Feed cards request `/api/screenshot/:id?variant=thumbnail`; story detail pages request `/api/screenshot/:id?variant=original`.
-- Thumbnails are JPEGs derived inside the Worker from the original JPEG using WASM-backed JPEG decode, resize/crop, and encode. Keep thumbnail processing queued and bounded, and skip pre-decode images whose dimensions exceed the configured pixel limit so Worker memory is not exhausted.
+- Thumbnail misses try the Cloudflare Images `IMAGES` binding first to produce canonical WebP. If Images is unavailable, quota-exhausted, over limit, or times out, the route falls back to the existing WASM-backed JPEG decode, resize/crop, and encode path. Keep thumbnail processing queued and bounded, and skip pre-decode images whose dimensions exceed the configured pixel limit so Worker memory is not exhausted.
 - Screenshot fallbacks are transparent GIFs with `no-store` headers; the in-memory fallback TTL avoids retry storms without poisoning `caches.default`.
 - Screenshot fallbacks are not written to R2. Stale R2 screenshots can be served briefly when backup15 fails.
 - Preserve screenshot cache behavior unless the task is specifically about invalidation or freshness.
@@ -142,10 +142,10 @@ Story screenshots should render from `/api/screenshot/:id?variant=thumbnail` on 
 - Do not add `provider="cloudflare"` to `NuxtImg` for screenshots.
 - Current screenshot rendering intentionally uses plain `<img>` tags to avoid Nuxt Image generating CDN proxy URLs.
 - `server/api/screenshot/[id].ts` resolves the HN story URL, checks `caches.default`, checks R2, then fetches a full-page original JPEG screenshot from `backup15.terasp.net` on an original miss.
-- Successful originals and thumbnails are JPEGs stored in R2 through the `SCREENSHOTS_BUCKET` binding.
+- Successful originals are JPEGs stored in R2 through the `SCREENSHOTS_BUCKET` binding. Successful thumbnails may be WebP from Cloudflare Images or JPEG from the WASM fallback; callers must trust the response `Content-Type`, not the thumbnail variant URL.
 - Server-side backup15 fetch concurrency is controlled by `runtimeConfig.screenshotFetchConcurrency` and should remain queued so the screenshot service is not overwhelmed.
-- Server-side thumbnail processing concurrency is controlled by `runtimeConfig.screenshotThumbnailProcessingConcurrency`; thumbnail pre-decode pixel safety is controlled by `runtimeConfig.screenshotThumbnailMaxInputPixels`.
-- Concurrent backup15 captures for the same source URL are coalesced, concurrent thumbnail processing for the same thumbnail key is coalesced, short per-isolate R2 miss memory avoids repeated R2 reads during fallback cooldowns, and failed captures or thumbnail processing write short-lived R2 failure markers instead of reusable screenshots.
+- Server-side Cloudflare Images and WASM thumbnail processing concurrency is controlled by `runtimeConfig.screenshotThumbnailProcessingConcurrency`; thumbnail pre-decode pixel safety is controlled by `runtimeConfig.screenshotThumbnailMaxInputPixels` for the WASM fallback.
+- Concurrent backup15 captures for the same source URL are coalesced, concurrent thumbnail processing for the same thumbnail key is coalesced, short per-isolate R2 miss memory avoids repeated R2 reads during fallback cooldowns, and failed captures write short-lived R2 failure markers instead of reusable screenshots. Thumbnail processing writes a failure marker only when Cloudflare Images was actually attempted and the WASM fallback also failed; do not mark a source failed just because Images quota was exhausted.
 - Client-side image request concurrency is controlled by `runtimeConfig.public.screenshotImageQueueConcurrency`.
 - Keep long shared-cache TTLs unless there is a concrete invalidation need.
 
