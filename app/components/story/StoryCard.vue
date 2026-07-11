@@ -30,23 +30,12 @@
       </div>
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="story-card-image-layer absolute inset-0 overflow-hidden">
-          <div
-            class="story-visual-fallback absolute inset-0"
-            :class="`fallback-composition-${fallbackVisual.composition}`"
-            :style="fallbackVisual.style"
-            aria-hidden="true"
-          >
-            <div class="fallback-panels absolute inset-0">
-              <span
-                v-for="panel in fallbackPanels"
-                :key="panel.key"
-                class="fallback-panel absolute"
-                :class="[`fallback-panel-${panel.variant}`, `fallback-panel-role-${panel.role}`]"
-                :style="panel.style"
-              ></span>
-            </div>
-            <div class="fallback-mark" aria-hidden="true">{{ fallbackVisual.initials }}</div>
-          </div>
+          <StoryPlaceholderVisual
+            :domain="storyDomain"
+            :seed="story.objectID"
+            :state="imageState"
+            presentation="card"
+          />
           <div 
             ref="imageContainerRef"
             class="story-card-image-track relative w-full h-full transform transition-transform duration-500"
@@ -138,7 +127,7 @@ import type { Story } from '#shared/types'
 import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
 import { useImageLoadQueue, type ImageLoadQueueHandle } from '~/composables/useImageLoadQueue'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
-import { buildStoryPlaceholder } from '~/composables/useStoryPlaceholder'
+import { normalizeStoryPlaceholderDomain } from '~/composables/useStoryPlaceholder'
 
 const props = defineProps<{
   story: Story
@@ -196,12 +185,8 @@ const formatCompactDistanceToNow = (dateValue: string): string => {
 
 const externalStoryUrl = computed(() => props.story.url || getHnItemUrl(props.story.objectID))
 const storyDomain = computed(() => getDomainFromUrl(externalStoryUrl.value))
-const cardPaletteStyle = computed(() => getSeedPaletteStyle(props.story.objectID, 'light', storyDomain.value))
-const fallbackVisual = computed(() => buildStoryPlaceholder(
-  storyDomain.value,
-  `${props.story.objectID}:${props.story.title}`,
-))
-const fallbackPanels = computed(() => fallbackVisual.value.panels)
+const paletteDomain = computed(() => normalizeStoryPlaceholderDomain(storyDomain.value))
+const cardPaletteStyle = computed(() => getSeedPaletteStyle(props.story.objectID, 'light', paletteDomain.value))
 
 const screenshotSrc = computed(() => `/api/screenshot/${props.story.objectID}?variant=thumbnail`)
 
@@ -967,106 +952,6 @@ onBeforeUnmount(() => {
   .story-card-metric-label {
     display: none;
   }
-}
-
-.story-visual-fallback {
-  background:
-    linear-gradient(135deg, transparent 0 var(--fallback-cut), var(--seed-ring) var(--fallback-cut) calc(var(--fallback-cut) + 1px), transparent calc(var(--fallback-cut) + 1px)),
-    repeating-linear-gradient(var(--fallback-angle), rgb(255 255 255 / 0.055) 0 1px, transparent 1px var(--fallback-grid)),
-    linear-gradient(150deg, var(--seed-surface-strong) 0%, var(--seed-overlay-mid) var(--fallback-sweep), var(--seed-overlay-edge) 100%);
-}
-
-.fallback-composition-terminal {
-  background:
-    repeating-linear-gradient(0deg, transparent 0 22px, rgb(255 255 255 / 0.045) 22px 23px),
-    linear-gradient(145deg, var(--seed-surface-strong), var(--seed-overlay-edge));
-}
-
-.fallback-composition-mosaic {
-  background:
-    radial-gradient(circle at 15% 20%, var(--seed-ring), transparent 38%),
-    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid) 52%, var(--seed-overlay-edge));
-}
-
-.fallback-composition-poster {
-  background:
-    linear-gradient(var(--fallback-direction), transparent 0 52%, var(--seed-ring) 52% calc(52% + 1px), transparent calc(52% + 1px)),
-    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid), var(--seed-overlay-edge));
-}
-
-.story-visual-fallback::before,
-.story-visual-fallback::after {
-  content: '';
-  position: absolute;
-  inset: 8%;
-  pointer-events: none;
-}
-
-.story-visual-fallback::before {
-  border: 1px solid var(--seed-border);
-  opacity: 0.34;
-  transform: rotate(var(--fallback-frame-angle));
-}
-
-.story-visual-fallback::after {
-  inset: 17% 11%;
-  border-top: 1px solid var(--seed-border);
-  border-bottom: 1px solid var(--seed-border);
-  opacity: 0.24;
-  transform: skewY(var(--fallback-band-angle));
-}
-
-.fallback-panel {
-  border: 1px solid var(--seed-border);
-  border-radius: 0.5rem;
-  box-shadow: 0 18px 40px rgb(15 23 42 / 0.16);
-  transform-origin: center;
-}
-
-.fallback-panel-strong {
-  background: var(--seed-accent-soft);
-}
-
-.fallback-panel-soft {
-  background: var(--seed-surface);
-}
-
-.fallback-panel-line {
-  height: 2px !important;
-  border-radius: 999px;
-  background: var(--seed-accent);
-  border-color: transparent;
-}
-
-.fallback-panel-role-poster-orb {
-  border-radius: 999px;
-  box-shadow: 0 24px 60px var(--seed-shadow-strong);
-}
-
-.fallback-panel-role-terminal-window {
-  box-shadow: 0 24px 58px var(--seed-shadow-strong);
-}
-
-.fallback-panel-role-terminal-header {
-  border-radius: 0.5rem 0.5rem 0.2rem 0.2rem;
-}
-
-.fallback-panel-role-sidebar,
-.fallback-panel-role-tile-tall {
-  border-radius: 0.75rem;
-}
-
-.fallback-mark {
-  position: absolute;
-  right: 1.1rem;
-  bottom: 0.6rem;
-  color: var(--seed-accent-strong);
-  font-family: var(--font-display);
-  font-size: 4.2rem;
-  font-weight: 700;
-  line-height: 1;
-  opacity: 0.2;
-  pointer-events: none;
 }
 
 </style>

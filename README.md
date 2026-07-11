@@ -95,7 +95,7 @@ Use `npm run check` as the baseline check before shipping changes.
 ## Project Structure
 
 - `app/pages/`: feed pages, story detail pages, and user activity pages.
-- `app/components/story/`: story grid and visual story card UI.
+- `app/components/story/`: story grid, visual story card UI, and the shared generated screenshot fallback.
 - `app/components/comment/`: nested comment rendering.
 - `server/api/`: feed, item, related-story, user, and screenshot APIs.
 - `server/utils/feed.ts`: shared ordered-feed handler for the four HN feeds.
@@ -153,6 +153,13 @@ that declare `application/pdf`, a PDF filename in `Content-Disposition`, or
 obvious non-HTML downloads/media such as audio, video, archives, Office files,
 and generic binary streams. Skipped screenshots return the transparent fallback
 and include policy headers instead of calling backup15.
+
+When a screenshot is queued or unavailable, the client renders a deterministic,
+non-semantic wireframe from the story ID and source domain. The shared fallback
+keeps the existing seeded OKLCH palette, uses six neutral layout grammars with
+bounded variation, and limits each card to five to eight static SVG primitives.
+It is rendered directly by Vue on feed and detail pages; it is not stored in the
+screenshot cache or treated as a captured source page.
 
 Feed cards request the `thumbnail` variant. The thumbnail is derived inside the
 Worker from the original JPEG. R2 lookup prefers the canonical Cloudflare Images

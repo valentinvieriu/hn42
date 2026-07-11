@@ -69,22 +69,12 @@
             :aria-label="`Open ${storyDomain} externally`"
             data-testid="compact-source-preview"
           >
-            <div
-              class="source-preview-fallback"
-              :class="`fallback-composition-${screenshotFallback.composition}`"
-              aria-hidden="true"
-            >
-              <div class="source-preview-fallback-panels">
-                <span
-                  v-for="panel in screenshotFallbackPanels"
-                  :key="panel.key"
-                  class="source-preview-fallback-panel"
-                  :class="[`source-preview-fallback-panel-${panel.variant}`, `source-preview-fallback-panel-role-${panel.role}`]"
-                  :style="panel.style"
-                ></span>
-              </div>
-              <div class="source-preview-fallback-mark">{{ screenshotFallback.initials }}</div>
-            </div>
+            <StoryPlaceholderVisual
+              :domain="storyDomain"
+              :seed="storyId ?? 'story'"
+              :state="thumbnailPreviewState"
+              presentation="compact"
+            />
             <img
               :alt="`Preview of ${story.title}`"
               width="720"
@@ -94,6 +84,7 @@
               decoding="async"
               class="compact-source-preview-image"
               :class="{ 'is-loaded': thumbnailPreviewState === 'loaded' }"
+              :aria-hidden="thumbnailPreviewState !== 'loaded'"
               @load="handleThumbnailPreviewLoad"
               @error="handleThumbnailPreviewError"
             />
@@ -111,22 +102,12 @@
             :data-screenshot-state="originalPreviewState"
             :style="screenshotPreviewStyle"
           >
-            <div
-              class="source-preview-fallback"
-              :class="`fallback-composition-${screenshotFallback.composition}`"
-              aria-hidden="true"
-            >
-              <div class="source-preview-fallback-panels">
-                <span
-                  v-for="panel in screenshotFallbackPanels"
-                  :key="`desktop-${panel.key}`"
-                  class="source-preview-fallback-panel"
-                  :class="[`source-preview-fallback-panel-${panel.variant}`, `source-preview-fallback-panel-role-${panel.role}`]"
-                  :style="panel.style"
-                ></span>
-              </div>
-              <div class="source-preview-fallback-mark">{{ screenshotFallback.initials }}</div>
-            </div>
+            <StoryPlaceholderVisual
+              :domain="storyDomain"
+              :seed="storyId ?? 'story'"
+              :state="originalPreviewState"
+              presentation="detail"
+            />
             <img
               :alt="story.title"
               width="600"
@@ -135,6 +116,7 @@
               decoding="async"
               class="source-screenshot-preview-image"
               :class="{ 'is-loaded': originalPreviewState === 'loaded' }"
+              :aria-hidden="originalPreviewState !== 'loaded'"
               @load="handleOriginalPreviewLoad"
               @error="handleOriginalPreviewError"
             />
@@ -186,7 +168,6 @@ import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock,
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
-import { buildStoryPlaceholder } from '~/composables/useStoryPlaceholder';
 import type { Comment } from '#shared/types'
 
 const route = useRoute();
@@ -274,17 +255,9 @@ const storyDomain = computed(() => {
   }
 })
 
-const screenshotPreviewSeed = computed(() => `${storyId.value ?? 'story'}:${story.value?.title ?? ''}`)
-const screenshotFallback = computed(() => buildStoryPlaceholder(storyDomain.value, screenshotPreviewSeed.value))
-
 const screenshotPreviewStyle = computed(() => {
-  return {
-    ...getSeedPaletteStyle(storyId.value, 'light', storyDomain.value),
-    ...screenshotFallback.value.style,
-  }
+  return getSeedPaletteStyle(storyId.value, 'light', storyDomain.value)
 })
-
-const screenshotFallbackPanels = computed(() => screenshotFallback.value.panels)
 
 const getPreviewStateFromImage = (event: Event): ScreenshotPreviewState => {
   const image = event.target as HTMLImageElement
@@ -497,97 +470,6 @@ useSeoMeta({
 
 .source-screenshot-preview-image.is-loaded {
   opacity: 1;
-}
-
-.source-preview-fallback {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, transparent 0 var(--fallback-cut), var(--seed-ring) var(--fallback-cut) calc(var(--fallback-cut) + 1px), transparent calc(var(--fallback-cut) + 1px)),
-    radial-gradient(circle at 18% 18%, var(--seed-accent-soft), transparent 30%),
-    linear-gradient(150deg, var(--seed-surface-strong) 0%, var(--seed-overlay-mid) var(--fallback-sweep), var(--seed-overlay-edge) 100%);
-}
-
-.source-preview-fallback.fallback-composition-terminal {
-  background:
-    repeating-linear-gradient(0deg, transparent 0 22px, rgb(255 255 255 / 0.045) 22px 23px),
-    linear-gradient(145deg, var(--seed-surface-strong), var(--seed-overlay-edge));
-}
-
-.source-preview-fallback.fallback-composition-mosaic {
-  background:
-    radial-gradient(circle at 15% 20%, var(--seed-ring), transparent 38%),
-    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid) 52%, var(--seed-overlay-edge));
-}
-
-.source-preview-fallback.fallback-composition-poster {
-  background:
-    linear-gradient(var(--fallback-direction), transparent 0 52%, var(--seed-ring) 52% calc(52% + 1px), transparent calc(52% + 1px)),
-    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid), var(--seed-overlay-edge));
-}
-
-.source-preview-fallback::before {
-  position: absolute;
-  inset: -18%;
-  content: "";
-  background-image:
-    linear-gradient(color-mix(in oklch, var(--seed-border) 64%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in oklch, var(--seed-border) 52%, transparent) 1px, transparent 1px);
-  background-size: var(--fallback-grid) var(--fallback-grid);
-  opacity: 0.48;
-  transform: rotate(var(--fallback-angle));
-}
-
-.source-preview-fallback-panels {
-  position: absolute;
-  inset: 0;
-}
-
-.source-preview-fallback-panel {
-  position: absolute;
-  display: block;
-  border-radius: 0.5rem;
-}
-
-.source-preview-fallback-panel-strong {
-  border: 1px solid var(--seed-border);
-  background: color-mix(in oklch, var(--seed-surface-raised) 74%, white 10%);
-  box-shadow: 0 12px 26px -20px var(--seed-shadow-strong);
-}
-
-.source-preview-fallback-panel-soft {
-  background: var(--seed-accent-soft);
-}
-
-.source-preview-fallback-panel-line {
-  height: 2px !important;
-  background: var(--seed-accent);
-}
-
-.source-preview-fallback-panel-role-poster-orb {
-  border-radius: 999px;
-  box-shadow: 0 24px 60px var(--seed-shadow-strong);
-}
-
-.source-preview-fallback-panel-role-terminal-window {
-  box-shadow: 0 24px 58px var(--seed-shadow-strong);
-}
-
-.source-preview-fallback-panel-role-terminal-header {
-  border-radius: 0.5rem 0.5rem 0.2rem 0.2rem;
-}
-
-.source-preview-fallback-mark {
-  position: absolute;
-  right: 1.15rem;
-  bottom: 1rem;
-  color: var(--seed-accent-strong);
-  font-family: var(--font-display, inherit);
-  font-size: clamp(2rem, 8vw, 4.75rem);
-  font-weight: 700;
-  line-height: 0.9;
-  opacity: 0.28;
 }
 
 .dark .compact-source-preview {

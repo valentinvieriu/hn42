@@ -38,6 +38,7 @@ Frontend:
 - `app/pages/user/[username].vue`: user profile/activity page with posts and comments.
 - `app/components/story/StoryGrid.vue`: feed layout and loading states.
 - `app/components/story/StoryCard.vue`: visual story card, source link, screenshot preview, title, and status row.
+- `app/components/story/StoryPlaceholderVisual.vue`: shared deterministic wireframe fallback for queued and unavailable screenshots.
 - `app/components/comment/CommentThread.vue`: nested comment renderer.
 - `app/components/user/UserCommentCard.vue`: user activity comment card.
 - `app/components/RelatedStories.vue`: related story list on detail pages.
@@ -49,6 +50,7 @@ Shared client logic:
 - `app/composables/useImageLoadQueue.ts`: client-side image load queue.
 - `app/composables/useFeedTheme.ts`: feed-specific labels, routes, and color theme variables.
 - `app/composables/useSeedPalette.ts`: deterministic card color palettes.
+- `app/composables/useStoryPlaceholder.ts`: non-semantic, story-seeded wireframe layout generation with bounded SVG geometry.
 - `app/composables/useSanitizer.ts`: safe rich-text rendering and HN comment post-processing.
 - `app/composables/useScroll.ts` and `useDebounce.ts`: scroll and timing helpers.
 
@@ -96,6 +98,7 @@ Caching expectations:
 - Feed cards request `/api/screenshot/:id?variant=thumbnail`; story detail pages request `/api/screenshot/:id?variant=original`.
 - Thumbnail misses in built Worker runtimes try the Cloudflare Images `IMAGES` binding first to produce canonical WebP. Nuxt dev explicitly skips Images and uses the WASM path so local development does not require the Images service. If Images is unavailable, quota-exhausted, over limit, or times out, the route falls back to the existing WASM-backed JPEG decode, resize/crop, and encode path. Keep thumbnail processing queued and bounded, and skip pre-decode images whose dimensions exceed the configured pixel limit so Worker memory is not exhausted.
 - Screenshot fallbacks are transparent GIFs with `no-store` headers; the in-memory fallback TTL avoids retry storms without poisoning `caches.default`.
+- The transparent screenshot fallback exposes a shared client-rendered wireframe underneath the image. Keep it deterministic and SSR-safe, preserve the existing seed palette, and keep its five-to-eight primitive budget so feeds with many failures remain inexpensive.
 - Screenshot fallbacks are not written to R2. Stale R2 screenshots can be served briefly when backup15 fails.
 - Deterministic screenshot skips return transparent fallbacks and should not call backup15. Current policy skips generic PDFs and a small known-blocked host list, transforms X/Twitter status URLs through XCancel, and transforms `arxiv.org/pdf/...` links to `arxiv.org/abs/...`.
 - After R2 misses, the screenshot route runs a short HEAD probe before browser capture. Skip `application/pdf`, PDF `Content-Disposition`, and obvious non-HTML download/media responses; write/use a short-lived failure marker when no stale screenshot exists.
