@@ -4,10 +4,13 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
+    "check": "npm run typecheck && npm test && npm run build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "npm run build && wrangler dev",
     "postinstall": "nuxt prepare",
+    "test": "vitest run",
+    "typecheck": "nuxi typecheck",
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types --include-runtime false",
     "cf:screenshots:bootstrap": "bash scripts/bootstrap-cloudflare-screenshots.sh",
@@ -31,9 +34,12 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260711.1",
+    "@types/node": "^26.1.1",
     "nitro-cloudflare-dev": "^0.2.2",
     "nitropack": "^2.13.4",
-    "typescript": "^7.0.2",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10",
+    "vue-tsc": "^3.3.7",
     "wrangler": "^4.110.0"
   }
 }

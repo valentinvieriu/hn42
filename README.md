@@ -80,6 +80,9 @@ Nuxt usually serves the app at `http://localhost:3000`, but it may choose anothe
 ```bash
 npm run dev          # Start local development
 npm run build        # Build for production
+npm run typecheck    # Check Vue, Nuxt, and server TypeScript
+npm test             # Run unit tests
+npm run check        # Run type checking, tests, and production build
 npm run preview      # Build and preview with Wrangler
 npm run deploy       # Build and deploy to Cloudflare Workers
 npm run cf-typegen   # Generate Cloudflare Worker types
@@ -87,7 +90,7 @@ npm run cf:screenshots:bootstrap   # Create screenshot buckets/lifecycle rule
 npm run cf:screenshots:reset-cache # Delete old screenshots/v1 objects
 ```
 
-Use `npm run build` as the baseline check before shipping changes.
+Use `npm run check` as the baseline check before shipping changes.
 
 ## Project Structure
 
@@ -95,6 +98,7 @@ Use `npm run build` as the baseline check before shipping changes.
 - `app/components/story/`: story grid and visual story card UI.
 - `app/components/comment/`: nested comment rendering.
 - `server/api/`: feed, item, related-story, user, and screenshot APIs.
+- `server/utils/feed.ts`: shared ordered-feed handler for the four HN feeds.
 - `app/composables/`: shared client logic such as story loading and sanitization.
 - `app/assets/css/main.css`: global typography and rich-text styling.
 - `shared/types/index.ts`: story, comment, user, and activity types shared by the app and server.

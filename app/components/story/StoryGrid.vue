@@ -88,8 +88,6 @@
               v-for="story in stories"
               :key="story.objectID"
               :story="story"
-              @mouseenter="hoveredStory = story.objectID"
-              @mouseleave="hoveredStory = null"
             />
           </div>
         </div>
@@ -106,11 +104,15 @@ import type { FeedEndpoint } from '~/composables/useFeedTheme';
 import { LucideRefreshCw } from '@lucide/vue';
 
 const props = defineProps<{ endpoint: FeedEndpoint }>();
-const { stories, hoveredStory, isLoading, isRefreshing, error } = useStories(props.endpoint);
+const { stories, isLoading, isRefreshing, error } = useStories(props.endpoint);
 const feedTheme = computed(() => getFeedTheme(props.endpoint));
 const feedThemeStyle = computed(() => getFeedThemeStyle(props.endpoint));
 const title = computed(() => feedTheme.value.title);
-const firstStoryImage = computed(() => stories.value.length > 0 ? stories.value[0].screenshotUrl : 'https://example.com/default-image.png'); // Default image if no stories
+const requestUrl = useRequestURL();
+const firstStoryImage = computed(() => {
+  const imagePath = stories.value[0]?.screenshotUrl || '/icon_x512.png';
+  return new URL(imagePath, requestUrl.origin).href;
+});
 const skeletonTitleWidths = ['82%', '68%', '76%', '58%', '88%'];
 const skeletonPaletteStyle = (index: number) => {
   return getSeedPaletteStyle(`loading-${props.endpoint}-${index}`);
@@ -122,7 +124,8 @@ useSeoMeta({
   ogTitle: title,
   ogDescription: () => feedTheme.value.description,
   ogImage: firstStoryImage,
-  twitterCard: firstStoryImage,
+  twitterCard: 'summary_large_image',
+  twitterImage: firstStoryImage,
 });
 </script>
 

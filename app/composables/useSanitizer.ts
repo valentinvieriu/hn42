@@ -189,7 +189,11 @@ const mapTextOutsideTags = (
 
   for (const match of html.matchAll(tagPattern)) {
     const tag = match[0]
-    const tagName = match[1].toLowerCase()
+    const tagName = match[1]?.toLowerCase()
+
+    if (!tagName) {
+      continue
+    }
     const index = match.index ?? 0
     const text = html.slice(lastIndex, index)
 

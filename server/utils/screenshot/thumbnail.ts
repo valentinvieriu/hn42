@@ -31,6 +31,17 @@ type ThumbnailOptions = {
   width?: unknown
 }
 
+type NormalizedThumbnailOptions = {
+  concurrency: number
+  height: number
+  jpegQuality: number
+  maxInputBytes: number
+  maxInputPixels: number
+  queueTimeoutMs: number
+  timeoutMs: number
+  width: number
+}
+
 const normalizePositiveInteger = (value: unknown, fallback: number) => {
   const parsedValue = Number(value)
 
@@ -102,11 +113,16 @@ const getJpegDimensions = (bytes: ArrayBuffer) => {
       continue
     }
 
-    while (view[offset] === 0xff) {
+    while (offset < view.length && view[offset] === 0xff) {
       offset += 1
     }
 
     const marker = view[offset]
+
+    if (marker === undefined) {
+      return null
+    }
+
     offset += 1
 
     if (marker === 0xda || marker === 0xd9) {
@@ -121,7 +137,14 @@ const getJpegDimensions = (bytes: ArrayBuffer) => {
       return null
     }
 
-    const segmentLength = (view[offset] << 8) | view[offset + 1]
+    const segmentLengthHigh = view[offset]
+    const segmentLengthLow = view[offset + 1]
+
+    if (segmentLengthHigh === undefined || segmentLengthLow === undefined) {
+      return null
+    }
+
+    const segmentLength = (segmentLengthHigh << 8) | segmentLengthLow
 
     if (segmentLength < 2 || offset + segmentLength > view.length) {
       return null
@@ -132,9 +155,23 @@ const getJpegDimensions = (bytes: ArrayBuffer) => {
         return null
       }
 
+      const heightHigh = view[offset + 3]
+      const heightLow = view[offset + 4]
+      const widthHigh = view[offset + 5]
+      const widthLow = view[offset + 6]
+
+      if (
+        heightHigh === undefined
+        || heightLow === undefined
+        || widthHigh === undefined
+        || widthLow === undefined
+      ) {
+        return null
+      }
+
       return {
-        height: (view[offset + 3] << 8) | view[offset + 4],
-        width: (view[offset + 5] << 8) | view[offset + 6],
+        height: (heightHigh << 8) | heightLow,
+        width: (widthHigh << 8) | widthLow,
       }
     }
 
@@ -271,7 +308,7 @@ const cropTop = (image: ImageData, height: number) => {
 
 const processThumbnail = async (
   original: ScreenshotResult,
-  options: Required<ThumbnailOptions>,
+  options: NormalizedThumbnailOptions,
 ): Promise<ScreenshotResult> => {
   if (original.contentType !== 'image/jpeg' || !isJpeg(original.bytes)) {
     throw new Error('Thumbnail processing requires a JPEG original')
@@ -335,8 +372,8 @@ export const createThumbnailFromJpeg = async (
   original: ScreenshotResult,
   options: ThumbnailOptions,
 ) => {
-  const normalizedOptions: Required<ThumbnailOptions> = {
-    concurrency: options.concurrency,
+  const normalizedOptions: NormalizedThumbnailOptions = {
+    concurrency: normalizePositiveInteger(options.concurrency, 1),
     height: normalizePositiveInteger(options.height, DEFAULT_HEIGHT),
     jpegQuality: normalizeJpegQuality(options.jpegQuality),
     maxInputBytes: normalizePositiveInteger(options.maxInputBytes, DEFAULT_MAX_INPUT_BYTES),

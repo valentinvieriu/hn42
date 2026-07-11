@@ -18,6 +18,15 @@ type ImagesThumbnailOptions = {
   width?: unknown
 }
 
+type NormalizedImagesThumbnailOptions = {
+  concurrency: number
+  height: number
+  quality: number
+  queueTimeoutMs: number
+  timeoutMs: number
+  width: number
+}
+
 const normalizePositiveInteger = (value: unknown, fallback: number) => {
   const parsedValue = Number(value)
 
@@ -77,7 +86,7 @@ const getImageStream = (original: ScreenshotResult) => {
 const transformThumbnail = async (
   images: ImagesBinding,
   original: ScreenshotResult,
-  options: Required<ImagesThumbnailOptions>,
+  options: NormalizedImagesThumbnailOptions,
 ): Promise<ScreenshotResult> => {
   const result = await images
     .input(getImageStream(original))
@@ -122,8 +131,8 @@ export const createThumbnailWithCloudflareImages = async (
     throw new Error('Cloudflare Images binding is not configured')
   }
 
-  const normalizedOptions: Required<ImagesThumbnailOptions> = {
-    concurrency: options.concurrency,
+  const normalizedOptions: NormalizedImagesThumbnailOptions = {
+    concurrency: normalizePositiveInteger(options.concurrency, 1),
     height: normalizePositiveInteger(options.height, DEFAULT_HEIGHT),
     quality: normalizeQuality(options.quality),
     queueTimeoutMs: normalizePositiveInteger(options.queueTimeoutMs, DEFAULT_QUEUE_TIMEOUT_MS),

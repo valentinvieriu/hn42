@@ -18,10 +18,7 @@ const DEFAULT_THUMBNAIL_HEIGHT = 1440
 const DEFAULT_THUMBNAIL_QUALITY = 78
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
-const TRANSPARENT_GIF = Uint8Array.from([
-  71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
-  255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
-])
+const EMPTY_FAILURE_MARKER = new Uint8Array()
 
 type R2ScreenshotMetadata = {
   capturedAt?: string
@@ -267,14 +264,16 @@ export const writeR2ScreenshotFailure = async (
     return
   }
 
-  await bucket.put(key, TRANSPARENT_GIF, {
+  // Failure markers only throttle retries. Keep them non-image and empty so a
+  // storage or metadata mistake can never turn one into a cached placeholder.
+  await bucket.put(key, EMPTY_FAILURE_MARKER, {
     httpMetadata: {
-      contentType: 'image/gif',
+      contentType: 'application/vnd.hn42.screenshot-failure',
       cacheControl: 'no-store',
     },
     customMetadata: toCustomMetadata({
       capturedAt: new Date().toISOString(),
-      contentType: 'image/gif',
+      contentType: 'application/vnd.hn42.screenshot-failure',
       policy: metadata.policy ?? 'capture',
       reason: reason.slice(0, 200),
       skipReason: metadata.skipReason,

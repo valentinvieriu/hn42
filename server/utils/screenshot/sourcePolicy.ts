@@ -128,7 +128,7 @@ export const isPrivateIpv4Address = (hostname: string) => {
     return false
   }
 
-  const [first, second] = octets
+  const [first, second = -1] = octets
 
   return first === 0
     || first === 10
@@ -233,7 +233,7 @@ const getArxivAbsUrl = (url: URL) => {
     return null
   }
 
-  const arxivId = match[1].replace(/^\/+|\/+$/g, '')
+  const arxivId = match[1]?.replace(/^\/+|\/+$/g, '') ?? ''
 
   if (!arxivId) {
     return null
@@ -341,7 +341,7 @@ const isRedirectStatus = (status: number) => {
 }
 
 const isPdfResponse = (headers: Headers) => {
-  const contentType = headers.get('Content-Type')?.toLowerCase().split(';')[0].trim()
+  const contentType = headers.get('Content-Type')?.toLowerCase().split(';')[0]?.trim()
   const contentDisposition = headers.get('Content-Disposition')?.toLowerCase() ?? ''
 
   return contentType === 'application/pdf'
@@ -349,7 +349,7 @@ const isPdfResponse = (headers: Headers) => {
 }
 
 const isNonHtmlBinaryResponse = (headers: Headers) => {
-  const contentType = headers.get('Content-Type')?.toLowerCase().split(';')[0].trim()
+  const contentType = headers.get('Content-Type')?.toLowerCase().split(';')[0]?.trim()
   const contentDisposition = headers.get('Content-Disposition')?.toLowerCase() ?? ''
 
   if (!contentType) {

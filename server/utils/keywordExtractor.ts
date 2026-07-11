@@ -45,8 +45,13 @@ export const extractKeywords = (title: string, maxKeywords: number = 10): string
   // Generate bigrams
   const bigrams: string[] = [];
   for (let i = 0; i < tokens.length - 1; i++) {
-    const bigram = `${tokens[i]} ${tokens[i + 1]}`;
-    if (!STOPWORDS.has(tokens[i + 1]) && !seen.has(bigram)) {
+    const firstToken = tokens[i];
+    const secondToken = tokens[i + 1];
+
+    if (!firstToken || !secondToken) continue;
+
+    const bigram = `${firstToken} ${secondToken}`;
+    if (!STOPWORDS.has(secondToken) && !seen.has(bigram)) {
       bigrams.push(bigram);
       seen.add(bigram);
       uniqueKeywords.push(bigram);

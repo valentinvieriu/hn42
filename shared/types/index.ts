@@ -75,11 +75,11 @@ export interface HNResponse {
 }
 
 export interface HNHit {
-  objectID: string;
-  title: string;
-  author: string;
-  created_at: string;
-  points: number;
-  num_comments: number;
-  url: string;
+  objectID?: string;
+  title?: string | null;
+  author?: string | null;
+  created_at?: string | null;
+  points?: number | null;
+  num_comments?: number | null;
+  url?: string | null;
 }

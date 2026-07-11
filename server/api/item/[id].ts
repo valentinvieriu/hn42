@@ -49,7 +49,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const hnResponse: HNResponse = await $fetch(`https://hn.algolia.com/api/v1/items/${id}`)
+    const hnResponse = await $fetch<HNResponse>(`https://hn.algolia.com/api/v1/items/${id}`)
 
     if (!hnResponse?.id) {
       throw createError({
@@ -70,7 +70,7 @@ export default defineEventHandler(async (event) => {
       children: hnResponse.children || [],
     }
 
-    setHeader(event, 'Cache-Control', 'public, max-age=120, stale-while-revalidate')
+    setHeader(event, 'Cache-Control', 'public, max-age=120, stale-while-revalidate=600')
 
     return story
   } catch (error) {

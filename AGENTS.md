@@ -54,7 +54,7 @@ Shared client logic:
 
 Server/API:
 
-- `server/api/top.ts`, `best.ts`, `new.ts`, `show.ts`: fetch ordered story IDs from HN Firebase, hydrate story data from Algolia, and preserve source order.
+- `server/api/top.ts`, `best.ts`, `new.ts`, `show.ts`: configure the shared ordered feed handler.
 - `server/api/item/[id].ts`: fetch story details and comment tree from Algolia Items API.
 - `server/api/related/[id].ts`: build related-story candidates from title, URL, comments, and Algolia search results.
 - `server/api/screenshot/[id].ts`: screenshot proxy and cache layer.
@@ -62,6 +62,7 @@ Server/API:
 - `server/api/user/[username].ts`: user profile from Algolia.
 - `server/api/user/[username]/comments.ts` and `stories.ts`: paginated user activity using Algolia search-by-date.
 - `server/utils/fetchStories.ts`: common Algolia story normalization.
+- `server/utils/feed.ts`: fetch ordered story IDs from HN Firebase, hydrate them from Algolia, preserve source order, and set feed cache headers.
 - `server/utils/userActivity.ts`: user activity validation, pagination, and mapping.
 - `server/utils/keywordExtractor.ts`: related-story keyword support.
 
@@ -171,9 +172,8 @@ Styling approach:
 Linting and checks:
 
 - There is currently no dedicated `lint` script in `package.json`.
-- Use `npm run build` as the baseline verification.
+- Use `npm run check` as the baseline verification; it runs type checking, unit tests, and the production build.
 - Use `git diff --check` for whitespace issues when editing docs or code.
-- Type checking currently reports pre-existing issues across the codebase; do not treat `nuxi typecheck` failures as caused by your change unless isolated.
 
 Code conventions:
 
@@ -216,6 +216,9 @@ npx wrangler deploy --dry-run
 npm install
 npm run dev
 npm run build
+npm run typecheck
+npm test
+npm run check
 npm run preview
 npm run deploy
 npm run cf-typegen
@@ -231,7 +234,6 @@ git diff --check
 - Browser verification should use the in-app browser against `http://localhost:3000` or the actual Nuxt dev port.
 - The dev server may need a restart after dependency or Nuxt/Nitro preset changes; hot reload can leave the app shell blank.
 - Screenshot latency is expected and should not be treated as a UI regression unless the task is specifically about screenshots.
-- Type checking has known pre-existing issues.
 
 ## Working Conventions
 

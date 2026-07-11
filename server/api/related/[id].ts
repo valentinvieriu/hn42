@@ -1,5 +1,4 @@
-import { defineEventHandler, getRouterParams, createError, setHeaders } from '#imports'
-import type { H3Event } from 'h3'
+import { createError, defineEventHandler, getRouterParams, setHeaders, type H3Event } from 'h3'
 
 const ALGOLIA_SEARCH_URL = 'https://hn.algolia.com/api/v1/search'
 const ALGOLIA_ITEMS_URL = 'https://hn.algolia.com/api/v1/items'

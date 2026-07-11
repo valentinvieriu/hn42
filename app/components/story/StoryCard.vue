@@ -30,17 +30,22 @@
       </div>
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
         <div class="story-card-image-layer absolute inset-0 overflow-hidden">
-          <div class="story-visual-fallback absolute inset-0" :style="fallbackVisualStyle" aria-hidden="true">
+          <div
+            class="story-visual-fallback absolute inset-0"
+            :class="`fallback-composition-${fallbackVisual.composition}`"
+            :style="fallbackVisual.style"
+            aria-hidden="true"
+          >
             <div class="fallback-panels absolute inset-0">
               <span
                 v-for="panel in fallbackPanels"
                 :key="panel.key"
                 class="fallback-panel absolute"
-                :class="panel.variant"
+                :class="[`fallback-panel-${panel.variant}`, `fallback-panel-role-${panel.role}`]"
                 :style="panel.style"
               ></span>
             </div>
-            <div class="fallback-mark" aria-hidden="true">{{ fallbackInitials }}</div>
+            <div class="fallback-mark" aria-hidden="true">{{ fallbackVisual.initials }}</div>
           </div>
           <div 
             ref="imageContainerRef"
@@ -133,6 +138,7 @@ import type { Story } from '#shared/types'
 import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
 import { useImageLoadQueue, type ImageLoadQueueHandle } from '~/composables/useImageLoadQueue'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
+import { buildStoryPlaceholder } from '~/composables/useStoryPlaceholder'
 
 const props = defineProps<{
   story: Story
@@ -188,75 +194,14 @@ const formatCompactDistanceToNow = (dateValue: string): string => {
   return `${Math.floor(diffSeconds / year)}y ago`
 }
 
-const cardPaletteStyle = computed(() => {
-  return getSeedPaletteStyle(props.story.objectID)
-})
-
 const externalStoryUrl = computed(() => props.story.url || getHnItemUrl(props.story.objectID))
 const storyDomain = computed(() => getDomainFromUrl(externalStoryUrl.value))
-const storySeed = computed(() => `${props.story.objectID}:${props.story.title}:${externalStoryUrl.value}`)
-
-const hashSeed = (seed: string): number => {
-  let hash = 2166136261
-
-  for (const character of seed) {
-    hash ^= character.codePointAt(0) ?? 0
-    hash = Math.imul(hash, 16777619)
-  }
-
-  return hash >>> 0
-}
-
-const seededRange = (salt: string, min: number, max: number): number => {
-  const hash = hashSeed(`${storySeed.value}:${salt}`)
-  return min + (hash % (max - min + 1))
-}
-
-const fallbackInitials = computed(() => {
-  const domain = storyDomain.value.replace(/^www\./, '')
-  const domainLabel = domain.split('.')[0] || props.story.title || 'HN'
-  const compactLabel = domainLabel.replace(/[^a-z0-9]/gi, '')
-
-  return (compactLabel.slice(0, 2) || 'HN').toUpperCase()
-})
-
-const fallbackVisualStyle = computed(() => {
-  const angle = seededRange('angle', -32, 32)
-
-  return {
-    '--fallback-angle': `${angle}deg`,
-    '--fallback-frame-angle': `${angle * -0.5}deg`,
-    '--fallback-band-angle': `${angle * 0.25}deg`,
-    '--fallback-grid': `${seededRange('grid', 26, 44)}px`,
-    '--fallback-sweep': `${seededRange('sweep', 18, 76)}%`,
-    '--fallback-cut': `${seededRange('cut', 24, 68)}%`,
-  }
-})
-
-const fallbackPanels = computed(() => {
-  return Array.from({ length: 9 }, (_, index) => {
-    const panelSeed = `panel-${index}`
-    const width = seededRange(`${panelSeed}-width`, 18, 46)
-    const height = seededRange(`${panelSeed}-height`, 5, 15)
-    const left = seededRange(`${panelSeed}-left`, -8, 86)
-    const top = seededRange(`${panelSeed}-top`, 9, 84)
-    const rotate = seededRange(`${panelSeed}-rotate`, -22, 22)
-    const opacity = seededRange(`${panelSeed}-opacity`, 30, 68) / 100
-
-    return {
-      key: `${props.story.objectID}-${index}`,
-      variant: index % 3 === 0 ? 'fallback-panel-strong' : index % 3 === 1 ? 'fallback-panel-soft' : 'fallback-panel-line',
-      style: {
-        width: `${width}%`,
-        height: `${height}%`,
-        left: `${left}%`,
-        top: `${top}%`,
-        opacity,
-        transform: `rotate(${rotate}deg)`,
-      },
-    }
-  })
-})
+const cardPaletteStyle = computed(() => getSeedPaletteStyle(props.story.objectID, 'light', storyDomain.value))
+const fallbackVisual = computed(() => buildStoryPlaceholder(
+  storyDomain.value,
+  `${props.story.objectID}:${props.story.title}`,
+))
+const fallbackPanels = computed(() => fallbackVisual.value.panels)
 
 const screenshotSrc = computed(() => `/api/screenshot/${props.story.objectID}?variant=thumbnail`)
 
@@ -1031,6 +976,24 @@ onBeforeUnmount(() => {
     linear-gradient(150deg, var(--seed-surface-strong) 0%, var(--seed-overlay-mid) var(--fallback-sweep), var(--seed-overlay-edge) 100%);
 }
 
+.fallback-composition-terminal {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 22px, rgb(255 255 255 / 0.045) 22px 23px),
+    linear-gradient(145deg, var(--seed-surface-strong), var(--seed-overlay-edge));
+}
+
+.fallback-composition-mosaic {
+  background:
+    radial-gradient(circle at 15% 20%, var(--seed-ring), transparent 38%),
+    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid) 52%, var(--seed-overlay-edge));
+}
+
+.fallback-composition-poster {
+  background:
+    linear-gradient(var(--fallback-direction), transparent 0 52%, var(--seed-ring) 52% calc(52% + 1px), transparent calc(52% + 1px)),
+    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid), var(--seed-overlay-edge));
+}
+
 .story-visual-fallback::before,
 .story-visual-fallback::after {
   content: '';
@@ -1073,6 +1036,24 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   background: var(--seed-accent);
   border-color: transparent;
+}
+
+.fallback-panel-role-poster-orb {
+  border-radius: 999px;
+  box-shadow: 0 24px 60px var(--seed-shadow-strong);
+}
+
+.fallback-panel-role-terminal-window {
+  box-shadow: 0 24px 58px var(--seed-shadow-strong);
+}
+
+.fallback-panel-role-terminal-header {
+  border-radius: 0.5rem 0.5rem 0.2rem 0.2rem;
+}
+
+.fallback-panel-role-sidebar,
+.fallback-panel-role-tile-tall {
+  border-radius: 0.75rem;
 }
 
 .fallback-mark {

@@ -1,6 +1,5 @@
 import { computed, ref, watch } from 'vue';
 import { useFetch } from 'nuxt/app';
-import type { Ref } from 'vue';
 import type { Story } from '#shared/types';
 
 type StoryEndpoint = 'best' | 'new' | 'show' | 'top';
@@ -78,7 +77,6 @@ const rememberStories = (endpoint: StoryEndpoint, stories: Story[]) => {
 };
 
 export const useStories = (endpoint: StoryEndpoint) => {
-  const hoveredStory: Ref<string | null> = ref(null);
   const cachedStories = ref<Story[]>(readCachedStories(endpoint));
   const { data, error, pending } = useFetch<Story[]>(`/api/${endpoint}`, {
     key: `stories:${endpoint}`,
@@ -105,7 +103,6 @@ export const useStories = (endpoint: StoryEndpoint) => {
   
   return {
     stories,
-    hoveredStory,
     isLoading,
     isRefreshing,
     error: fetchError,

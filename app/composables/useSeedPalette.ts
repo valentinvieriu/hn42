@@ -31,7 +31,7 @@ export const getSeedHue = (
 ): number => {
   const seedHash = hashSeed(seed)
   const contextHue = hashSeed(contextSeed) % 360
-  const offset = HARMONY_OFFSETS[seedHash % HARMONY_OFFSETS.length]
+  const offset = HARMONY_OFFSETS[seedHash % HARMONY_OFFSETS.length] ?? 0
   const jitter = Math.floor(seedHash / HARMONY_OFFSETS.length) % 17 - 8
 
   return normalizeHue(contextHue + offset + jitter)

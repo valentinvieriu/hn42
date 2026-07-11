@@ -1,11 +1,11 @@
 import {
+  createError,
   defineEventHandler,
   getQuery,
   getRequestURL,
   getRouterParams,
-  createError,
-  useRuntimeConfig,
-} from '#imports'
+} from 'h3'
+import { useRuntimeConfig } from '#imports'
 import { captureScreenshotWithProvider } from '../../utils/screenshot/providers'
 import {
   getR2OriginalScreenshotKey,
@@ -278,7 +278,7 @@ const readR2Cache = async (
     return null
   }
 
-  const result = await readR2Screenshot(env, key, ttlDays, failureTtlMinutes).catch((error) => {
+  const result = await readR2Screenshot(env, key, ttlDays, failureTtlMinutes).catch((error): typeof R2_READ_FAILED => {
     console.warn(`R2 screenshot read failed: ${error instanceof Error ? error.message : String(error)}`)
     return R2_READ_FAILED
   })
@@ -783,7 +783,7 @@ export default defineEventHandler(async (event) => {
 
   const variant = getRequestedVariant(event)
   const fallbackKey = getFallbackKey(id, variant)
-  const cache = globalThis.caches?.default
+  const cache = (globalThis.caches as CacheStorage & { default?: Cache } | undefined)?.default
   const cacheKey = cache ? new Request(getRequestURL(event).toString(), { method: 'GET' }) : undefined
   const cachedResponse = cacheKey ? await cache?.match(cacheKey) : undefined
 

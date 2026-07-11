@@ -16,18 +16,19 @@
         <h1 class="text-3xl font-display font-semibold mb-4">Loading...</h1>
       </div>
 
-      <div v-else class="grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+      <div v-else-if="story" class="grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
         <article class="min-w-0 lg:col-start-1">
           <h1 class="mb-3 text-3xl font-display font-semibold leading-tight text-gray-900 dark:text-gray-100 md:text-4xl">
             {{ story.title }}
           </h1>
           <a
-            :href="story.url"
+            v-if="storyExternalUrl"
+            :href="storyExternalUrl"
             target="_blank"
             rel="noopener noreferrer"
             class="meta-text mb-3 flex items-center gap-1.5 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           >
-            <span class="truncate">{{ story.url }}</span> <LucideExternalLink size="14" />
+            <span class="truncate">{{ storyExternalUrl }}</span> <LucideExternalLink :size="14" />
           </a>
           <div class="meta-text mb-4 text-gray-600 dark:text-gray-400">
             by
@@ -68,17 +69,21 @@
             :aria-label="`Open ${storyDomain} externally`"
             data-testid="compact-source-preview"
           >
-            <div class="source-preview-fallback" aria-hidden="true">
+            <div
+              class="source-preview-fallback"
+              :class="`fallback-composition-${screenshotFallback.composition}`"
+              aria-hidden="true"
+            >
               <div class="source-preview-fallback-panels">
                 <span
                   v-for="panel in screenshotFallbackPanels"
                   :key="panel.key"
                   class="source-preview-fallback-panel"
-                  :class="panel.variant"
+                  :class="[`source-preview-fallback-panel-${panel.variant}`, `source-preview-fallback-panel-role-${panel.role}`]"
                   :style="panel.style"
                 ></span>
               </div>
-              <div class="source-preview-fallback-mark">{{ screenshotFallbackInitials }}</div>
+              <div class="source-preview-fallback-mark">{{ screenshotFallback.initials }}</div>
             </div>
             <img
               :alt="`Preview of ${story.title}`"
@@ -106,17 +111,21 @@
             :data-screenshot-state="originalPreviewState"
             :style="screenshotPreviewStyle"
           >
-            <div class="source-preview-fallback" aria-hidden="true">
+            <div
+              class="source-preview-fallback"
+              :class="`fallback-composition-${screenshotFallback.composition}`"
+              aria-hidden="true"
+            >
               <div class="source-preview-fallback-panels">
                 <span
                   v-for="panel in screenshotFallbackPanels"
                   :key="`desktop-${panel.key}`"
                   class="source-preview-fallback-panel"
-                  :class="panel.variant"
+                  :class="[`source-preview-fallback-panel-${panel.variant}`, `source-preview-fallback-panel-role-${panel.role}`]"
                   :style="panel.style"
                 ></span>
               </div>
-              <div class="source-preview-fallback-mark">{{ screenshotFallbackInitials }}</div>
+              <div class="source-preview-fallback-mark">{{ screenshotFallback.initials }}</div>
             </div>
             <img
               :alt="story.title"
@@ -177,19 +186,11 @@ import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock,
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
+import { buildStoryPlaceholder } from '~/composables/useStoryPlaceholder';
+import type { Comment } from '#shared/types'
 
 const route = useRoute();
 const expandAllComments = ref(false);
-
-type StoryComment = {
-  id?: number
-  created_at?: string
-  author?: string
-  text?: string
-  points?: number
-  parent_id?: number | null
-  children?: StoryComment[]
-}
 
 type StoryDetail = {
   id: number
@@ -200,7 +201,7 @@ type StoryDetail = {
   text: string | null
   points: number
   parent_id: number | null
-  children: StoryComment[]
+  children: Comment[]
 }
 
 const normalizeStoryId = (param: unknown): string | null => {
@@ -249,7 +250,15 @@ const error = computed(() => {
 const isLoading = computed(() => pending.value)
 const thumbnailScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=thumbnail` : '')
 const originalScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=original` : '')
-const storyExternalUrl = computed(() => story.value?.url || '')
+const storyExternalUrl = computed(() => {
+  if (story.value?.url) {
+    return story.value.url
+  }
+
+  return storyId.value
+    ? `https://news.ycombinator.com/item?id=${storyId.value}`
+    : ''
+})
 type ScreenshotPreviewState = 'loading' | 'loaded' | 'failed'
 const thumbnailPreviewState = ref<ScreenshotPreviewState>('loading')
 const originalPreviewState = ref<ScreenshotPreviewState>('loading')
@@ -265,67 +274,17 @@ const storyDomain = computed(() => {
   }
 })
 
-const screenshotPreviewSeed = computed(() => `${storyId.value ?? 'story'}:${story.value?.title ?? ''}:${storyExternalUrl.value}`)
-
-const hashSeed = (seed: string): number => {
-  let hash = 2166136261
-
-  for (const character of seed) {
-    hash ^= character.codePointAt(0) ?? 0
-    hash = Math.imul(hash, 16777619)
-  }
-
-  return hash >>> 0
-}
-
-const seededRange = (salt: string, min: number, max: number): number => {
-  const hash = hashSeed(`${screenshotPreviewSeed.value}:${salt}`)
-  return min + (hash % (max - min + 1))
-}
-
-const screenshotFallbackInitials = computed(() => {
-  const domainLabel = storyDomain.value.replace(/^www\./, '').split('.')[0] || story.value?.title || 'HN'
-  const compactLabel = domainLabel.replace(/[^a-z0-9]/gi, '')
-
-  return (compactLabel.slice(0, 2) || 'HN').toUpperCase()
-})
+const screenshotPreviewSeed = computed(() => `${storyId.value ?? 'story'}:${story.value?.title ?? ''}`)
+const screenshotFallback = computed(() => buildStoryPlaceholder(storyDomain.value, screenshotPreviewSeed.value))
 
 const screenshotPreviewStyle = computed(() => {
-  const angle = seededRange('angle', -28, 28)
-
   return {
-    ...getSeedPaletteStyle(screenshotPreviewSeed.value),
-    '--fallback-angle': `${angle}deg`,
-    '--fallback-grid': `${seededRange('grid', 28, 48)}px`,
-    '--fallback-sweep': `${seededRange('sweep', 22, 74)}%`,
-    '--fallback-cut': `${seededRange('cut', 24, 68)}%`,
+    ...getSeedPaletteStyle(storyId.value, 'light', storyDomain.value),
+    ...screenshotFallback.value.style,
   }
 })
 
-const screenshotFallbackPanels = computed(() => {
-  return Array.from({ length: 8 }, (_, index) => {
-    const panelSeed = `panel-${index}`
-    const width = seededRange(`${panelSeed}-width`, 18, 44)
-    const height = seededRange(`${panelSeed}-height`, 5, 14)
-    const left = seededRange(`${panelSeed}-left`, -6, 86)
-    const top = seededRange(`${panelSeed}-top`, 12, 82)
-    const rotate = seededRange(`${panelSeed}-rotate`, -20, 20)
-    const opacity = seededRange(`${panelSeed}-opacity`, 32, 68) / 100
-
-    return {
-      key: `${storyId.value ?? 'story'}-${index}`,
-      variant: index % 3 === 0 ? 'source-preview-fallback-panel-strong' : index % 3 === 1 ? 'source-preview-fallback-panel-soft' : 'source-preview-fallback-panel-line',
-      style: {
-        width: `${width}%`,
-        height: `${height}%`,
-        left: `${left}%`,
-        top: `${top}%`,
-        opacity,
-        transform: `rotate(${rotate}deg)`,
-      },
-    }
-  })
-})
+const screenshotFallbackPanels = computed(() => screenshotFallback.value.panels)
 
 const getPreviewStateFromImage = (event: Event): ScreenshotPreviewState => {
   const image = event.target as HTMLImageElement
@@ -363,13 +322,13 @@ const sanitizedText = computed(() => sanitize(story.value?.text || '', `story-${
 
 const MAX_COMMENT_DEPTH = 3;
 
-const countComments = (comments = []) => {
+const countComments = (comments: Comment[]): number => {
   return comments.reduce((total, comment) => {
     return total + 1 + countComments(comment.children || []);
   }, 0);
 };
 
-const hasRepliesBeyondDefaultDepth = (comments = [], depth = 1) => {
+const hasRepliesBeyondDefaultDepth = (comments: Comment[], depth = 1): boolean => {
   return comments.some((comment) => {
     const children = comment.children || [];
 
@@ -384,7 +343,7 @@ const hasRepliesBeyondDefaultDepth = (comments = [], depth = 1) => {
 const commentCount = computed(() => countComments(story.value?.children || []));
 const hasCollapsedReplies = computed(() => hasRepliesBeyondDefaultDepth(story.value?.children || []));
 
-const countCommentsByAuthor = (comments: StoryComment[] = [], counts: Record<string, number> = {}) => {
+const countCommentsByAuthor = (comments: Comment[] = [], counts: Record<string, number> = {}) => {
   comments.forEach((comment) => {
     if (comment.author) {
       counts[comment.author] = (counts[comment.author] || 0) + 1;
@@ -407,18 +366,25 @@ const timeAgo = computed(() => {
   return formatDistanceToNow(new Date(story.value.created_at), { addSuffix: true });
 });
 
-// Update SEO metadata with null checks
+const requestUrl = useRequestURL()
+const siteOrigin = requestUrl.origin
 const title = computed(() => story.value?.title ?? 'Loading...')
-const ogImage = computed(() => story.value?.screenshotUrl ?? 'https://example.com/default-image.png')
+const socialImage = computed(() => {
+  const path = storyId.value
+    ? `/api/screenshot/${storyId.value}?variant=thumbnail`
+    : '/icon_x512.png'
 
-// Set SEO metadata
+  return new URL(path, siteOrigin).href
+})
+
 useSeoMeta({
   title,
   description: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
   ogTitle: title,
   ogDescription: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
-  ogImage,
-  twitterCard: ogImage,
+  ogImage: socialImage,
+  twitterCard: 'summary_large_image',
+  twitterImage: socialImage,
 });
 </script>
 
@@ -543,6 +509,24 @@ useSeoMeta({
     linear-gradient(150deg, var(--seed-surface-strong) 0%, var(--seed-overlay-mid) var(--fallback-sweep), var(--seed-overlay-edge) 100%);
 }
 
+.source-preview-fallback.fallback-composition-terminal {
+  background:
+    repeating-linear-gradient(0deg, transparent 0 22px, rgb(255 255 255 / 0.045) 22px 23px),
+    linear-gradient(145deg, var(--seed-surface-strong), var(--seed-overlay-edge));
+}
+
+.source-preview-fallback.fallback-composition-mosaic {
+  background:
+    radial-gradient(circle at 15% 20%, var(--seed-ring), transparent 38%),
+    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid) 52%, var(--seed-overlay-edge));
+}
+
+.source-preview-fallback.fallback-composition-poster {
+  background:
+    linear-gradient(var(--fallback-direction), transparent 0 52%, var(--seed-ring) 52% calc(52% + 1px), transparent calc(52% + 1px)),
+    linear-gradient(150deg, var(--seed-surface-strong), var(--seed-overlay-mid), var(--seed-overlay-edge));
+}
+
 .source-preview-fallback::before {
   position: absolute;
   inset: -18%;
@@ -579,6 +563,19 @@ useSeoMeta({
 .source-preview-fallback-panel-line {
   height: 2px !important;
   background: var(--seed-accent);
+}
+
+.source-preview-fallback-panel-role-poster-orb {
+  border-radius: 999px;
+  box-shadow: 0 24px 60px var(--seed-shadow-strong);
+}
+
+.source-preview-fallback-panel-role-terminal-window {
+  box-shadow: 0 24px 58px var(--seed-shadow-strong);
+}
+
+.source-preview-fallback-panel-role-terminal-header {
+  border-radius: 0.5rem 0.5rem 0.2rem 0.2rem;
 }
 
 .source-preview-fallback-mark {
