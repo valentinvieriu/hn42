@@ -16,24 +16,24 @@
   "dependencies": {
     "@jsquash/jpeg": "^1.6.0",
     "@jsquash/resize": "^2.1.1",
-    "@lucide/vue": "^1.14.0",
+    "@lucide/vue": "^1.24.0",
     "@nuxt/image": "^2.0.0",
-    "@nuxtjs/color-mode": "^4.0.0",
+    "@nuxtjs/color-mode": "^4.0.1",
     "@nuxtjs/google-fonts": "^3.2.0",
     "@nuxtjs/tailwindcss": "^6.14.0",
-    "date-fns": "^4.1.0",
-    "nuxt": "^4.4.4",
+    "date-fns": "^4.4.0",
+    "nuxt": "^4.4.8",
     "nuxt-lucide-icons": "^2.1.0",
     "pos": "^0.4.2",
     "stemmer": "^2.0.1",
-    "vue": "latest",
-    "vue-router": "latest"
+    "vue": "^3.5.39",
+    "vue-router": "^5.1.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260426.1",
+    "@cloudflare/workers-types": "^5.20260711.1",
     "nitro-cloudflare-dev": "^0.2.2",
-    "nitropack": "^2.9.7",
-    "typescript": "^6.0.3",
-    "wrangler": "^4.86.0"
+    "nitropack": "^2.13.4",
+    "typescript": "^7.0.2",
+    "wrangler": "^4.110.0"
   }
 }
