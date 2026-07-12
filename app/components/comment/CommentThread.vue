@@ -101,6 +101,7 @@ const commentContainerClasses = computed(() => {
     'comment-container',
     `comment-depth-${Math.min(currentDepth.value, DEFAULT_COMMENT_DEPTH)}`,
     {
+      'comment-top-level': currentDepth.value === 1,
       'comment-max-depth': currentDepth.value >= DEFAULT_COMMENT_DEPTH,
     },
   ]
@@ -137,6 +138,11 @@ const shouldRenderChildren = computed(() => {
   position: relative;
 }
 
+.comment-top-level {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 20rem;
+}
+
 .comment-panel {
   position: relative;
   background:
@@ -149,7 +155,7 @@ const shouldRenderChildren = computed(() => {
     0 14px 34px var(--seed-shadow),
     inset 0 1px 0 rgb(255 255 255 / 0.34);
   overflow: hidden;
-  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .dark .comment-panel {

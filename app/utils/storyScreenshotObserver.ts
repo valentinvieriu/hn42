@@ -26,7 +26,7 @@ const getLoadObserver = () => {
       })
     },
     {
-      rootMargin: '400px 0px',
+      rootMargin: '200px 0px',
       threshold: 0.01,
     },
   )

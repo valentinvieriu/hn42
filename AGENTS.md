@@ -33,7 +33,7 @@ HN42 uses Nuxt pages for the main routes and Nitro server routes for Hacker News
 
 Frontend:
 
-- `app/pages/top.vue`, `app/pages/best.vue`, `app/pages/new.vue`, `app/pages/show.vue`: feed pages.
+- `app/pages/index.vue`, `app/pages/top.vue`, `app/pages/best.vue`, `app/pages/new.vue`, `app/pages/show.vue`: feed pages (`/` and `/top` both render the top feed without a redirect).
 - `app/pages/item/[id].vue`: story detail page with metadata, screenshot, comments, and related stories.
 - `app/pages/user/[username].vue`: user profile/activity page with posts and comments.
 - `app/components/story/StoryGrid.vue`: feed layout and loading states.
@@ -64,7 +64,8 @@ Server/API:
 - `server/api/user/[username]/comments.ts` and `stories.ts`: paginated user activity using Algolia search-by-date.
 - `server/utils/userActivityHandler.ts`: shared validation, cache, error, and timing wrapper for user activity routes.
 - `server/utils/fetchStories.ts`: common Algolia story normalization.
-- `server/utils/feed.ts`: fetch ordered story IDs from HN Firebase, hydrate them from Algolia, preserve source order, and set feed cache headers.
+- `server/utils/feed.ts`: fetch ordered story IDs from HN Firebase, hydrate them from Algolia, preserve source order, cache the four feed payloads briefly inside each Nitro isolate, and set feed cache headers.
+- `server/plugins/removeInlinedStylesheets.ts`: strip duplicate generated stylesheet links from SSR HTML after Nuxt inlines the same critical CSS, while leaving the client manifest intact.
 - `server/utils/userActivity.ts`: user activity pagination and mapping.
 
 Types and global styling:
@@ -89,7 +90,8 @@ Primary upstreams:
 
 Caching expectations:
 
-- Feed and item routes use short public cache headers so story metadata stays fresh.
+- Feed and item routes use short public cache headers so story metadata stays fresh. Feed payloads additionally use a four-entry, per-isolate Nitro stale-while-revalidate cache (120 seconds fresh, 600 seconds stale) so Nuxt's internal SSR requests do not refetch both upstreams on every warm request; this is best-effort isolate reuse, not a replacement for the shared front-of-Worker cache.
+- Keep `features.inlineStyles` paired with `removeInlinedStylesheets.ts`: initial SSR must contain its critical CSS without duplicate render-blocking `/_nuxt/*.css` links, while client navigation still uses the unmodified build manifest.
 - Related stories use longer cache headers because they are derived and less time-sensitive.
 - User profile/activity routes cache briefly.
 - Screenshot responses use long browser/CDN cache headers and Wrangler Workers Caching, which runs before the Worker and works on the production `workers.dev` hostname. Edge TTLs must use only the remaining R2 freshness window. Do not reintroduce `caches.default`; Cache API operations have no effect on `workers.dev`.
@@ -189,6 +191,7 @@ Styling approach:
 - Shared typography/rich-text styling belongs in `app/assets/css/main.css`.
 - Dark mode uses `@nuxtjs/color-mode` with class-based Tailwind dark mode.
 - Fonts are Inter for body text and Sora for display headings.
+- Google Font faces are self-hosted and injected into Nuxt's hashed CSS with `font-display: optional`; do not restore the separate `/css/nuxt-google-fonts.css` render-blocking link.
 - Prefer the existing feed theme and seed palette helpers over one-off color systems.
 
 Linting and checks:

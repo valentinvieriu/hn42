@@ -156,7 +156,6 @@ const renderModel = computed(() => {
   overflow: hidden;
   contain: layout paint;
   pointer-events: none;
-  transition: opacity 500ms ease, visibility 0s linear;
   background:
     radial-gradient(circle at var(--wire-glow-x) var(--wire-glow-y), var(--seed-ring), transparent 42%),
     linear-gradient(155deg, var(--seed-surface-strong), var(--seed-overlay-mid) 56%, var(--seed-overlay-edge));
@@ -165,7 +164,6 @@ const renderModel = computed(() => {
 .story-placeholder-visual--loaded {
   visibility: hidden;
   opacity: 0;
-  transition: opacity 500ms ease, visibility 0s linear 500ms;
 }
 
 .story-placeholder-visual::before {
@@ -329,11 +327,5 @@ const renderModel = computed(() => {
 
 .story-placeholder-primitive--line.story-placeholder-primitive--accent-soft {
   stroke: color-mix(in oklch, var(--seed-accent) 72%, transparent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .story-placeholder-visual {
-    transition-duration: 1ms;
-  }
 }
 </style>

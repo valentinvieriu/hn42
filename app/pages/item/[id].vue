@@ -16,8 +16,9 @@
         <h1 class="text-3xl font-display font-semibold mb-4">Loading...</h1>
       </div>
 
-      <div v-else-if="story" class="grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
-        <article class="min-w-0 lg:col-start-1">
+      <div v-else-if="story" class="story-detail-layout grid gap-8 lg:gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+        <div class="story-detail-primary min-w-0">
+          <article class="story-detail-article min-w-0">
           <h1 class="mb-3 text-3xl font-display font-semibold leading-tight text-gray-900 dark:text-gray-100 md:text-4xl">
             {{ story.title }}
           </h1>
@@ -58,71 +59,48 @@
               {{ timeAgo }}
             </span>
           </div>
-          <a
-            v-if="storyExternalUrl && isCompactViewport"
-            :href="storyExternalUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="compact-source-preview seed-palette-surface mb-6 block lg:hidden"
-            :data-screenshot-state="thumbnailPreviewState"
+          <div
+            class="source-screenshot-preview seed-palette-surface mb-6 lg:mb-8"
+            :data-screenshot-state="screenshotPreviewState"
             :style="screenshotPreviewStyle"
-            :aria-label="`Open ${storyDomain} externally`"
-            data-testid="compact-source-preview"
+            data-testid="source-screenshot-preview"
           >
             <StoryPlaceholderVisual
               :domain="storyDomain"
               :seed="storyId ?? 'story'"
-              :state="thumbnailPreviewState"
-              presentation="compact"
-            />
-            <img
-              :alt="`Preview of ${story.title}`"
-              width="1440"
-              height="900"
-              :src="thumbnailScreenshotSrc"
-              loading="eager"
-              decoding="async"
-              class="compact-source-preview-image"
-              :class="{ 'is-loaded': thumbnailPreviewState === 'loaded' }"
-              :aria-hidden="thumbnailPreviewState !== 'loaded'"
-              @load="handleThumbnailPreviewLoad"
-              @error="handleThumbnailPreviewError"
-            />
-            <span class="compact-source-preview-chip meta-text">
-              <span>{{ storyDomain }}</span>
-              <LucideExternalLink class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            </span>
-          </a>
-          <div
-            class="rich-text reading-measure mb-5 text-base leading-7 text-gray-700 dark:text-gray-300"
-            v-html="sanitizedText"
-          ></div>
-          <div
-            v-if="!isCompactViewport"
-            class="source-screenshot-preview seed-palette-surface hidden lg:block mb-8"
-            :data-screenshot-state="originalPreviewState"
-            :style="screenshotPreviewStyle"
-          >
-            <StoryPlaceholderVisual
-              :domain="storyDomain"
-              :seed="storyId ?? 'story'"
-              :state="originalPreviewState"
+              :state="screenshotPreviewState"
               presentation="detail"
             />
             <img
-              :alt="story.title"
+              ref="screenshotImage"
+              :alt="`Preview of ${story.title}`"
               width="1440"
-              :src="originalScreenshotSrc"
-              loading="lazy"
+              height="900"
+              :src="screenshotSrc"
+              loading="eager"
+              fetchpriority="high"
               decoding="async"
               class="source-screenshot-preview-image"
-              :class="{ 'is-loaded': originalPreviewState === 'loaded' }"
-              :aria-hidden="originalPreviewState !== 'loaded'"
-              @load="handleOriginalPreviewLoad"
-              @error="handleOriginalPreviewError"
+              :aria-hidden="screenshotPreviewState === 'failed'"
+              @load="handleScreenshotPreviewLoad"
+              @error="handleScreenshotPreviewError"
             />
+            <a
+              v-if="storyExternalUrl"
+              :href="storyExternalUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="source-preview-mobile-link"
+              :aria-label="`Open ${storyDomain} externally`"
+              data-testid="compact-source-preview"
+            >
+              <span class="source-preview-domain-chip meta-text">
+                <span>{{ storyDomain }}</span>
+                <LucideExternalLink class="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              </span>
+            </a>
             <button
-              v-if="originalPreviewState === 'loaded'"
+              v-if="screenshotPreviewState === 'loaded'"
               type="button"
               class="source-preview-expand-button"
               aria-label="Expand source preview"
@@ -132,8 +110,16 @@
               <span>Expand</span>
             </button>
           </div>
-        </article>
-        <aside id="comments" class="min-w-0 scroll-mt-24 lg:col-start-2 lg:row-start-1 lg:row-span-2">
+          <div
+            class="story-detail-text rich-text reading-measure mb-5 text-base leading-7 text-gray-700 dark:text-gray-300"
+            v-html="sanitizedText"
+          ></div>
+          </article>
+          <section class="story-detail-related min-w-0">
+            <RelatedStories v-if="storyId" :story-id="storyId" />
+          </section>
+        </div>
+        <aside id="comments" class="story-detail-comments min-w-0 scroll-mt-24">
           <div class="comments-toolbar">
             <div class="comments-title-group">
               <h2 class="section-title mb-0 text-2xl font-semibold text-gray-900 dark:text-gray-100">Comments</h2>
@@ -158,7 +144,7 @@
           <div v-else class="space-y-4">
             <CommentThread
               v-for="comment in story.children"
-              :key="`${comment.id}-${expandAllComments ? 'expanded' : 'default'}`"
+              :key="comment.id"
               :comment="comment"
               :expand-all="expandAllComments"
               :author-comment-counts="authorCommentCounts"
@@ -166,9 +152,6 @@
             />
           </div>
         </aside>
-        <section class="min-w-0 lg:col-start-1">
-          <RelatedStories v-if="storyId" :story-id="storyId" />
-        </section>
         <dialog
           ref="screenshotDialog"
           class="source-preview-dialog"
@@ -288,7 +271,6 @@ const error = computed(() => {
 })
 const isLoading = computed(() => pending.value)
 const screenshotSrc = computed(() => storyId.value ? getScreenshotPath(storyId.value) : '')
-const thumbnailScreenshotSrc = screenshotSrc
 const originalScreenshotSrc = screenshotSrc
 const storyExternalUrl = computed(() => {
   if (story.value?.url) {
@@ -300,25 +282,12 @@ const storyExternalUrl = computed(() => {
     : ''
 })
 type ScreenshotPreviewState = 'loading' | 'loaded' | 'failed'
-const thumbnailPreviewState = ref<ScreenshotPreviewState>('loading')
-const originalPreviewState = ref<ScreenshotPreviewState>('loading')
-const isCompactViewport = ref(false)
+const screenshotPreviewState = ref<ScreenshotPreviewState>('loading')
+const screenshotImage = ref<HTMLImageElement | null>(null)
 const screenshotDialog = ref<HTMLDialogElement | null>(null)
 const isScreenshotDialogOpen = ref(false)
-let compactViewportMediaQuery: MediaQueryList | null = null
-
-const updateCompactViewport = (event: MediaQueryList | MediaQueryListEvent) => {
-  isCompactViewport.value = event.matches
-}
-
-onMounted(() => {
-  compactViewportMediaQuery = window.matchMedia('(max-width: 1023px)')
-  updateCompactViewport(compactViewportMediaQuery)
-  compactViewportMediaQuery.addEventListener('change', updateCompactViewport)
-})
 
 onBeforeUnmount(() => {
-  compactViewportMediaQuery?.removeEventListener('change', updateCompactViewport)
   screenshotDialog.value?.close()
 })
 const storyDomain = computed(() => {
@@ -337,31 +306,27 @@ const screenshotPreviewStyle = computed(() => {
   return getSeedPaletteStyle(storyId.value, storyDomain.value)
 })
 
-const getPreviewStateFromImage = (event: Event): ScreenshotPreviewState => {
-  const image = event.target as HTMLImageElement
-
+const getPreviewStateFromImage = (image: HTMLImageElement): ScreenshotPreviewState => {
   return image.naturalWidth > 1 && image.naturalHeight > 1 ? 'loaded' : 'failed'
 }
 
-const handleThumbnailPreviewLoad = (event: Event) => {
-  thumbnailPreviewState.value = getPreviewStateFromImage(event)
+const handleScreenshotPreviewLoad = (event: Event) => {
+  screenshotPreviewState.value = getPreviewStateFromImage(event.target as HTMLImageElement)
 }
 
-const handleThumbnailPreviewError = () => {
-  thumbnailPreviewState.value = 'failed'
+const handleScreenshotPreviewError = () => {
+  screenshotPreviewState.value = 'failed'
 }
 
-const handleOriginalPreviewLoad = (event: Event) => {
-  originalPreviewState.value = getPreviewStateFromImage(event)
-}
-
-const handleOriginalPreviewError = () => {
-  originalPreviewState.value = 'failed'
-}
+onMounted(() => {
+  if (screenshotImage.value?.complete) {
+    screenshotPreviewState.value = getPreviewStateFromImage(screenshotImage.value)
+  }
+})
 
 const openScreenshotPreview = () => {
   if (
-    originalPreviewState.value !== 'loaded'
+    screenshotPreviewState.value !== 'loaded'
     || !screenshotDialog.value
     || screenshotDialog.value.open
   ) {
@@ -380,12 +345,8 @@ const handleScreenshotDialogClose = () => {
   isScreenshotDialogOpen.value = false
 }
 
-watch(thumbnailScreenshotSrc, () => {
-  thumbnailPreviewState.value = 'loading'
-})
-
-watch(originalScreenshotSrc, () => {
-  originalPreviewState.value = 'loading'
+watch(screenshotSrc, () => {
+  screenshotPreviewState.value = 'loading'
 })
 
 // Use the sanitizer
@@ -417,6 +378,18 @@ const socialImage = computed(() => {
   return new URL(path, siteOrigin).href
 })
 
+useHead(() => ({
+  link: screenshotSrc.value
+    ? [{
+        key: 'story-screenshot-preload',
+        rel: 'preload',
+        as: 'image',
+        href: screenshotSrc.value,
+        fetchpriority: 'high',
+      }]
+    : [],
+}))
+
 useSeoMeta({
   title,
   description: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
@@ -429,11 +402,27 @@ useSeoMeta({
 </script>
 
 <style scoped>
-.compact-source-preview {
+.story-detail-primary {
+  display: contents;
+}
+
+.story-detail-article {
+  order: 1;
+}
+
+.story-detail-comments {
+  order: 2;
+}
+
+.story-detail-related {
+  order: 3;
+}
+
+.source-screenshot-preview {
   position: relative;
   overflow: hidden;
   aspect-ratio: 16 / 10;
-  border: 1px solid color-mix(in oklch, var(--seed-border) 74%, rgb(148 163 184 / 0.26));
+  border: 1px solid color-mix(in oklch, var(--seed-border) 72%, rgb(148 163 184 / 0.26));
   border-radius: 0.75rem;
   background:
     linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 54%, transparent), transparent 32%),
@@ -441,8 +430,9 @@ useSeoMeta({
   box-shadow: 0 18px 40px -32px var(--seed-shadow-strong);
 }
 
-.compact-source-preview::after {
+.source-screenshot-preview::after {
   position: absolute;
+  z-index: 2;
   inset: auto 0 0;
   height: 42%;
   content: "";
@@ -450,33 +440,39 @@ useSeoMeta({
   pointer-events: none;
 }
 
-.compact-source-preview-image {
-  position: relative;
+.source-screenshot-preview-image {
+  position: absolute;
   z-index: 1;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
   object-position: top center;
-  opacity: 0;
-  transition: opacity 0.28s ease, transform 0.25s ease;
 }
 
-.compact-source-preview-image.is-loaded {
-  opacity: 1;
+.source-screenshot-preview[data-screenshot-state="failed"] .source-screenshot-preview-image {
+  visibility: hidden;
 }
 
-.compact-source-preview:hover .compact-source-preview-image,
-.compact-source-preview:focus-visible .compact-source-preview-image {
-  transform: scale(1.015);
+.source-preview-mobile-link {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  display: block;
+  border-radius: inherit;
 }
 
-.compact-source-preview-chip {
+.source-preview-mobile-link:focus-visible {
+  outline: 3px solid var(--seed-accent);
+  outline-offset: -3px;
+}
+
+.source-preview-domain-chip {
   position: absolute;
   right: 0.75rem;
   bottom: 0.75rem;
   left: 0.75rem;
-  z-index: 1;
   display: inline-flex;
   width: max-content;
   max-width: calc(100% - 1.5rem);
@@ -494,49 +490,11 @@ useSeoMeta({
   backdrop-filter: blur(12px);
 }
 
-.compact-source-preview-chip span {
+.source-preview-domain-chip span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.source-screenshot-preview {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid color-mix(in oklch, var(--seed-border) 72%, rgb(148 163 184 / 0.26));
-  border-radius: 0.75rem;
-  background:
-    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 54%, transparent), transparent 32%),
-    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
-  box-shadow: 0 18px 40px -32px var(--seed-shadow-strong);
-}
-
-.source-screenshot-preview[data-screenshot-state="loading"],
-.source-screenshot-preview[data-screenshot-state="failed"] {
-  aspect-ratio: 4 / 3;
-}
-
-.source-screenshot-preview-image {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: 100%;
-  height: auto;
-  opacity: 0;
-  transition: opacity 0.28s ease;
-}
-
-.source-screenshot-preview[data-screenshot-state="loading"] .source-screenshot-preview-image,
-.source-screenshot-preview[data-screenshot-state="failed"] .source-screenshot-preview-image {
-  position: absolute;
-  inset: 0;
-  height: 100%;
-  object-fit: cover;
-}
-
-.source-screenshot-preview-image.is-loaded {
-  opacity: 1;
 }
 
 .source-preview-expand-button {
@@ -544,7 +502,7 @@ useSeoMeta({
   top: 0.75rem;
   right: 0.75rem;
   z-index: 3;
-  display: inline-flex;
+  display: none;
   min-height: 2.25rem;
   align-items: center;
   gap: 0.4rem;
@@ -565,6 +523,42 @@ useSeoMeta({
 .source-preview-expand-button:focus-visible {
   background: white;
   transform: translateY(-1px);
+}
+
+@media (min-width: 1024px) {
+  .story-detail-primary {
+    display: block;
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .story-detail-comments {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .story-detail-article {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .story-detail-text {
+    order: 1;
+  }
+
+  .source-screenshot-preview {
+    order: 2;
+    aspect-ratio: 4 / 3;
+  }
+
+  .source-screenshot-preview::after,
+  .source-preview-mobile-link {
+    display: none;
+  }
+
+  .source-preview-expand-button {
+    display: inline-flex;
+  }
 }
 
 .source-preview-dialog {
@@ -638,13 +632,6 @@ useSeoMeta({
   background: white;
 }
 
-.dark .compact-source-preview {
-  border-color: color-mix(in oklch, var(--seed-border) 82%, rgb(148 163 184 / 0.28));
-  background:
-    linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 50%, transparent), transparent 34%),
-    linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
-}
-
 .dark .source-screenshot-preview {
   border-color: color-mix(in oklch, var(--seed-border) 82%, rgb(148 163 184 / 0.28));
   background:
@@ -690,7 +677,7 @@ useSeoMeta({
   background: rgb(15 23 42);
 }
 
-.dark .compact-source-preview-chip {
+.dark .source-preview-domain-chip {
   border-color: rgb(255 255 255 / 0.16);
   background: rgb(15 23 42 / 0.78);
   color: rgb(226 232 240);

@@ -26,7 +26,11 @@
           {{ formatCompactTimeAgo(story.created_at) }}
         </span>
       </div>
-      <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
+      <NuxtLink
+        :to="`/item/${story.objectID}`"
+        class="block h-full"
+        :aria-label="`Open ${story.title} on HN42`"
+      >
         <div class="story-card-image-layer absolute inset-0 overflow-hidden">
           <StoryPlaceholderVisual
             :domain="storyDomain"
@@ -37,14 +41,17 @@
           <div class="story-card-image-track relative w-full h-full transform transition-transform duration-500">
             <img
               v-if="imageSrc"
+              ref="imageRef"
               :alt="story.title"
               width="400"
+              height="400"
               :src="imageSrc"
+              :fetchpriority="priority ? 'high' : undefined"
               loading="eager"
               decoding="async"
-              class="story-card-image w-full object-cover transition-opacity duration-500"
-              :class="imageState === 'loaded' ? 'opacity-100' : 'opacity-0'"
-              :aria-hidden="imageState !== 'loaded'"
+              class="story-card-image w-full object-cover"
+              :class="imageIsVisible ? 'opacity-100' : 'opacity-0'"
+              :aria-hidden="!imageIsVisible"
               @load="handleImageLoad"
               @error="handleImageError"
             />
@@ -113,9 +120,12 @@ import { formatCompactTimeAgo } from '#shared/utils/date'
 import { getHnItemUrl, getHnUserPath } from '#shared/utils/hn'
 import { observeStoryScreenshot, unobserveStoryScreenshot } from '~/utils/storyScreenshotObserver'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  priority?: boolean
   story: Story
-}>()
+}>(), {
+  priority: false,
+})
 
 const getDomainFromUrl = (url: string): string => {
   try {
@@ -162,8 +172,16 @@ const handleCardClick = () => {
 }
 
 const cardRef = ref<HTMLElement | null>(null)
-const imageSrc = ref<string | null>(null)
-const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>('queued')
+const imageRef = ref<HTMLImageElement | null>(null)
+const imageSrc = ref<string | null>(props.priority ? screenshotSrc : null)
+const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>(props.priority ? 'loading' : 'queued')
+const imageIsVisible = computed(() => {
+  if (props.priority) {
+    return imageState.value !== 'failed'
+  }
+
+  return imageState.value === 'loaded'
+})
 
 const bodyBackdropImageStyle = computed(() => {
   if (!imageSrc.value || imageState.value !== 'loaded') {
@@ -175,9 +193,12 @@ const bodyBackdropImageStyle = computed(() => {
   }
 })
 
-const handleImageLoad = (event: Event) => {
-  const image = event.target as HTMLImageElement
+const settleImageState = (image: HTMLImageElement) => {
   imageState.value = image.naturalWidth > 1 && image.naturalHeight > 1 ? 'loaded' : 'failed'
+}
+
+const handleImageLoad = (event: Event) => {
+  settleImageState(event.target as HTMLImageElement)
 }
 
 const handleImageError = () => {
@@ -194,6 +215,14 @@ const loadScreenshot = () => {
 }
 
 onMounted(() => {
+  if (props.priority) {
+    if (imageRef.value?.complete) {
+      settleImageState(imageRef.value)
+    }
+
+    return
+  }
+
   if (!cardRef.value || !observeStoryScreenshot(cardRef.value, loadScreenshot)) {
     loadScreenshot()
   }
@@ -405,7 +434,6 @@ onBeforeUnmount(() => {
   filter: blur(7px) saturate(1.16) contrast(0.94);
   opacity: 0;
   transform: scale(1.05);
-  transition: opacity 500ms ease;
 }
 
 .story-card-body-image-track.is-loaded .story-card-body-image {

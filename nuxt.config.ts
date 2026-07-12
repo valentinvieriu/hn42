@@ -4,6 +4,9 @@ import { defineNuxtConfig } from 'nuxt/config'
 export default defineNuxtConfig({
   compatibilityDate: '2026-07-11',
   devtools: { enabled: false },
+  features: {
+    inlineStyles: true,
+  },
   runtimeConfig: {
     screenshotBrowserActionTimeoutMs: '5000',
     screenshotBrowserCacheTtlSeconds: '0',
@@ -49,8 +52,8 @@ export default defineNuxtConfig({
         wght: [400, 500, 600, 700],
       },
     },
-    display: 'swap',
-    inject: false,
+    display: 'optional',
+    inject: true,
   },
   components: [
     {
@@ -77,7 +80,6 @@ export default defineNuxtConfig({
       ],
       link: [
         { rel: 'manifest', href: '/manifest.webmanifest' },
-        { rel: 'stylesheet', href: '/css/nuxt-google-fonts.css' },
         { rel: 'apple-touch-icon', href: '/icon_x192.png' },
         { rel: 'apple-touch-icon', sizes: '72x72', href: '/icon_x72.png' },
         { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/icon_x192.png' },
@@ -99,7 +101,7 @@ export default defineNuxtConfig({
     transpile: ['vue-router'],
   },
   routeRules: {
-    '/': { redirect: '/top' },
+    '/': { headers: { 'cache-control': 'no-store' } },
     '/best': { headers: { 'cache-control': 'no-store' } },
     '/item/**': { headers: { 'cache-control': 'no-store' } },
     '/new': { headers: { 'cache-control': 'no-store' } },

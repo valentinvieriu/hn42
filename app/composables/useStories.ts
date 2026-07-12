@@ -1,5 +1,5 @@
-import { computed, ref, watch } from 'vue';
-import { useFetch } from 'nuxt/app';
+import { computed, shallowRef, watch } from 'vue';
+import { onNuxtReady, useFetch, useNuxtApp } from 'nuxt/app';
 import type { Story } from '#shared/types';
 import type { FeedEndpoint } from './useFeedTheme';
 
@@ -12,6 +12,15 @@ type FeedCachePayload = {
 };
 
 const memoryCache = new Map<FeedEndpoint, Story[]>();
+const pendingStoragePayloads = new Map<FeedEndpoint, FeedCachePayload>();
+const scheduledStorageWrites = new Set<FeedEndpoint>();
+
+type IdleCapableWindow = Window & {
+  requestIdleCallback?: (
+    callback: () => void,
+    options?: { timeout: number },
+  ) => number;
+};
 
 const removeCachedStories = (endpoint: FeedEndpoint) => {
   try {
@@ -55,28 +64,79 @@ const readCachedStories = (endpoint: FeedEndpoint): Story[] => {
   }
 };
 
-const rememberStories = (endpoint: FeedEndpoint, stories: Story[]) => {
-  if (!import.meta.client || stories.length === 0) {
+const flushStoredStories = (endpoint: FeedEndpoint) => {
+  scheduledStorageWrites.delete(endpoint);
+  const payload = pendingStoragePayloads.get(endpoint);
+  pendingStoragePayloads.delete(endpoint);
+
+  if (!payload) {
     return;
   }
-
-  memoryCache.set(endpoint, stories);
 
   try {
     window.sessionStorage.setItem(
       `${FEED_CACHE_PREFIX}${endpoint}`,
-      JSON.stringify({
-        savedAt: Date.now(),
-        stories,
-      } satisfies FeedCachePayload),
+      JSON.stringify(payload),
     );
   } catch {
     // Storage can be unavailable in private browsing or constrained WebViews.
   }
 };
 
+const scheduleStoredStories = (endpoint: FeedEndpoint, stories: Story[]) => {
+  pendingStoragePayloads.set(endpoint, {
+    savedAt: Date.now(),
+    stories,
+  });
+
+  if (scheduledStorageWrites.has(endpoint)) {
+    return;
+  }
+
+  scheduledStorageWrites.add(endpoint);
+  const flush = () => flushStoredStories(endpoint);
+  const idleWindow = window as IdleCapableWindow;
+
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    idleWindow.requestIdleCallback(flush, { timeout: 2000 });
+    return;
+  }
+
+  window.setTimeout(flush, 0);
+};
+
+const rememberStories = (
+  endpoint: FeedEndpoint,
+  stories: Story[],
+  persist = true,
+) => {
+  if (!import.meta.client || stories.length === 0) {
+    return;
+  }
+
+  memoryCache.set(endpoint, stories);
+
+  if (persist) {
+    scheduleStoredStories(endpoint, stories);
+  }
+};
+
 export const useStories = (endpoint: FeedEndpoint) => {
-  const cachedStories = ref<Story[]>(readCachedStories(endpoint));
+  const nuxtApp = useNuxtApp();
+  const cachedStories = shallowRef<Story[]>(
+    import.meta.client && !nuxtApp.isHydrating ? readCachedStories(endpoint) : [],
+  );
+
+  if (import.meta.client && nuxtApp.isHydrating) {
+    onNuxtReady(() => {
+      const currentStories = memoryCache.get(endpoint);
+
+      if (currentStories?.length) {
+        scheduleStoredStories(endpoint, currentStories);
+      }
+    });
+  }
+
   const { data, error, pending } = useFetch<Story[]>(`/api/${endpoint}`, {
     key: `stories:${endpoint}`,
     lazy: true,
@@ -88,7 +148,7 @@ export const useStories = (endpoint: FeedEndpoint) => {
     (currentStories) => {
       if (currentStories?.length) {
         cachedStories.value = currentStories;
-        rememberStories(endpoint, currentStories);
+        rememberStories(endpoint, currentStories, !nuxtApp.isHydrating);
       }
     },
     { immediate: true },

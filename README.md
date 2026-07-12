@@ -98,8 +98,9 @@ Use `npm run check` as the baseline check before shipping changes.
 - `app/components/story/`: story grid, visual story card UI, and the shared generated screenshot fallback.
 - `app/components/comment/`: nested comment rendering.
 - `server/api/`: feed, item, related-story, user, and screenshot APIs.
-- `server/utils/feed.ts`: shared ordered-feed handler for the four HN feeds.
+- `server/utils/feed.ts`: shared ordered-feed handler and short Nitro SWR data cache for the four HN feeds.
 - `server/utils/userActivityHandler.ts`: shared wrapper for paginated user activity routes.
+- `server/plugins/removeInlinedStylesheets.ts`: removes duplicate Nuxt stylesheet links after SSR has inlined the same critical CSS.
 - `app/composables/`: shared client logic such as story loading and sanitization.
 - `app/utils/storyScreenshotObserver.ts`: shared feed-card screenshot preload observer.
 - `app/assets/css/main.css`: global typography and rich-text styling.
@@ -197,8 +198,15 @@ not operate on `workers.dev`. Successful images are cached in browsers for up to
 freshness window. Short-lived transparent fallbacks are
 also cached so unavailable sources do not repeatedly invoke the Worker. SSR HTML
 routes explicitly use `no-store`, while feed and API routes retain their own
-short freshness policies. See [Workers Caching](https://developers.cloudflare.com/workers/cache/configuration/)
+short freshness policies. Feed data also uses a four-entry, per-isolate Nitro
+stale-while-revalidate cache so internal SSR requests can reuse the same
+120-second result without bypassing page `no-store`; shared edge caching remains
+the cross-isolate reuse layer. See [Workers Caching](https://developers.cloudflare.com/workers/cache/configuration/)
 and the [Cache API hostname limitation](https://developers.cloudflare.com/r2/examples/cache-api/).
+
+Nuxt's `features.inlineStyles` remains enabled so first paint does not wait for
+route CSS. The Nitro render hook removes only duplicate generated `/_nuxt/*.css`
+links from initial SSR HTML; the client manifest remains intact for navigation.
 
 The `BROWSER` and `SCREENSHOTS_BUCKET` bindings use remote mode during local
 development so existing production screenshots can be reused. New captures are

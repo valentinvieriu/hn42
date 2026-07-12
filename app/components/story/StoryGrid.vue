@@ -74,20 +74,19 @@
         <div v-else>
           <div
             v-if="isRefreshing"
-            class="mb-4 flex justify-end"
+            class="feed-refresh-indicator meta-text inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 font-medium text-slate-600 shadow-sm dark:border-slate-700 dark:bg-slate-900/90 dark:text-slate-300"
             aria-live="polite"
           >
-            <div class="meta-text inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 font-medium text-slate-600 shadow-sm backdrop-blur dark:border-slate-700 dark:bg-slate-900/80 dark:text-slate-300">
-              <LucideRefreshCw class="h-3.5 w-3.5 animate-spin text-orange-500" aria-hidden="true" />
-              <span>Updating</span>
-            </div>
+            <LucideRefreshCw class="h-3.5 w-3.5 animate-spin text-orange-500" aria-hidden="true" />
+            <span>Updating</span>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-7">
             <StoryCard
-              v-for="story in stories"
+              v-for="(story, index) in stories"
               :key="story.objectID"
               :story="story"
+              :priority="index === 0"
             />
           </div>
         </div>
@@ -101,10 +100,15 @@ import { useStories } from '~/composables/useStories';
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
 import { getFeedTheme, getFeedThemeStyle } from '~/composables/useFeedTheme';
 import type { FeedEndpoint } from '~/composables/useFeedTheme';
+import { getScreenshotPath } from '#shared/utils/screenshot';
 import { LucideRefreshCw } from '@lucide/vue';
 
 const props = defineProps<{ endpoint: FeedEndpoint }>();
 const { stories, isLoading, isRefreshing, error } = useStories(props.endpoint);
+const priorityScreenshotHref = computed(() => {
+  const firstStory = stories.value[0];
+  return firstStory ? getScreenshotPath(firstStory.objectID) : null;
+});
 const feedTheme = computed(() => getFeedTheme(props.endpoint));
 const feedThemeStyle = computed(() => getFeedThemeStyle(props.endpoint));
 const title = computed(() => feedTheme.value.title);
@@ -114,6 +118,18 @@ const skeletonTitleWidths = ['82%', '68%', '76%', '58%', '88%'];
 const skeletonPaletteStyle = (index: number) => {
   return getSeedPaletteStyle(`loading-${props.endpoint}-${index}`);
 };
+
+useHead(() => ({
+  link: priorityScreenshotHref.value
+    ? [{
+        key: `feed-screenshot-${props.endpoint}`,
+        rel: 'preload',
+        as: 'image',
+        href: priorityScreenshotHref.value,
+        fetchpriority: 'high',
+      }]
+    : [],
+}));
 
 useSeoMeta({
   title,
@@ -181,6 +197,21 @@ useSeoMeta({
   color: rgb(203 213 225);
 }
 
+.feed-refresh-indicator {
+  position: fixed;
+  top: 4.25rem;
+  right: 1rem;
+  z-index: 40;
+  pointer-events: none;
+}
+
+@media (min-width: 640px) {
+  .feed-refresh-indicator {
+    top: 4.75rem;
+    right: max(1.25rem, calc((100vw - 80rem) / 2 + 1.25rem));
+  }
+}
+
 .story-card-skeleton {
   position: relative;
   border: 1px solid color-mix(in oklch, var(--seed-border) 72%, rgb(203 213 225 / 0.5));
@@ -210,6 +241,7 @@ useSeoMeta({
 }
 
 .story-card-skeleton-body {
+  min-height: 9.65rem;
   border-top: 1px solid color-mix(in oklch, var(--seed-border) 54%, transparent);
   background:
     radial-gradient(circle at 100% 0%, color-mix(in oklch, var(--seed-ring) 68%, transparent) 0, transparent 48%),

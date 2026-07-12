@@ -1,6 +1,6 @@
 <template>
   <nav
-    class="site-header feed-theme-surface sticky top-0 z-50 border-b backdrop-blur-lg"
+    class="site-header feed-theme-surface sticky top-0 z-50 border-b"
     :style="currentFeed ? getFeedThemeStyle(currentFeed) : undefined"
   >
     <div class="max-w-7xl mx-auto flex h-14 items-center justify-between gap-3 px-3 sm:h-16 sm:gap-5 sm:px-5 lg:px-6">
@@ -32,12 +32,12 @@
       <button
         type="button"
         class="theme-toggle ml-1 shrink-0 sm:ml-2"
-        :aria-label="isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'"
-        :title="isDarkMode ? 'Switch to light theme' : 'Switch to dark theme'"
+        aria-label="Toggle color theme"
+        title="Toggle color theme"
         @click="toggleColorMode"
       >
-        <LucideSun v-if="isDarkMode" class="h-4 w-4" aria-hidden="true" />
-        <LucideMoon v-else class="h-4 w-4" aria-hidden="true" />
+        <LucideSun class="theme-toggle-icon theme-toggle-icon-sun" aria-hidden="true" />
+        <LucideMoon class="theme-toggle-icon theme-toggle-icon-moon" aria-hidden="true" />
       </button>
     </div>
   </nav>
@@ -50,20 +50,18 @@ import { feedThemeList, getFeedThemeStyle, isFeedEndpoint } from '~/composables/
 const colorMode = useColorMode();
 const route = useRoute();
 const feedNavRef = ref<HTMLElement | null>(null);
-const hasMounted = ref(false);
-const isDarkMode = computed(() => hasMounted.value && colorMode.value === 'dark');
-
-onMounted(() => {
-  hasMounted.value = true;
-});
 
 const currentFeed = computed(() => {
+  if (route.path === '/') {
+    return 'top';
+  }
+
   const feedCandidate = route.path.split('/')[1];
   return isFeedEndpoint(feedCandidate) ? feedCandidate : null;
 });
 
 const toggleColorMode = () => {
-  colorMode.preference = isDarkMode.value ? 'light' : 'dark';
+  colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark';
 };
 
 watch(
@@ -131,7 +129,7 @@ watch(
 }
 
 .theme-toggle {
-  display: inline-flex;
+  display: inline-grid;
   min-height: 1.875rem;
   min-width: 1.875rem;
   align-items: center;
@@ -146,6 +144,24 @@ watch(
     border-color 180ms ease,
     color 180ms ease,
     opacity 180ms ease;
+}
+
+.theme-toggle-icon {
+  width: 1rem;
+  height: 1rem;
+  grid-area: 1 / 1;
+}
+
+.theme-toggle-icon-sun {
+  display: none;
+}
+
+.dark .theme-toggle-icon-sun {
+  display: block;
+}
+
+.dark .theme-toggle-icon-moon {
+  display: none;
 }
 
 .theme-toggle:hover,
