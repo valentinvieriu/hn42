@@ -27,6 +27,8 @@ export default defineNuxtConfig({
     screenshotPreviewJpegQuality: '68',
     screenshotPreviewMaxBytes: '2000000',
     screenshotPreviewWidth: '1440',
+    screenshotProviders: 'browser-run',
+    screenshotProviderStrategy: 'ordered',
     screenshotR2TtlDays: '180',
     screenshotXCancelBaseUrl: 'https://xcancel.com',
   },

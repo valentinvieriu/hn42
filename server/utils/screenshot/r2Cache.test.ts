@@ -27,6 +27,7 @@ describe('screenshot R2 failure markers', () => {
       'provider down',
       'original',
       { policy: 'capture', sourceStrategy: 'direct' },
+      'ordered:browser-run',
     )
 
     const [, body, options] = put.mock.calls[0] ?? []
@@ -37,6 +38,7 @@ describe('screenshot R2 failure markers', () => {
     })
     expect(options.customMetadata).toMatchObject({
       policy: 'capture',
+      providerPlan: 'ordered:browser-run',
       reason: 'provider down',
       sourceStrategy: 'direct',
       sourceUrlHash: 'hash',
@@ -53,6 +55,7 @@ describe('screenshot R2 failure markers', () => {
           arrayBuffer,
           customMetadata: {
             capturedAt: new Date().toISOString(),
+            providerPlan: 'balanced:provider-a,provider-b',
             status: 'failed',
             variant: 'thumbnail',
           },
@@ -63,7 +66,11 @@ describe('screenshot R2 failure markers', () => {
 
     const result = await readR2Screenshot(env, 'marker', 30, 360)
 
-    expect(result).toMatchObject({ isFailure: true, isFresh: true })
+    expect(result).toMatchObject({
+      isFailure: true,
+      isFresh: true,
+      providerPlan: 'balanced:provider-a,provider-b',
+    })
     expect(result).not.toHaveProperty('variant')
     expect(arrayBuffer).not.toHaveBeenCalled()
   })

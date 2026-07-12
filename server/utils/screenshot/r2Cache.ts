@@ -27,6 +27,7 @@ type R2ScreenshotMetadata = {
   policy?: ScreenshotPolicyName
   processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
+  providerPlan?: string
   reason?: string
   skipReason?: ScreenshotSkipReason
   sourceUrlHash?: string
@@ -49,6 +50,7 @@ export type R2ScreenshotFailure = {
   isFailure: true
   isFresh: boolean
   policy?: ScreenshotPolicyName
+  providerPlan?: string
   skipReason?: ScreenshotSkipReason
   sourceStrategy?: ScreenshotSourceStrategy
 }
@@ -187,6 +189,7 @@ export const readR2Screenshot = async (
       isFailure: true,
       isFresh: isFreshFailure(capturedAt, failureTtlMinutes),
       policy: metadata.policy,
+      providerPlan: metadata.providerPlan,
       skipReason: metadata.skipReason,
       sourceStrategy: metadata.sourceStrategy,
     }
@@ -259,6 +262,7 @@ export const writeR2ScreenshotFailure = async (
   reason: string,
   variant: ScreenshotVariant,
   metadata: ScreenshotPolicyMetadata = {},
+  providerPlan?: string,
 ) => {
   const bucket = env?.SCREENSHOTS_BUCKET
 
@@ -277,6 +281,7 @@ export const writeR2ScreenshotFailure = async (
       capturedAt: new Date().toISOString(),
       contentType: 'application/vnd.hn42.screenshot-failure',
       policy: metadata.policy ?? 'capture',
+      providerPlan,
       reason: reason.slice(0, 200),
       skipReason: metadata.skipReason,
       sourceUrlHash,

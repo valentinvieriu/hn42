@@ -2,8 +2,12 @@ import {
   createConcurrencyLimiter,
   ScreenshotConcurrencyQueueFullError,
   ScreenshotConcurrencyTimeoutError,
-} from './concurrency'
-import type { ScreenshotEnv, ScreenshotResult } from './types'
+} from '../concurrency'
+import type {
+  ScreenshotEnv,
+  ScreenshotResult,
+  ScreenshotRuntimeConfig,
+} from '../types'
 
 // Keep the existing coordinator key during the v3-to-v4 rollout so old and new
 // Worker versions share one account-wide Browser Run budget.
@@ -24,7 +28,7 @@ const DEFAULT_WAIT_AFTER_LOAD_MS = 200
 const DEFAULT_WIDTH = 1440
 const MAX_GLOBAL_RATE_ATTEMPTS = 6
 const MAX_RATE_WAIT_MS = 30_000
-const MIN_SCREENSHOT_BYTES = 1024
+const MAX_PROVIDER_ERROR_BYTES = 1024
 const browserRunLimiter = createConcurrencyLimiter(1)
 let localNextCaptureAt = 0
 let localCaptureDay = ''
@@ -80,10 +84,57 @@ const wait = (delayMs: number) => new Promise<void>((resolve) => {
   setTimeout(resolve, delayMs)
 })
 
-const isJpeg = (bytes: ArrayBuffer) => {
-  const view = new Uint8Array(bytes)
+const readBoundedResponseBody = async (
+  response: Response,
+  maxBytes: number,
+  truncate: boolean,
+) => {
+  const reader = response.body?.getReader()
 
-  return view.length >= 3 && view[0] === 0xff && view[1] === 0xd8 && view[2] === 0xff
+  if (!reader) {
+    return new ArrayBuffer(0)
+  }
+
+  const chunks: Uint8Array[] = []
+  let byteLength = 0
+
+  while (true) {
+    const { done, value } = await reader.read()
+
+    if (done) {
+      break
+    }
+
+    const remainingBytes = maxBytes - byteLength
+
+    if (value.byteLength > remainingBytes) {
+      if (truncate && remainingBytes > 0) {
+        chunks.push(value.subarray(0, remainingBytes))
+        byteLength += remainingBytes
+      }
+
+      await reader.cancel().catch(() => {})
+
+      if (!truncate) {
+        throw new Error(`Browser Run screenshot exceeded the ${maxBytes}-byte limit`)
+      }
+
+      break
+    }
+
+    chunks.push(value)
+    byteLength += value.byteLength
+  }
+
+  const bytes = new Uint8Array(byteLength)
+  let offset = 0
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return bytes.buffer
 }
 
 const parseBrowserMsUsed = (response: Response) => {
@@ -286,7 +337,7 @@ const recordBrowserRunCooldown = async (
 export const captureWithBrowserRun = async (
   env: ScreenshotEnv | undefined,
   sourceUrl: string,
-  runtimeConfig: any,
+  runtimeConfig: ScreenshotRuntimeConfig,
 ): Promise<ScreenshotResult> => {
   const browser = env?.BROWSER
 
@@ -453,7 +504,9 @@ export const captureWithBrowserRun = async (
       const browserMsUsed = parseBrowserMsUsed(response)
 
       if (!response.ok) {
-        const message = (await response.text()).slice(0, 200)
+        const message = new TextDecoder().decode(
+          await readBoundedResponseBody(response, MAX_PROVIDER_ERROR_BYTES, true),
+        ).slice(0, 200)
         const retryAfterMs = message.toLowerCase().includes('time limit exceeded for today')
           ? Math.max(0, getNextUtcDay() - Date.now())
           : (parseRetryAfterMs(response) ?? (response.status === 429 ? DEFAULT_MIN_INTERVAL_MS : undefined))
@@ -465,23 +518,14 @@ export const captureWithBrowserRun = async (
         throw new BrowserRunResponseError(response.status, message, retryAfterMs, browserMsUsed)
       }
 
-      const contentType = response.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase()
-      const bytes = await response.arrayBuffer()
+      const contentType = response.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase() ?? ''
       const maxBytes = normalizeInteger(
         runtimeConfig.screenshotPreviewMaxBytes,
         DEFAULT_MAX_BYTES,
-        MIN_SCREENSHOT_BYTES,
+        1024,
         10_000_000,
       )
-
-      if (
-        contentType !== 'image/jpeg'
-        || bytes.byteLength < MIN_SCREENSHOT_BYTES
-        || bytes.byteLength > maxBytes
-        || !isJpeg(bytes)
-      ) {
-        throw new Error('Browser Run returned an invalid JPEG screenshot')
-      }
+      const bytes = await readBoundedResponseBody(response, maxBytes, false)
 
       return {
         browserMsUsed,

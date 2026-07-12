@@ -98,6 +98,7 @@ Use `npm run check` as the baseline check before shipping changes.
 - `app/components/story/`: story grid, visual story card UI, and the shared generated screenshot fallback.
 - `app/components/comment/`: nested comment rendering.
 - `server/api/`: feed, item, related-story, user, and screenshot APIs.
+- `server/utils/screenshot/providers/`: provider contract, registry, orchestration, and concrete capture adapters.
 - `server/utils/feed.ts`: shared ordered-feed handler and short Nitro SWR data cache for the four HN feeds.
 - `server/utils/userActivityHandler.ts`: shared wrapper for paginated user activity routes.
 - `server/plugins/removeInlinedStylesheets.ts`: removes duplicate Nuxt stylesheet links after SSR has inlined the same critical CSS.
@@ -151,30 +152,57 @@ The pipeline follows this decision order:
    deterministic transforms and skips before spending browser time.
 3. Reuse the single content-addressed preview from R2, including a stale preview
    when a fresh capture is temporarily unavailable.
-4. On a genuine miss, verify that a bounded GET resolves to public HTML and
-   admit the request only if capture is enabled and the shared Browser Run rate,
-   queue, and daily budgets have capacity.
-5. Capture one bounded deep preview, persist one JPEG in R2, and let all feed,
+4. On a genuine miss, run one bounded GET to verify public HTML, then pass that
+   verified final URL to the configured provider chain.
+5. Attempt providers sequentially until the first result passes the common
+   bounded-JPEG validation, persist that success once in R2, and let all feed,
    detail, and social-preview consumers reuse the same canonical URL.
-6. If any stage cannot justify or complete a capture, return the transparent
-   response and keep the deterministic client wireframe visible.
+6. If the chain cannot complete a capture, return the transparent 1x1 GIF and
+   keep the deterministic client-rendered SVG wireframe visible.
 
 Missing screenshots are acceptable; uncontrolled retries and duplicate assets
 are not. Do not remove the deep-preview height ceiling, add a second stored
-variant, schedule backfills, or add another processing provider without a
-measured product need and a new Browser Run, R2 storage, and request-cost
-calculation.
+variant, or schedule backfills without measured product need and a new R2
+storage and request-cost calculation. Browser Run is the only registered
+provider today. Adding a concrete provider requires its own adapter, registry
+entry, binding or secret configuration, and provider-specific credit and cost
+review.
 
-Article screenshots are generated with the Cloudflare Browser Run `screenshot`
-Quick Action and proxied through `/api/screenshot/:id`. The app appends the
-single current `?profile=v7` cache version so intentional capture-profile
+Article screenshots are proxied through `/api/screenshot/:id`. The app appends
+the single current `?profile=v7` cache version so intentional capture-profile
 migrations bypass old immutable browser and edge entries. The legacy
 `variant=original|thumbnail` values remain accepted, but the app does not use
-them. The public
-route accepts only a numeric Hacker News item ID; callers cannot provide a
-capture URL. On a cache miss the Worker resolves the item through HN Firebase,
-requires a live story, extracts its public HTTP(S) URL, applies the screenshot
-source policy, and checks R2 before invoking the private `BROWSER` binding.
+them. The public route accepts only a numeric Hacker News item ID; callers
+cannot provide a capture URL. On a cache miss the Worker resolves the item
+through HN Firebase, requires a live story, extracts its public HTTP(S) URL,
+applies the screenshot source policy and content probe once, then delegates the
+verified final URL to the provider orchestrator.
+
+Provider adapters implement the shared contract in
+`server/utils/screenshot/providers/types.ts`. The orchestrator in
+`providers/orchestrator.ts` resolves configured IDs through
+`providers/registry.ts`, tries them sequentially, and validates their output
+against one JPEG contract. `ordered` uses the configured order. Deterministic
+`balanced` rotates the primary provider from the stable source hash while
+retaining every other configured provider as the fallback chain. Each adapter
+owns its quota and cooldown behavior. Configure the comma-separated IDs with
+`screenshotProviders` / `NUXT_SCREENSHOT_PROVIDERS` (default `browser-run`) and
+the strategy with `screenshotProviderStrategy` /
+`NUXT_SCREENSHOT_PROVIDER_STRATEGY` (`ordered` by default or `balanced`).
+
+The first successful result is written once to the provider-independent
+`screenshots/v7/<source-url-hash>/preview-1440x4096-q68.jpg` key, with the
+winning provider retained in R2 metadata. Direct captures use the normalized
+story URL as the hash input, allowing repeat HN submissions of a link to reuse
+the object. Transformed capture targets scope the hash to their source strategy
+and transformed URL. Existing v3 through v6 objects are not migrated or deleted
+early; their lifecycle rules let them expire naturally.
+
+#### Browser Run provider
+
+The currently registered `browser-run` adapter in
+`server/utils/screenshot/providers/browserRun.ts` uses the Cloudflare Browser
+Run `screenshot` Quick Action through the private `BROWSER` binding.
 
 Browser Run uses a wide desktop 1440x900 viewport and produces one JPEG deep
 preview up to 1440x4096 at quality 68. Full-page capture and capture beyond the
@@ -184,12 +212,10 @@ for `domcontentloaded`, unnecessary
 streaming resource types are rejected, and a
 short post-load wait allows the initial viewport to settle. Both API variants
 serve that same object, so a story requires one browser navigation, one R2 image,
-and no image-transformation service. Successful previews are stored at
-`screenshots/v7/<source-url-hash>/preview-1440x4096-q68.jpg`. Direct captures use
-the normalized story URL as the hash input, allowing repeat HN submissions of a
-link to reuse the object. Transformed capture targets scope the hash to their
-source strategy and transformed URL. Existing v3 through v6 objects are not
-migrated or deleted early; their lifecycle rules let them expire naturally.
+and no image-transformation service when this adapter succeeds. Its Quick
+Action response cache remains disabled so capture-profile changes cannot reuse
+incompatible output. The adapter consumes every response body and explicitly
+disposes the RPC result so remote development does not leak stubs.
 
 Wrangler Workers Caching is enabled in front of the Worker. This is the effective
 edge cache on the production `workers.dev` hostname; the manual Cache API does
@@ -228,14 +254,15 @@ rules transform X/Twitter status URLs through XCancel, transform
 `arxiv.org/pdf/...` links to their HTML abstract pages, skip generic PDFs and
 obvious PDF query shapes, and skip a default list of known paywall or bot-check
 domains. A bounded ranged GET must confirm
-`text/html` or `application/xhtml+xml` before Browser Run is called. Direct
+`text/html` or `application/xhtml+xml` before the provider chain is called. Direct
 images, media, archives, Office files, unknown content types, invalid/private
 redirects, unavailable resources, and failed verification return the transparent
-fallback without invoking Browser Run.
+fallback without invoking a provider.
 
 When a screenshot is queued or unavailable, the client renders a deterministic,
-non-semantic wireframe from the story ID and source domain. It is rendered
-directly by Vue on feed and detail pages and is never stored as a screenshot.
+non-semantic inline SVG wireframe from the story ID and source domain. It is
+rendered directly by Vue on feed and detail pages and is never stored as a
+screenshot. The server's final 1x1 GIF makes that underlying wireframe visible.
 
 Feed cards, story detail previews, and story social metadata use the same
 profile-versioned screenshot URL and bounded JPEG. Responsive detail rendering mounts
@@ -243,8 +270,11 @@ only the preview used at the current breakpoint. Desktop detail pages can open
 the preview at its 1440-pixel capture width, while compact layouts retain a
 scroll-safe crop. Offscreen feed tasks are canceled before their network request
 starts. Responses expose
-`X-HN42-Screenshot-Format`, `X-HN42-Screenshot-Processor`, and
-`X-HN42-Browser-Ms-Used` for capture diagnostics. Tune Browser Run with
+`X-HN42-Screenshot-Format`, `X-HN42-Screenshot-Processor`,
+`X-HN42-Screenshot-Provider`, and `X-HN42-Browser-Ms-Used` for capture
+diagnostics. Configure orchestration with `NUXT_SCREENSHOT_PROVIDERS` and
+`NUXT_SCREENSHOT_PROVIDER_STRATEGY`. Tune the currently registered Browser Run
+adapter with
 `NUXT_SCREENSHOT_CAPTURE_ENABLED`,
 `NUXT_SCREENSHOT_CAPTURE_CONCURRENCY`,
 `NUXT_SCREENSHOT_CAPTURE_DAILY_LIMIT`,
@@ -275,17 +305,24 @@ preload margin. The browser schedules those image requests directly; capture
 concurrency and admission limits remain enforced by the screenshot route.
 
 The route coalesces concurrent captures for the same source URL within a Worker
-isolate, spaces Browser Run starts through a shared R2 coordinator, uses Browser
-Run without its provider-level response cache so capture-profile changes cannot
-reuse incompatible output, and writes short-lived R2 failure markers for
-admitted provider failures at keys separate from successful images. R2 remains
-the canonical shared reuse layer. Policy skips use only the cached transparent response,
-so arbitrary non-HTML stories cannot amplify R2 writes. Separate
-keys prevent a late failure in one isolate from overwriting a successful capture
-from another isolate.
+isolate and uses R2 as the canonical shared reuse layer. It writes a short-lived
+R2 failure marker at a key separate from the successful image only when the
+entire chain ends in a provider failure. If every attempted provider was merely
+unavailable or capacity-limited, it returns the transient fallback without a
+marker so another request can use recovered capacity. Failure markers include
+the resolved provider-plan ID, so changing the provider order or strategy does
+not let an older marker suppress the new chain. Policy skips use only the
+cached transparent response, so arbitrary non-HTML stories cannot amplify R2
+writes. Separate keys prevent a late terminal failure in one isolate from
+overwriting a successful capture from another isolate.
 Tune marker lifetime with `NUXT_SCREENSHOT_FAILURE_TTL_MINUTES`. Responses also
 include `X-HN42-Screenshot-Policy`, `X-HN42-Screenshot-Source-Strategy`, and,
 for skips, `X-HN42-Screenshot-Skip-Reason`.
+
+The Browser Run adapter independently spaces its starts through a shared R2
+coordinator and enforces its own queue, daily admission, and cooldown behavior.
+Other providers must keep their corresponding quota and cooldown implementation
+inside their adapters rather than the route or orchestrator.
 
 ### Screenshot cost envelope
 

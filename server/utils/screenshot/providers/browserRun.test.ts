@@ -4,7 +4,7 @@ import {
   BrowserRunResponseError,
   captureWithBrowserRun,
 } from './browserRun'
-import type { ScreenshotEnv } from './types'
+import type { ScreenshotEnv } from '../types'
 
 const createJpegResponse = () => {
   const bytes = new Uint8Array(1200)
@@ -120,6 +120,17 @@ describe('Browser Run screenshot provider', () => {
   it('fails closed when the Browser Run binding is absent', async () => {
     await expect(captureWithBrowserRun(undefined, 'https://example.com', {}))
       .rejects.toThrow('Browser Run binding is not configured')
+  })
+
+  it('stops reading screenshots that exceed the configured byte limit', async () => {
+    const env = {
+      BROWSER: { quickAction: vi.fn().mockResolvedValue(createJpegResponse()) },
+    } as unknown as ScreenshotEnv
+
+    await expect(captureWithBrowserRun(env, 'https://example.com/article', {
+      screenshotBrowserMinIntervalMs: 0,
+      screenshotPreviewMaxBytes: 1024,
+    })).rejects.toThrow('exceeded the 1024-byte limit')
   })
 
   it('preserves Browser Run rate-limit metadata', async () => {

@@ -7,9 +7,12 @@ import {
 } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import {
-  captureWithBrowserRun,
-  isBrowserRunCapacityError,
-} from '../../utils/screenshot/browserRun'
+  captureWithScreenshotProviders,
+  getScreenshotProviderPlanId,
+  hasAvailableScreenshotProvider,
+} from '../../utils/screenshot/providers/registry'
+import { shouldPersistScreenshotProviderFailure } from '../../utils/screenshot/providers/orchestrator'
+import { ScreenshotProviderChainError } from '../../utils/screenshot/providers/types'
 import {
   deleteR2ScreenshotFailure,
   getR2PreviewScreenshotKey,
@@ -37,6 +40,7 @@ import type {
   ScreenshotProcessorName,
   ScreenshotProviderName,
   ScreenshotResult,
+  ScreenshotRuntimeConfig,
   ScreenshotVariant,
 } from '../../utils/screenshot/types'
 import { SCREENSHOT_PROFILE_VERSION } from '#shared/utils/screenshot'
@@ -76,19 +80,6 @@ type HnFirebaseStory = {
   deleted?: unknown
   type?: unknown
   url?: unknown
-}
-
-type ScreenshotRuntimeConfig = {
-  screenshotCaptureEnabled?: unknown
-  screenshotFailureTtlMinutes?: unknown
-  screenshotPolicyBlockedHosts?: unknown
-  screenshotPolicyProbeTimeoutMs?: unknown
-  screenshotPreviewHeight?: unknown
-  screenshotPreviewJpegQuality?: unknown
-  screenshotPreviewWidth?: unknown
-  screenshotR2TtlDays?: unknown
-  screenshotXCancelBaseUrl?: unknown
-  [key: string]: unknown
 }
 
 const getScreenshotCacheHeaders = (
@@ -278,9 +269,10 @@ const captureAndPersistPreview = (
         throw new ScreenshotPolicySkipError(probeResult.skipReason, sourceDecision.sourceStrategy)
       }
 
-      return captureWithBrowserRun(
+      return captureWithScreenshotProviders(
         env,
         probeResult.captureUrl,
+        sourceUrlHash,
         runtimeConfig,
       )
     })
@@ -303,9 +295,10 @@ const captureAndPersistPreview = (
       }
 
       console.info(JSON.stringify({
-        message: 'Browser Run screenshot captured',
+        message: 'Screenshot captured',
         browserMsUsed: preview.browserMsUsed,
         bytes: preview.bytes.byteLength,
+        provider: preview.provider,
         sourceStrategy: sourceDecision.sourceStrategy,
         sourceUrlHash: sourceUrlHash.slice(0, 16),
       }))
@@ -313,7 +306,7 @@ const captureAndPersistPreview = (
       return preview
     })
     .catch(async (error) => {
-      if (!isBrowserRunCapacityError(error) && !isScreenshotPolicySkipError(error)) {
+      if (shouldPersistScreenshotProviderFailure(error) && !isScreenshotPolicySkipError(error)) {
         try {
           await writeR2ScreenshotFailure(
             env,
@@ -322,6 +315,7 @@ const captureAndPersistPreview = (
             error instanceof Error ? error.message : String(error),
             'original',
             getCaptureMetadata(sourceDecision),
+            getScreenshotProviderPlanId(runtimeConfig),
           )
         } catch (writeError) {
           console.warn(JSON.stringify({
@@ -455,8 +449,9 @@ const servePreview = async (
     options.runtimeConfig.screenshotFailureTtlMinutes,
   )
   const failure = getR2Failure(failureResult)
+  const providerPlan = getScreenshotProviderPlanId(options.runtimeConfig)
 
-  if (failure?.isFresh) {
+  if (failure?.isFresh && failure.providerPlan === providerPlan) {
     if (previewScreenshot) {
       return createImageResponse(
         previewScreenshot,
@@ -475,7 +470,15 @@ const servePreview = async (
     )
   }
 
-  if (!options.captureEnabled || !options.env?.SCREENSHOTS_BUCKET || !options.env.BROWSER) {
+  if (
+    !options.captureEnabled
+    || !options.env?.SCREENSHOTS_BUCKET
+    || !hasAvailableScreenshotProvider(
+      options.env,
+      options.sourceDecision.captureUrl,
+      options.runtimeConfig,
+    )
+  ) {
     if (previewScreenshot) {
       return createImageResponse(
         previewScreenshot,
@@ -526,6 +529,7 @@ const servePreview = async (
 
     console.warn(JSON.stringify({
       message: 'Screenshot capture failed',
+      attempts: error instanceof ScreenshotProviderChainError ? error.attempts : undefined,
       error: error instanceof Error ? error.message : String(error),
     }))
   }
