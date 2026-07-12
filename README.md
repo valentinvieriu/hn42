@@ -259,6 +259,10 @@ cached response bypasses the Worker, its `X-HN42-*` headers describe the respons
 that originally populated the cache; `X-HN42-Browser-Ms-Used` is capture-generation
 metadata, not proof that the current request consumed browser time.
 
+Feed cards mount their screenshot image when they enter the Intersection Observer
+preload margin. The browser schedules those image requests directly; capture
+concurrency and admission limits remain enforced by the screenshot route.
+
 The route coalesces concurrent captures for the same source URL within a Worker
 isolate, spaces Browser Run starts through a shared R2 coordinator, uses Browser
 Run without its provider-level response cache so capture-profile changes cannot

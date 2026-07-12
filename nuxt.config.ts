@@ -26,9 +26,6 @@ export default defineNuxtConfig({
     screenshotPreviewWidth: '1440',
     screenshotR2TtlDays: '180',
     screenshotXCancelBaseUrl: 'https://xcancel.com',
-    public: {
-      screenshotImageQueueConcurrency: '1',
-    },
   },
   nitro: {
     preset: "cloudflare-module",

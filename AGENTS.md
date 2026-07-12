@@ -47,7 +47,6 @@ Frontend:
 Shared client logic:
 
 - `app/composables/useStories.ts`: feed loading, session-memory cache, and stale refresh state.
-- `app/composables/useImageLoadQueue.ts`: client-side image load queue.
 - `app/composables/useFeedTheme.ts`: feed-specific labels, routes, and color theme variables.
 - `app/composables/useSeedPalette.ts`: deterministic card color palettes.
 - `app/composables/useStoryPlaceholder.ts`: non-semantic, story-seeded wireframe layout generation with bounded SVG geometry.
@@ -177,7 +176,7 @@ Preserve these strategic guardrails:
 - Source policy runtime config includes `screenshotPolicyProbeTimeoutMs`, `screenshotXCancelBaseUrl`, and `screenshotPolicyBlockedHosts`; the host list extends the default blocked hosts.
 - Concurrent Browser Run captures for the same source URL are coalesced within an isolate. Admitted provider failures write short-lived R2 markers under separate `.failure` keys so a cross-isolate failure cannot overwrite a valid image. Policy/probe skips must use the edge-cached transparent response and must not write R2 markers outside the daily admission budget.
 - Consume each Browser Run Quick Action response body and explicitly dispose the RPC result afterward; remote development otherwise reports leaked stubs. Do not add isolate-local fallback memoization before R2 reads, because it can hide a screenshot successfully written by another isolate or development process.
-- Client-side image request concurrency is controlled by `runtimeConfig.public.screenshotImageQueueConcurrency`.
+- Feed cards mount screenshot images when they enter the Intersection Observer preload margin; leave request scheduling and concurrency to the browser.
 - Keep long shared-cache TTLs unless there is a concrete invalidation need.
 
 ## Styling, Linting, And Code Style

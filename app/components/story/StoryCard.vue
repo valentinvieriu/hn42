@@ -5,7 +5,7 @@
     @keydown.enter="handleCardClick"
     ref="cardRef"
     :data-screenshot-state="imageState"
-    :data-screenshot-requested="queuedImageSrc ? 'started' : 'pending'"
+    :data-screenshot-requested="imageSrc ? 'started' : 'pending'"
     class="story-card seed-palette-surface group flex flex-col overflow-hidden rounded-2xl bg-white transition-[border-color,box-shadow,transform] duration-300 dark:bg-gray-900"
     :class="[
       { 'pointer-events-none': isScrolling }
@@ -44,13 +44,12 @@
               'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
             }">
             <img
-              v-if="queuedImageSrc"
+              v-if="imageSrc"
               :alt="story.title"
               width="400"
-              :src="queuedImageSrc"
+              :src="imageSrc"
               loading="eager"
               decoding="async"
-              :fetchpriority="priority ? 'high' : 'low'"
               class="story-card-image w-full object-cover transition-opacity duration-500"
               :class="imageState === 'loaded' ? 'opacity-100' : 'opacity-0'"
               :aria-hidden="imageState !== 'loaded'"
@@ -125,17 +124,13 @@ import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock 
 import { useScroll } from '~/composables/useScroll'
 import type { Story } from '#shared/types'
 import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
-import { useImageLoadQueue, type ImageLoadQueueHandle } from '~/composables/useImageLoadQueue'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 import { normalizeStoryPlaceholderDomain } from '~/composables/useStoryPlaceholder'
 import { getScreenshotPath } from '#shared/utils/screenshot'
 
 const props = defineProps<{
-  priority?: boolean
   story: Story
 }>()
-
-const IMAGE_LOAD_TIMEOUT_MS = 45_000
 
 const { isScrolling } = useScroll()
 
@@ -241,82 +236,50 @@ const isTouchDevice = ref(false)
 const cardRef = ref<HTMLElement | null>(null)
 const imageContainerRef = ref<HTMLElement | null>(null)
 const bodyImageContainerRef = ref<HTMLElement | null>(null)
-const queuedImageSrc = ref<string | null>(null)
+const imageSrc = ref<string | null>(null)
 const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>('queued')
-const hasRequestedImageLoad = ref(false)
 const isWithinImageLoadMargin = ref(false)
-const { enqueueImageLoad } = useImageLoadQueue()
-let imageQueueHandle: ImageLoadQueueHandle | null = null
 let imageLoadObserver: IntersectionObserver | null = null
-let imageLoadTimeout: ReturnType<typeof setTimeout> | null = null
 
 const bodyBackdropImageStyle = computed(() => {
-  if (!queuedImageSrc.value || imageState.value !== 'loaded') {
+  if (!imageSrc.value || imageState.value !== 'loaded') {
     return {}
   }
 
   return {
-    backgroundImage: `url("${queuedImageSrc.value}")`,
+    backgroundImage: `url("${imageSrc.value}")`,
   }
 })
-
-const releaseImageQueueSlot = () => {
-  if (imageLoadTimeout) {
-    clearTimeout(imageLoadTimeout)
-    imageLoadTimeout = null
-  }
-
-  imageQueueHandle?.complete()
-  imageQueueHandle = null
-}
 
 const handleImageLoad = (event: Event) => {
   const image = event.target as HTMLImageElement
   imageState.value = image.naturalWidth > 1 && image.naturalHeight > 1 ? 'loaded' : 'failed'
-  releaseImageQueueSlot()
 }
 
 const handleImageError = () => {
   imageState.value = 'failed'
-  releaseImageQueueSlot()
 }
 
-const queueScreenshotLoad = () => {
-  if (queuedImageSrc.value || imageQueueHandle) {
+const loadScreenshot = () => {
+  if (imageSrc.value) {
     return
   }
 
-  hasRequestedImageLoad.value = true
-  imageState.value = 'queued'
-  imageQueueHandle = enqueueImageLoad(() => {
-    imageState.value = 'loading'
-    queuedImageSrc.value = screenshotSrc.value
-    imageLoadObserver?.disconnect()
-    imageLoadObserver = null
-    imageLoadTimeout = setTimeout(() => {
-      imageState.value = 'failed'
-      queuedImageSrc.value = null
-      releaseImageQueueSlot()
-    }, IMAGE_LOAD_TIMEOUT_MS)
-  })
+  imageState.value = 'loading'
+  imageSrc.value = screenshotSrc.value
+  imageLoadObserver?.disconnect()
+  imageLoadObserver = null
 }
 
 watch(
   () => props.story.objectID,
   async () => {
-    if (imageLoadTimeout) {
-      clearTimeout(imageLoadTimeout)
-      imageLoadTimeout = null
-    }
-
-    imageQueueHandle?.cancel()
-    imageQueueHandle = null
-    queuedImageSrc.value = null
+    imageSrc.value = null
     imageState.value = 'queued'
     await nextTick()
 
-    if (hasRequestedImageLoad.value && isWithinImageLoadMargin.value) {
-      queueScreenshotLoad()
+    if (isWithinImageLoadMargin.value) {
+      loadScreenshot()
     }
   },
 )
@@ -411,13 +374,7 @@ onMounted(() => {
         isWithinImageLoadMargin.value = entry.isIntersecting
 
         if (entry.isIntersecting) {
-          queueScreenshotLoad()
-          return
-        }
-
-        if (!queuedImageSrc.value && imageQueueHandle) {
-          imageQueueHandle.cancel()
-          imageQueueHandle = null
+          loadScreenshot()
         }
       },
       {
@@ -431,7 +388,7 @@ onMounted(() => {
     }
   } else {
     isWithinImageLoadMargin.value = true
-    queueScreenshotLoad()
+    loadScreenshot()
   }
 
   isTouchDevice.value = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
@@ -479,10 +436,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   if (scrollAnimationFrameId) {
     cancelAnimationFrame(scrollAnimationFrameId)
-  }
-  imageQueueHandle?.cancel()
-  if (imageLoadTimeout) {
-    clearTimeout(imageLoadTimeout)
   }
   imageLoadObserver?.disconnect()
   observer?.disconnect()
