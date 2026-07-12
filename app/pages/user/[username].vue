@@ -93,7 +93,7 @@
 
         <section v-show="activeTab === 'posts'" role="tabpanel" aria-label="Posts">
           <div
-            v-if="postsInitialLoading && posts.length === 0"
+            v-if="postsInitialLoading"
             key="posts-loading"
             class="grid grid-cols-1 gap-6 md:gap-7 sm:grid-cols-2 lg:grid-cols-3"
             aria-busy="true"
@@ -145,7 +145,7 @@
 
         <section v-show="activeTab === 'comments'" role="tabpanel" aria-label="Comments">
           <div
-            v-if="commentsInitialLoading && comments.length === 0"
+            v-if="commentsInitialLoading"
             key="comments-loading"
             class="space-y-4"
             aria-busy="true"
@@ -198,7 +198,6 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { format, formatDistanceToNow } from 'date-fns'
 import {
   LucideClock,
   LucideExternalLink,
@@ -208,6 +207,8 @@ import {
   LucideTrendingUp,
 } from '@lucide/vue'
 import type { HNUserProfile, UserActivityPage, UserComment, UserPost } from '#shared/types'
+import { formatCalendarDate, formatTimeAgo } from '#shared/utils/date'
+import { normalizeHnUsername } from '#shared/utils/hn'
 import { useSanitizer } from '~/composables/useSanitizer'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
@@ -219,15 +220,7 @@ const route = useRoute()
 const { sanitize } = useSanitizer()
 const numberFormatter = new Intl.NumberFormat('en-US')
 
-const normalizeUsername = (param: unknown) => {
-  const rawUsername = Array.isArray(param) ? param[0] : param
-
-  return typeof rawUsername === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(rawUsername)
-    ? rawUsername
-    : ''
-}
-
-const username = computed(() => normalizeUsername(route.params.username))
+const username = computed(() => normalizeHnUsername(route.params.username))
 const encodedUsername = computed(() => encodeURIComponent(username.value))
 const activeTab = ref<ActivityTab>('posts')
 
@@ -515,7 +508,7 @@ const joinedDate = computed(() => {
     return ''
   }
 
-  return `${format(createdAt, 'MMM d, yyyy')} (${formatDistanceToNow(createdAt, { addSuffix: true })})`
+  return `${formatCalendarDate(createdAt)} (${formatTimeAgo(createdAt)})`
 })
 
 useSeoMeta({

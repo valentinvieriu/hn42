@@ -4,6 +4,7 @@ import {
   getRemainingR2TtlSeconds,
   getR2ScreenshotFailureKey,
   readR2Screenshot,
+  writeR2Screenshot,
   writeR2ScreenshotFailure,
 } from './r2Cache'
 import type { ScreenshotEnv } from './types'
@@ -19,7 +20,14 @@ describe('screenshot R2 failure markers', () => {
 
     const previewKey = getR2PreviewScreenshotKey('hash')
 
-    await writeR2ScreenshotFailure(env, getR2ScreenshotFailureKey(previewKey), 'hash', 'provider down', 'original')
+    await writeR2ScreenshotFailure(
+      env,
+      getR2ScreenshotFailureKey(previewKey),
+      'hash',
+      'provider down',
+      'original',
+      { policy: 'capture', sourceStrategy: 'direct' },
+    )
 
     const [, body, options] = put.mock.calls[0] ?? []
     expect(body).toHaveLength(0)
@@ -27,7 +35,14 @@ describe('screenshot R2 failure markers', () => {
       cacheControl: 'no-store',
       contentType: 'application/vnd.hn42.screenshot-failure',
     })
-    expect(options.customMetadata.status).toBe('failed')
+    expect(options.customMetadata).toMatchObject({
+      policy: 'capture',
+      reason: 'provider down',
+      sourceStrategy: 'direct',
+      sourceUrlHash: 'hash',
+      status: 'failed',
+      variant: 'original',
+    })
   })
 
   it('reads a failure marker without treating its body as a screenshot', async () => {
@@ -48,8 +63,36 @@ describe('screenshot R2 failure markers', () => {
 
     const result = await readR2Screenshot(env, 'marker', 30, 360)
 
-    expect(result).toMatchObject({ isFailure: true, isFresh: true, variant: 'thumbnail' })
+    expect(result).toMatchObject({ isFailure: true, isFresh: true })
+    expect(result).not.toHaveProperty('variant')
     expect(arrayBuffer).not.toHaveBeenCalled()
+  })
+
+  it('retains successful screenshot custom metadata when writing R2', async () => {
+    const put = vi.fn().mockResolvedValue(undefined)
+    const env = { SCREENSHOTS_BUCKET: { put } } as unknown as ScreenshotEnv
+
+    await writeR2Screenshot(env, 'preview', 'hash', {
+      bytes: new Uint8Array([1, 2, 3]).buffer,
+      contentType: 'image/jpeg',
+      processor: 'browser-run',
+      provider: 'browser-run',
+    }, 'original', {
+      policy: 'capture',
+      sourceStrategy: 'xcancel',
+    })
+
+    const [, , options] = put.mock.calls[0] ?? []
+    expect(options.customMetadata).toMatchObject({
+      contentType: 'image/jpeg',
+      policy: 'capture',
+      processor: 'browser-run',
+      provider: 'browser-run',
+      sourceStrategy: 'xcancel',
+      sourceUrlHash: 'hash',
+      status: 'ok',
+      variant: 'original',
+    })
   })
 
   it('propagates storage errors so callers can fail closed', async () => {

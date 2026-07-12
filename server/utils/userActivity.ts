@@ -1,5 +1,5 @@
 import type { UserActivityPage, UserComment, UserPost } from '#shared/types'
-import { getScreenshotPath } from '#shared/utils/screenshot'
+import { getHnItemUrl } from '../../shared/utils/hn'
 
 const ALGOLIA_SEARCH_BY_DATE_URL = 'https://hn.algolia.com/api/v1/search_by_date'
 const ALGOLIA_RESULT_WINDOW = 1000
@@ -8,7 +8,7 @@ const MAX_HITS_PER_PAGE = 50
 
 type ActivityType = 'comment' | 'story'
 
-type ActivityQueryOptions = {
+export type ActivityQueryOptions = {
   page: number
   hitsPerPage: number
   before?: number | null
@@ -20,24 +20,20 @@ type AlgoliaSearchResponse<T> = {
   hitsPerPage?: number
   nbHits?: number
   nbPages?: number
-  exhaustiveNbHits?: boolean
 }
 
 type AlgoliaStoryHit = {
   objectID?: string
   title?: string | null
   url?: string | null
-  author?: string | null
   points?: number | null
   num_comments?: number | null
   created_at?: string | null
   created_at_i?: number | null
-  story_text?: string | null
 }
 
 type AlgoliaCommentHit = {
   objectID?: string
-  author?: string | null
   points?: number | null
   created_at?: string | null
   created_at_i?: number | null
@@ -45,11 +41,15 @@ type AlgoliaCommentHit = {
   story_id?: number | string | null
   story_title?: string | null
   story_url?: string | null
-  parent_id?: number | null
 }
 
-export const isValidHNUsername = (username: unknown): username is string => {
-  return typeof username === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(username)
+type ActivityHit = {
+  created_at_i?: number | null
+}
+
+const ACTIVITY_ATTRIBUTES: Record<ActivityType, string> = {
+  comment: 'objectID,points,created_at,created_at_i,comment_text,story_id,story_title,story_url',
+  story: 'objectID,title,url,points,num_comments,created_at,created_at_i',
 }
 
 const firstQueryValue = (value: unknown) => {
@@ -87,26 +87,13 @@ export const normalizeActivityBefore = (value: unknown) => {
   return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null
 }
 
-const getHnItemUrl = (id: string) => `https://news.ycombinator.com/item?id=${id}`
-
-const getNextCursor = (items: Array<{ created_at_i?: number }>) => {
-  const timestamps = items
-    .map((item) => item.created_at_i)
-    .filter((timestamp): timestamp is number => typeof timestamp === 'number' && Number.isFinite(timestamp))
-
-  if (timestamps.length === 0) {
-    return null
-  }
-
-  return Math.min(...timestamps)
-}
-
 const buildActivitySearchParams = (
   username: string,
   activityType: ActivityType,
   options: ActivityQueryOptions,
 ) => {
   const searchParams = new URLSearchParams({
+    attributesToRetrieve: ACTIVITY_ATTRIBUTES[activityType],
     tags: `${activityType},author_${username}`,
     hitsPerPage: String(options.hitsPerPage),
     page: String(options.before ? 0 : options.page),
@@ -119,7 +106,7 @@ const buildActivitySearchParams = (
   return searchParams
 }
 
-const fetchUserActivity = async <THit, TItem extends { created_at_i?: number }>(
+const fetchUserActivity = async <THit extends ActivityHit, TItem>(
   username: string,
   activityType: ActivityType,
   options: ActivityQueryOptions,
@@ -130,9 +117,24 @@ const fetchUserActivity = async <THit, TItem extends { created_at_i?: number }>(
     `${ALGOLIA_SEARCH_BY_DATE_URL}?${searchParams.toString()}`,
   )
 
-  const items = (response.hits ?? [])
-    .map(mapHit)
-    .filter((item): item is TItem => Boolean(item))
+  const items: TItem[] = []
+  let nextCursor: number | null = null
+
+  for (const hit of response.hits ?? []) {
+    const item = mapHit(hit)
+
+    if (item === null) {
+      continue
+    }
+
+    items.push(item)
+
+    if (typeof hit.created_at_i === 'number' && Number.isFinite(hit.created_at_i)) {
+      nextCursor = nextCursor === null
+        ? hit.created_at_i
+        : Math.min(nextCursor, hit.created_at_i)
+    }
+  }
 
   const page = response.page ?? options.page
   const hitsPerPage = response.hitsPerPage ?? options.hitsPerPage
@@ -145,29 +147,24 @@ const fetchUserActivity = async <THit, TItem extends { created_at_i?: number }>(
     && page + 1 < nbPages
     ? page + 1
     : null
-  const nextCursor = getNextCursor(items)
   const hasCursorPage =
     Boolean(nextCursor)
     && (options.before ? items.length === hitsPerPage : nbHits > nextOffset)
 
   return {
     items,
-    page,
-    hitsPerPage,
     nbHits,
-    nbPages,
     nextPage,
     nextCursor,
     hasMore: Boolean(nextPage || hasCursorPage),
-    exhaustiveNbHits: response.exhaustiveNbHits,
   }
 }
 
-export const fetchUserPosts = async (
+export const fetchUserPosts = (
   username: string,
   options: ActivityQueryOptions,
 ): Promise<UserActivityPage<UserPost>> => {
-  return await fetchUserActivity<AlgoliaStoryHit, UserPost>(
+  return fetchUserActivity<AlgoliaStoryHit, UserPost>(
     username,
     'story',
     options,
@@ -182,23 +179,20 @@ export const fetchUserPosts = async (
         objectID,
         title: hit.title || 'Untitled',
         url: hit.url || getHnItemUrl(objectID),
-        author: hit.author || username,
+        author: username,
         points: hit.points || 0,
         num_comments: hit.num_comments || 0,
         created_at: hit.created_at || '',
-        created_at_i: hit.created_at_i ?? undefined,
-        story_text: hit.story_text || null,
-        screenshotUrl: getScreenshotPath(objectID),
       }
     },
   )
 }
 
-export const fetchUserComments = async (
+export const fetchUserComments = (
   username: string,
   options: ActivityQueryOptions,
 ): Promise<UserActivityPage<UserComment>> => {
-  return await fetchUserActivity<AlgoliaCommentHit, UserComment>(
+  return fetchUserActivity<AlgoliaCommentHit, UserComment>(
     username,
     'comment',
     options,
@@ -212,17 +206,13 @@ export const fetchUserComments = async (
       const storyId = hit.story_id ? String(hit.story_id) : ''
 
       return {
-        id: Number.parseInt(objectID, 10) || 0,
         objectID,
-        author: hit.author || username,
         points: hit.points || 0,
         created_at: hit.created_at || '',
-        created_at_i: hit.created_at_i ?? undefined,
         text: hit.comment_text || '',
         story_id: storyId,
         story_title: hit.story_title || 'Untitled story',
         story_url: hit.story_url || (storyId ? getHnItemUrl(storyId) : ''),
-        parent_id: hit.parent_id ?? null,
       }
     },
   )

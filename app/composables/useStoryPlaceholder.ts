@@ -6,12 +6,12 @@ export type StoryPlaceholderLayout =
   | 'layout-05'
   | 'layout-06'
 
-export type StoryPlaceholderMotif = 'bands' | 'glow' | 'grid' | 'plain'
-export type StoryPlaceholderPrimitiveShape = 'circle' | 'line' | 'rect'
-export type StoryPlaceholderPrimitiveTone = 'accent' | 'accent-soft' | 'raised' | 'surface'
-export type StoryPlaceholderPrimitiveRadius = 'lg' | 'md' | 'pill' | 'sm'
+type StoryPlaceholderMotif = 'bands' | 'glow' | 'grid' | 'plain'
+type StoryPlaceholderPrimitiveShape = 'circle' | 'line' | 'rect'
+type StoryPlaceholderPrimitiveTone = 'accent' | 'accent-soft' | 'raised' | 'surface'
+type StoryPlaceholderPrimitiveRadius = 'lg' | 'md' | 'pill' | 'sm'
 
-export type StoryPlaceholderRect = {
+type StoryPlaceholderRect = {
   height: number
   width: number
   x: number
@@ -27,7 +27,7 @@ export type StoryPlaceholderPrimitive = {
   tone: StoryPlaceholderPrimitiveTone
 }
 
-export type StoryPlaceholder = {
+type StoryPlaceholder = {
   density: 0 | 1 | 2
   initials: string
   layout: StoryPlaceholderLayout

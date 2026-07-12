@@ -1,7 +1,7 @@
 <template>
   <nav
     class="site-header feed-theme-surface sticky top-0 z-50 border-b backdrop-blur-lg"
-    :style="currentFeed ? getNavStyle(currentFeed) : undefined"
+    :style="currentFeed ? getFeedThemeStyle(currentFeed) : undefined"
   >
     <div class="max-w-7xl mx-auto flex h-14 items-center justify-between gap-3 px-3 sm:h-16 sm:gap-5 sm:px-5 lg:px-6">
       <NuxtLink to="/top" class="flex shrink-0 items-center space-x-2">
@@ -22,7 +22,7 @@
             :to="link.path"
             class="feed-nav-link feed-theme-surface inline-flex shrink-0 items-center py-1 font-medium transition-colors duration-200"
             :class="{ 'feed-nav-link-active': currentFeed === link.key }"
-            :style="getNavStyle(link.key)"
+            :style="getFeedThemeStyle(link.key)"
             :aria-current="currentFeed === link.key ? 'page' : undefined"
           >
             <span>{{ link.label }}</span>
@@ -44,54 +44,27 @@
 </template>
 
 <script setup lang="ts">
+import { LucideMoon, LucideSun } from '@lucide/vue'
 import { feedThemeList, getFeedThemeStyle, isFeedEndpoint } from '~/composables/useFeedTheme';
-import type { FeedEndpoint } from '~/composables/useFeedTheme';
 
 const colorMode = useColorMode();
 const route = useRoute();
 const feedNavRef = ref<HTMLElement | null>(null);
-const isDarkMode = ref(false);
-let colorModeObserver: MutationObserver | null = null;
+const hasMounted = ref(false);
+const isDarkMode = computed(() => hasMounted.value && colorMode.value === 'dark');
+
+onMounted(() => {
+  hasMounted.value = true;
+});
 
 const currentFeed = computed(() => {
   const feedCandidate = route.path.split('/')[1];
   return isFeedEndpoint(feedCandidate) ? feedCandidate : null;
 });
 
-const getNavStyle = (feed: FeedEndpoint) => {
-  return getFeedThemeStyle(feed);
-};
-
 const toggleColorMode = () => {
   colorMode.preference = isDarkMode.value ? 'light' : 'dark';
 };
-
-const syncColorMode = () => {
-  if (!import.meta.client) {
-    isDarkMode.value = colorMode.value === 'dark';
-    return;
-  }
-
-  isDarkMode.value = document.documentElement.classList.contains('dark');
-};
-
-onMounted(() => {
-  syncColorMode();
-  colorModeObserver = new MutationObserver(syncColorMode);
-  colorModeObserver.observe(document.documentElement, {
-    attributeFilter: ['class'],
-    attributes: true,
-  });
-});
-
-onBeforeUnmount(() => {
-  colorModeObserver?.disconnect();
-});
-
-watch(
-  () => colorMode.value,
-  () => nextTick(syncColorMode),
-);
 
 watch(
   currentFeed,

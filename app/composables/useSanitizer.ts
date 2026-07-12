@@ -308,12 +308,12 @@ const formatTextConventions = (html: string, rawScopeId?: string | number | null
   return formatted.join('')
 }
 
-export const useSanitizer = () => {
-  const sanitize = (html: string, scopeId?: string | number | null) => {
-    const safeHtml = sanitizeHtml(html)
+const sanitize = (html: string, scopeId?: string | number | null) => {
+  const safeHtml = sanitizeHtml(html)
 
-    return formatTextConventions(safeHtml, scopeId);
-  };
+  return formatTextConventions(safeHtml, scopeId)
+}
 
-  return { sanitize };
-};
+const sanitizer = Object.freeze({ sanitize })
+
+export const useSanitizer = () => sanitizer

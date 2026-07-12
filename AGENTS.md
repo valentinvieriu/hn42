@@ -51,7 +51,7 @@ Shared client logic:
 - `app/composables/useSeedPalette.ts`: deterministic card color palettes.
 - `app/composables/useStoryPlaceholder.ts`: non-semantic, story-seeded wireframe layout generation with bounded SVG geometry.
 - `app/composables/useSanitizer.ts`: safe rich-text rendering and HN comment post-processing.
-- `app/composables/useScroll.ts` and `useDebounce.ts`: scroll and timing helpers.
+- `app/utils/storyScreenshotObserver.ts`: one shared client-side Intersection Observer for card screenshot preloading.
 
 Server/API:
 
@@ -62,16 +62,17 @@ Server/API:
 - `server/utils/screenshot/sourcePolicy.ts`: URL policy for screenshot capture targets, deterministic skips, and bounded content probing.
 - `server/api/user/[username].ts`: user profile from Algolia.
 - `server/api/user/[username]/comments.ts` and `stories.ts`: paginated user activity using Algolia search-by-date.
+- `server/utils/userActivityHandler.ts`: shared validation, cache, error, and timing wrapper for user activity routes.
 - `server/utils/fetchStories.ts`: common Algolia story normalization.
 - `server/utils/feed.ts`: fetch ordered story IDs from HN Firebase, hydrate them from Algolia, preserve source order, and set feed cache headers.
-- `server/utils/userActivity.ts`: user activity validation, pagination, and mapping.
-- `server/utils/keywordExtractor.ts`: related-story keyword support.
+- `server/utils/userActivity.ts`: user activity pagination and mapping.
 
 Types and global styling:
 
 - `shared/types/index.ts`: shared story, comment, user, and activity types used by the Vue app and Nitro server.
+- `shared/utils/comments.ts`, `date.ts`, and `hn.ts`: framework-neutral comment analysis, date formatting, and HN identifier/path helpers.
 - `app/assets/css/main.css`: base typography, rich-text rendering, quote/code/reference styles.
-- `tailwind.config.ts`: Tailwind content paths, fonts, dark mode, and extended color tokens.
+- `tailwind.config.ts`: Tailwind app content path, fonts, dark mode, and extended color tokens.
 
 ## Data Sources And Caching
 
@@ -143,7 +144,7 @@ Current rendering uses `useSanitizer.ts` to:
 - Autolink safe bare URLs only when HN/Algolia did not already emit an anchor.
 - Style `Edit:`, `Update:`, and `TL;DR:` as note labels.
 
-Nested comments render to a limited depth by default. `app/pages/item/[id].vue` exposes expand/collapse-all controls, while `CommentThread.vue` shows local reply disclosure when replies are hidden under the depth limit.
+Nested comments render to a limited depth by default. `app/pages/item/[id].vue` analyzes the tree once for totals, author activity, descendant counts, and collapsed-state; `CommentThread.vue` uses that shared summary for local reply disclosure.
 
 ## Images And Screenshots
 
@@ -176,7 +177,7 @@ Preserve these strategic guardrails:
 - Source policy runtime config includes `screenshotPolicyProbeTimeoutMs`, `screenshotXCancelBaseUrl`, and `screenshotPolicyBlockedHosts`; the host list extends the default blocked hosts.
 - Concurrent Browser Run captures for the same source URL are coalesced within an isolate. Admitted provider failures write short-lived R2 markers under separate `.failure` keys so a cross-isolate failure cannot overwrite a valid image. Policy/probe skips must use the edge-cached transparent response and must not write R2 markers outside the daily admission budget.
 - Consume each Browser Run Quick Action response body and explicitly dispose the RPC result afterward; remote development otherwise reports leaked stubs. Do not add isolate-local fallback memoization before R2 reads, because it can hide a screenshot successfully written by another isolate or development process.
-- Feed cards mount screenshot images when they enter the Intersection Observer preload margin; leave request scheduling and concurrency to the browser.
+- Feed cards share one Intersection Observer and mount screenshot images when they enter its preload margin; leave request scheduling and concurrency to the browser.
 - Keep long shared-cache TTLs unless there is a concrete invalidation need.
 
 ## Styling, Linting, And Code Style

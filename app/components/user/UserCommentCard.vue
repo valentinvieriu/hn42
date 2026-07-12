@@ -57,9 +57,10 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { formatDistanceToNow } from 'date-fns'
 import { LucideClock, LucideExternalLink, LucideMessageSquare, LucideTrendingUp } from '@lucide/vue'
 import type { UserComment } from '#shared/types'
+import { formatTimeAgo } from '#shared/utils/date'
+import { getHnItemUrl } from '#shared/utils/hn'
 import { useSanitizer } from '~/composables/useSanitizer'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
@@ -78,20 +79,10 @@ const commentPaletteStyle = computed(() => {
 const sanitizedText = computed(() => sanitize(props.comment.text || '', `user-comment-${props.comment.objectID}`))
 
 const timeAgo = computed(() => {
-  if (!props.comment.created_at) {
-    return ''
-  }
-
-  const createdAt = new Date(props.comment.created_at)
-
-  if (Number.isNaN(createdAt.getTime())) {
-    return ''
-  }
-
-  return formatDistanceToNow(createdAt, { addSuffix: true })
+  return formatTimeAgo(props.comment.created_at)
 })
 
-const hnCommentUrl = computed(() => `https://news.ycombinator.com/item?id=${props.comment.objectID}`)
+const hnCommentUrl = computed(() => getHnItemUrl(props.comment.objectID))
 </script>
 
 <style scoped>

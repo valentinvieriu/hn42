@@ -6,8 +6,10 @@ import {
   type H3Event,
 } from 'h3'
 import { useRuntimeConfig } from '#imports'
-import { isBrowserRunCapacityError } from '../../utils/screenshot/browserRun'
-import { captureScreenshotWithProvider } from '../../utils/screenshot/providers'
+import {
+  captureWithBrowserRun,
+  isBrowserRunCapacityError,
+} from '../../utils/screenshot/browserRun'
 import {
   deleteR2ScreenshotFailure,
   getR2PreviewScreenshotKey,
@@ -38,6 +40,7 @@ import type {
   ScreenshotVariant,
 } from '../../utils/screenshot/types'
 import { SCREENSHOT_PROFILE_VERSION } from '#shared/utils/screenshot'
+import { isValidHnItemId } from '#shared/utils/hn'
 
 const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
@@ -275,20 +278,13 @@ const captureAndPersistPreview = (
         throw new ScreenshotPolicySkipError(probeResult.skipReason, sourceDecision.sourceStrategy)
       }
 
-      return captureScreenshotWithProvider(
-        sourceDecision.captureProvider,
+      return captureWithBrowserRun(
         env,
         probeResult.captureUrl,
         runtimeConfig,
       )
     })
-    .then(async (screenshot) => {
-      const preview: ScreenshotResult = {
-        ...screenshot,
-        sourceStrategy: sourceDecision.sourceStrategy,
-        variant: 'original',
-      }
-
+    .then(async (preview) => {
       try {
         await writeR2Screenshot(
           env,
@@ -310,7 +306,7 @@ const captureAndPersistPreview = (
         message: 'Browser Run screenshot captured',
         browserMsUsed: preview.browserMsUsed,
         bytes: preview.bytes.byteLength,
-        sourceStrategy: preview.sourceStrategy,
+        sourceStrategy: sourceDecision.sourceStrategy,
         sourceUrlHash: sourceUrlHash.slice(0, 16),
       }))
 
@@ -344,14 +340,6 @@ const captureAndPersistPreview = (
   pendingCaptures.set(previewKey, capture)
 
   return capture
-}
-
-const isValidStoryId = (id: unknown): id is string => {
-  if (typeof id !== 'string' || !/^[1-9]\d{0,14}$/.test(id)) {
-    return false
-  }
-
-  return Number.isSafeInteger(Number(id))
 }
 
 const getRequestedVariant = (event: H3Event): ScreenshotVariant => {
@@ -559,7 +547,7 @@ const servePreview = async (
 export default defineEventHandler(async (event) => {
   const id = getRouterParams(event).id
 
-  if (!isValidStoryId(id)) {
+  if (!isValidHnItemId(id)) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Valid story ID is required',

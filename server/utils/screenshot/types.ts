@@ -29,8 +29,6 @@ export type ScreenshotResult = {
   contentType: string
   processor?: ScreenshotProcessorName
   provider: ScreenshotProviderName
-  sourceStrategy?: ScreenshotSourceStrategy
-  variant?: ScreenshotVariant
 }
 
 export type ScreenshotPolicyMetadata = {

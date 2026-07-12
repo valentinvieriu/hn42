@@ -7,9 +7,6 @@
   </div>
 </template>
 
-<script setup lang="ts">
-</script>
-
 <style>
 .safe-area-container {
   /* Handle bottom safe area */

@@ -39,20 +39,12 @@
 
 <script setup lang="ts">
 import { LucideTrendingUp, LucideMessageSquare } from '@lucide/vue'
+import type { RelatedStory } from '#shared/types'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
 const props = defineProps<{
   storyId: string
 }>()
-
-interface RelatedStory {
-  title: string
-  objectID: string
-  points: number
-  num_comments: number
-  author: string
-  url: string
-}
 
 const relatedPaletteStyle = (story: RelatedStory) => {
   return getSeedPaletteStyle(story.objectID)

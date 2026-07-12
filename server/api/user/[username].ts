@@ -1,7 +1,8 @@
 import { createError, defineEventHandler, getRouterParams, setHeader } from 'h3'
 import type { HNUserProfile } from '#shared/types'
+import { isValidHnUsername } from '#shared/utils/hn'
 import { formatServerTiming } from '#shared/utils/serverTiming'
-import { isValidHNUsername } from '../../utils/userActivity'
+import { getErrorStatusCode } from '../../utils/error'
 
 type AlgoliaUserProfile = {
   username?: string | null
@@ -10,30 +11,10 @@ type AlgoliaUserProfile = {
   about?: string | null
 }
 
-const getStatusCode = (error: unknown): number | null => {
-  if (!error || typeof error !== 'object') {
-    return null
-  }
-
-  if ('statusCode' in error && typeof error.statusCode === 'number') {
-    return error.statusCode
-  }
-
-  if ('response' in error && error.response && typeof error.response === 'object') {
-    const response = error.response as { status?: unknown }
-
-    if (typeof response.status === 'number') {
-      return response.status
-    }
-  }
-
-  return null
-}
-
 export default defineEventHandler(async (event) => {
   const { username } = getRouterParams(event)
 
-  if (!isValidHNUsername(username)) {
+  if (!isValidHnUsername(username)) {
     throw createError({
       statusCode: 400,
       statusMessage: 'Valid username is required',
@@ -79,7 +60,7 @@ export default defineEventHandler(async (event) => {
 
     return userProfile
   } catch (error) {
-    if (getStatusCode(error) === 404) {
+    if (getErrorStatusCode(error) === 404) {
       throw createError({
         statusCode: 404,
         statusMessage: 'User not found',

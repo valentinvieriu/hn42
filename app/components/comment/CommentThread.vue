@@ -1,10 +1,10 @@
 <template>
   <article class="seed-palette-surface" :class="commentContainerClasses" :style="commentPaletteStyle" :data-author="comment.author">
     <div class="comment-panel">
-      <div :class="`comment-header ${headerTextColor} flex items-center`">
+      <div class="comment-header flex items-center text-gray-600 dark:text-gray-400">
         <span class="author-chip">
           <span class="author-dot" aria-hidden="true"></span>
-          <NuxtLink :to="getUserPath(comment.author)" class="hover:underline">
+          <NuxtLink :to="getHnUserPath(comment.author)" class="hover:underline">
             {{ comment.author }}
           </NuxtLink>
         </span>
@@ -25,7 +25,7 @@
         </span>
       </div>
       <div
-        :class="`comment-text rich-text ${textColor} break-words`"
+        class="comment-text rich-text break-words text-gray-800 dark:text-gray-200"
         v-html="sanitizedText"
       ></div>
       <div class="comment-actions">
@@ -33,8 +33,7 @@
           :href="`https://news.ycombinator.com/reply?id=${comment.id}&goto=item%3Fid%3D${comment.parent_id}%23${comment.id}`"
           target="_blank"
           rel="noopener noreferrer"
-          class="reply-action reply-link hover:underline"
-          :class="replyLinkColor"
+          class="reply-action reply-link text-gray-600 hover:text-gray-800 hover:underline dark:text-gray-400 dark:hover:text-gray-300"
         >
           <LucideMessageSquare class="w-3.5 h-3.5" />
           <span>Reply</span>
@@ -42,8 +41,7 @@
         <button 
           v-if="canShowMoreReplies" 
           @click="toggleReplies" 
-          class="more-replies-button focus:outline-none"
-          :class="replyLinkColor"
+          class="more-replies-button text-gray-600 hover:text-gray-800 focus:outline-none dark:text-gray-400 dark:hover:text-gray-300"
           :aria-expanded="showReplies"
         >
           <LucideChevronDown v-if="showReplies" class="w-3.5 h-3.5" />
@@ -60,6 +58,7 @@
         :current-depth="currentDepth + 1"
         :expand-all="expandAll"
         :author-comment-counts="authorCommentCounts"
+        :descendant-comment-counts="descendantCommentCounts"
       />
     </div>
   </article>
@@ -68,77 +67,52 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { LucideMessageSquare, LucideClock, LucideChevronDown, LucideChevronRight } from '@lucide/vue'
-import { formatDistanceToNow } from 'date-fns'
+import type { Comment } from '#shared/types'
+import { DEFAULT_COMMENT_DEPTH } from '#shared/utils/comments'
+import { formatTimeAgo } from '#shared/utils/date'
+import { getHnUserPath } from '#shared/utils/hn'
 import { useSanitizer } from '~/composables/useSanitizer'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
-
-interface Comment {
-  id: number
-  created_at: string
-  author: string
-  text: string
-  points: number
-  parent_id: number | null
-  children: Comment[]
-}
 
 const props = defineProps<{
   comment: Comment
   currentDepth?: number
   expandAll?: boolean
-  authorCommentCounts?: Record<string, number>
+  authorCommentCounts: ReadonlyMap<string, number>
+  descendantCommentCounts: ReadonlyMap<number, number>
 }>()
 
 const { sanitize } = useSanitizer()
 const sanitizedText = computed(() => sanitize(props.comment.text || '', `comment-${props.comment.id}`))
 
-const MAX_DEPTH = 3
-const currentDepth = computed(() => props.currentDepth || 1)
+const currentDepth = computed(() => props.currentDepth ?? 1)
 const expandAll = computed(() => Boolean(props.expandAll))
-const authorCommentCounts = computed(() => props.authorCommentCounts || {})
-const authorCommentCount = computed(() => authorCommentCounts.value[props.comment.author] || 1)
-const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
-
-const commentPaletteStyle = computed(() => ({
-  ...getSeedPaletteStyle(props.comment.author),
-}))
+const authorCommentCounts = computed(() => props.authorCommentCounts)
+const descendantCommentCounts = computed(() => props.descendantCommentCounts)
+const authorCommentCount = computed(() => authorCommentCounts.value.get(props.comment.author) ?? 1)
+const commentPaletteStyle = computed(() => getSeedPaletteStyle(props.comment.author))
 
 const timeAgo = computed(() => {
-  return formatDistanceToNow(new Date(props.comment.created_at), { addSuffix: true })
-})
-
-const replyLinkColor = computed(() => {
-  return 'text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300'
-})
-
-const headerTextColor = computed(() => {
-  return 'text-gray-600 dark:text-gray-400'
-})
-
-const textColor = computed(() => {
-  return 'text-gray-800 dark:text-gray-200'
+  return formatTimeAgo(props.comment.created_at)
 })
 
 const commentContainerClasses = computed(() => {
   return [
     'comment-container',
-    `comment-depth-${Math.min(currentDepth.value, MAX_DEPTH)}`,
+    `comment-depth-${Math.min(currentDepth.value, DEFAULT_COMMENT_DEPTH)}`,
     {
-      'comment-max-depth': currentDepth.value >= MAX_DEPTH,
+      'comment-max-depth': currentDepth.value >= DEFAULT_COMMENT_DEPTH,
     },
   ]
 })
 
 const showReplies = ref(false)
-
-const countComments = (comments: Comment[]): number => {
-  return comments.reduce((total, child) => total + 1 + countComments(child.children || []), 0)
-}
-
-const hiddenReplyCount = computed(() => countComments(props.comment.children || []))
+const hiddenReplyCount = computed(() => descendantCommentCounts.value.get(props.comment.id) ?? 0)
 
 const canShowMoreReplies = computed(() => {
-  return !expandAll.value && currentDepth.value >= MAX_DEPTH && hiddenReplyCount.value > 0
+  return !expandAll.value
+    && currentDepth.value >= DEFAULT_COMMENT_DEPTH
+    && hiddenReplyCount.value > 0
 })
 
 const toggleReplies = () => {
@@ -150,7 +124,7 @@ const shouldRenderChildren = computed(() => {
     return props.comment.children.length > 0
   }
 
-  if (currentDepth.value < MAX_DEPTH) {
+  if (currentDepth.value < DEFAULT_COMMENT_DEPTH) {
     return props.comment.children.length > 0
   } else {
     return showReplies.value

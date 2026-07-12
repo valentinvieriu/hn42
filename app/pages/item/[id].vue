@@ -33,7 +33,7 @@
           <div class="meta-text mb-4 text-gray-600 dark:text-gray-400">
             by
             <NuxtLink
-              :to="getUserPath(story.author)"
+              :to="getHnUserPath(story.author)"
               class="font-medium text-gray-700 hover:text-gray-900 hover:underline dark:text-gray-300 dark:hover:text-gray-100"
             >
               {{ story.author }}
@@ -162,6 +162,7 @@
               :comment="comment"
               :expand-all="expandAllComments"
               :author-comment-counts="authorCommentCounts"
+              :descendant-comment-counts="descendantCommentCounts"
             />
           </div>
         </aside>
@@ -210,37 +211,20 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp, LucideMaximize2, LucideX } from '@lucide/vue';
-import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
-import type { Comment } from '#shared/types'
+import type { StoryDetail } from '#shared/types'
+import { summarizeCommentTree } from '#shared/utils/comments'
+import { formatTimeAgo } from '#shared/utils/date'
+import { getHnItemUrl, getHnUserPath, normalizeHnItemId } from '#shared/utils/hn'
 import { getScreenshotPath } from '#shared/utils/screenshot'
 import { appendServerTiming } from '#shared/utils/serverTiming'
 
 const route = useRoute();
 const expandAllComments = ref(false);
 
-type StoryDetail = {
-  id: number
-  created_at: string
-  author: string
-  title: string
-  url: string
-  text: string | null
-  points: number
-  parent_id: number | null
-  children: Comment[]
-}
-
-const normalizeStoryId = (param: unknown): string | null => {
-  const rawId = Array.isArray(param) ? param[0] : param
-
-  return typeof rawId === 'string' && /^\d+$/.test(rawId) ? rawId : null
-}
-
-const storyId = computed(() => normalizeStoryId(route.params.id))
+const storyId = computed(() => normalizeHnItemId(route.params.id))
 const storyDataKey = computed(() => `story-detail:${storyId.value ?? 'missing'}`)
-const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
 const serverTimingHeader = useResponseHeader('Server-Timing')
 const pageSsrStartedAt = import.meta.server ? performance.now() : null
 
@@ -312,7 +296,7 @@ const storyExternalUrl = computed(() => {
   }
 
   return storyId.value
-    ? `https://news.ycombinator.com/item?id=${storyId.value}`
+    ? getHnItemUrl(storyId.value)
     : ''
 })
 type ScreenshotPreviewState = 'loading' | 'loaded' | 'failed'
@@ -350,7 +334,7 @@ const storyDomain = computed(() => {
 })
 
 const screenshotPreviewStyle = computed(() => {
-  return getSeedPaletteStyle(storyId.value, 'light', storyDomain.value)
+  return getSeedPaletteStyle(storyId.value, storyDomain.value)
 })
 
 const getPreviewStateFromImage = (event: Event): ScreenshotPreviewState => {
@@ -408,50 +392,18 @@ watch(originalScreenshotSrc, () => {
 const { sanitize } = useSanitizer();
 const sanitizedText = computed(() => sanitize(story.value?.text || '', `story-${storyId.value}`));
 
-const MAX_COMMENT_DEPTH = 3;
-
-const countComments = (comments: Comment[]): number => {
-  return comments.reduce((total, comment) => {
-    return total + 1 + countComments(comment.children || []);
-  }, 0);
-};
-
-const hasRepliesBeyondDefaultDepth = (comments: Comment[], depth = 1): boolean => {
-  return comments.some((comment) => {
-    const children = comment.children || [];
-
-    if (depth >= MAX_COMMENT_DEPTH && children.length > 0) {
-      return true;
-    }
-
-    return hasRepliesBeyondDefaultDepth(children, depth + 1);
-  });
-};
-
-const commentCount = computed(() => countComments(story.value?.children || []));
-const hasCollapsedReplies = computed(() => hasRepliesBeyondDefaultDepth(story.value?.children || []));
-
-const countCommentsByAuthor = (comments: Comment[] = [], counts: Record<string, number> = {}) => {
-  comments.forEach((comment) => {
-    if (comment.author) {
-      counts[comment.author] = (counts[comment.author] || 0) + 1;
-    }
-
-    countCommentsByAuthor(comment.children || [], counts);
-  });
-
-  return counts;
-};
-
-const authorCommentCounts = computed(() => countCommentsByAuthor(story.value?.children || []));
+const commentSummary = computed(() => summarizeCommentTree(story.value?.children || []))
+const commentCount = computed(() => commentSummary.value.total)
+const hasCollapsedReplies = computed(() => commentSummary.value.hasRepliesBeyondDefaultDepth)
+const authorCommentCounts = computed(() => commentSummary.value.authorCounts)
+const descendantCommentCounts = computed(() => commentSummary.value.descendantCounts)
 
 const toggleExpandAllComments = () => {
   expandAllComments.value = !expandAllComments.value;
 };
 
 const timeAgo = computed(() => {
-  if (!story.value?.created_at) return '';
-  return formatDistanceToNow(new Date(story.value.created_at), { addSuffix: true });
+  return formatTimeAgo(story.value?.created_at || '')
 });
 
 const requestUrl = useRequestURL()

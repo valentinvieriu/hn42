@@ -1,23 +1,34 @@
-import type { HNHit, Story } from '#shared/types'
-import { getScreenshotPath } from '#shared/utils/screenshot'
+import type { Story } from '#shared/types'
+import { getHnItemUrl } from '../../shared/utils/hn'
 
-type AlgoliaStoryResponse = {
-  hits?: HNHit[]
+type AlgoliaStoryHit = {
+  objectID?: string
+  title?: string | null
+  author?: string | null
+  created_at?: string | null
+  points?: number | null
+  num_comments?: number | null
+  url?: string | null
 }
 
-const getHnItemUrl = (id: string) => `https://news.ycombinator.com/item?id=${id}`
+type AlgoliaStoryResponse = {
+  hits?: AlgoliaStoryHit[]
+}
 
+const STORY_ATTRIBUTES = 'objectID,title,author,created_at,points,num_comments,url'
 export const fetchStories = async (
   baseUrl: string,
   queryParams: Record<string, string>,
 ): Promise<Story[]> => {
   try {
+    const searchParams = new URLSearchParams(queryParams)
+    searchParams.set('attributesToRetrieve', STORY_ATTRIBUTES)
     const response = await $fetch<AlgoliaStoryResponse>(
-      `${baseUrl}?${new URLSearchParams(queryParams)}`,
+      `${baseUrl}?${searchParams}`,
     )
 
     return (response.hits ?? [])
-      .filter((hit): hit is HNHit & { objectID: string } => Boolean(hit.objectID))
+      .filter((hit): hit is AlgoliaStoryHit & { objectID: string } => Boolean(hit.objectID))
       .map((hit) => ({
         title: hit.title || 'Untitled',
         url: hit.url || getHnItemUrl(hit.objectID),
@@ -26,7 +37,6 @@ export const fetchStories = async (
         num_comments: hit.num_comments || 0,
         created_at: hit.created_at || '',
         objectID: hit.objectID,
-        screenshotUrl: getScreenshotPath(hit.objectID),
       }))
   } catch (error) {
     console.error('Error fetching stories:', error)

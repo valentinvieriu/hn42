@@ -99,9 +99,12 @@ Use `npm run check` as the baseline check before shipping changes.
 - `app/components/comment/`: nested comment rendering.
 - `server/api/`: feed, item, related-story, user, and screenshot APIs.
 - `server/utils/feed.ts`: shared ordered-feed handler for the four HN feeds.
+- `server/utils/userActivityHandler.ts`: shared wrapper for paginated user activity routes.
 - `app/composables/`: shared client logic such as story loading and sanitization.
+- `app/utils/storyScreenshotObserver.ts`: shared feed-card screenshot preload observer.
 - `app/assets/css/main.css`: global typography and rich-text styling.
 - `shared/types/index.ts`: story, comment, user, and activity types shared by the app and server.
+- `shared/utils/`: framework-neutral HN paths, dates, screenshot paths, timing, and comment-tree analysis.
 - `wrangler.toml`: Cloudflare Workers deployment config.
 
 ## Deployment

@@ -1,8 +1,7 @@
 import { computed, ref, watch } from 'vue';
 import { useFetch } from 'nuxt/app';
 import type { Story } from '#shared/types';
-
-type StoryEndpoint = 'best' | 'new' | 'show' | 'top';
+import type { FeedEndpoint } from './useFeedTheme';
 
 const FEED_CACHE_PREFIX = 'hn42:stories:';
 const FEED_CACHE_MAX_AGE = 30 * 60 * 1000;
@@ -12,9 +11,9 @@ type FeedCachePayload = {
   stories: Story[];
 };
 
-const memoryCache = new Map<StoryEndpoint, Story[]>();
+const memoryCache = new Map<FeedEndpoint, Story[]>();
 
-const removeCachedStories = (endpoint: StoryEndpoint) => {
+const removeCachedStories = (endpoint: FeedEndpoint) => {
   try {
     window.sessionStorage.removeItem(`${FEED_CACHE_PREFIX}${endpoint}`);
   } catch {
@@ -22,7 +21,7 @@ const removeCachedStories = (endpoint: StoryEndpoint) => {
   }
 };
 
-const readCachedStories = (endpoint: StoryEndpoint): Story[] => {
+const readCachedStories = (endpoint: FeedEndpoint): Story[] => {
   if (!import.meta.client) {
     return [];
   }
@@ -56,7 +55,7 @@ const readCachedStories = (endpoint: StoryEndpoint): Story[] => {
   }
 };
 
-const rememberStories = (endpoint: StoryEndpoint, stories: Story[]) => {
+const rememberStories = (endpoint: FeedEndpoint, stories: Story[]) => {
   if (!import.meta.client || stories.length === 0) {
     return;
   }
@@ -76,7 +75,7 @@ const rememberStories = (endpoint: StoryEndpoint, stories: Story[]) => {
   }
 };
 
-export const useStories = (endpoint: StoryEndpoint) => {
+export const useStories = (endpoint: FeedEndpoint) => {
   const cachedStories = ref<Story[]>(readCachedStories(endpoint));
   const { data, error, pending } = useFetch<Story[]>(`/api/${endpoint}`, {
     key: `stories:${endpoint}`,

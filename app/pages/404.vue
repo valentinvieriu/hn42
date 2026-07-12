@@ -12,7 +12,3 @@
     </div>
   </div>
 </template>
-
-<script setup lang="ts">
-// No additional script needed
-</script>

@@ -1,5 +1,4 @@
 import type {
-  ScreenshotProviderName,
   ScreenshotSkipReason,
   ScreenshotSourceStrategy,
 } from './types'
@@ -58,15 +57,12 @@ type ScreenshotCaptureStrategy = Exclude<ScreenshotSourceStrategy, 'skip-pdf' | 
 
 export type ScreenshotCaptureDecision = {
   cacheIdentityUrl: string
-  captureProvider: ScreenshotProviderName
   captureUrl: string
-  originalUrl: string
   policy: 'capture'
   sourceStrategy: ScreenshotCaptureStrategy
 }
 
 export type ScreenshotSkipDecision = {
-  originalUrl: string
   policy: 'skip'
   skipReason: ScreenshotSkipReason
   sourceStrategy: Extract<ScreenshotSourceStrategy, 'skip-pdf' | 'skip-known-blocked'>
@@ -301,9 +297,7 @@ export const createScreenshotSourceDecision = (
   if (arxivAbsUrl) {
     return {
       cacheIdentityUrl: getScopedCacheIdentityUrl('arxiv-abs', arxivAbsUrl, sourceUrl),
-      captureProvider: 'browser-run',
       captureUrl: arxivAbsUrl,
-      originalUrl: sourceUrl,
       policy: 'capture',
       sourceStrategy: 'arxiv-abs',
     }
@@ -311,7 +305,6 @@ export const createScreenshotSourceDecision = (
 
   if (isObviousPdfUrl(url)) {
     return {
-      originalUrl: sourceUrl,
       policy: 'skip',
       skipReason: 'pdf-url',
       sourceStrategy: 'skip-pdf',
@@ -320,7 +313,6 @@ export const createScreenshotSourceDecision = (
 
   if (isKnownBlockedHost(url, runtimeConfig)) {
     return {
-      originalUrl: sourceUrl,
       policy: 'skip',
       skipReason: 'known-blocked-host',
       sourceStrategy: 'skip-known-blocked',
@@ -332,9 +324,7 @@ export const createScreenshotSourceDecision = (
   if (xcancelUrl) {
     return {
       cacheIdentityUrl: getScopedCacheIdentityUrl('xcancel', xcancelUrl, sourceUrl),
-      captureProvider: 'browser-run',
       captureUrl: xcancelUrl,
-      originalUrl: sourceUrl,
       policy: 'capture',
       sourceStrategy: 'xcancel',
     }
@@ -342,9 +332,7 @@ export const createScreenshotSourceDecision = (
 
   return {
     cacheIdentityUrl: sourceUrl,
-    captureProvider: 'browser-run',
     captureUrl: sourceUrl,
-    originalUrl: sourceUrl,
     policy: 'capture',
     sourceStrategy: 'direct',
   }
@@ -414,8 +402,7 @@ export const probeCaptureUrlContent = async (
   runtimeConfig: any,
 ): Promise<ContentProbeResult> => {
   const timeoutMs = normalizePositiveInteger(
-    runtimeConfig.screenshotPolicyProbeTimeoutMs
-      ?? runtimeConfig.screenshotPolicyHeadProbeTimeoutMs,
+    runtimeConfig.screenshotPolicyProbeTimeoutMs,
     DEFAULT_PROBE_TIMEOUT_MS,
   )
   let currentUrl = captureUrl

@@ -1,15 +1,17 @@
 import { createError, defineEventHandler, getRouterParams, setHeader, setHeaders, type H3Event } from 'h3'
+import type { RelatedStory } from '#shared/types'
+import { isValidHnItemId } from '#shared/utils/hn'
 import { formatServerTiming, type ServerTimingMetric } from '#shared/utils/serverTiming'
+import { getErrorStatusCode } from '../../utils/error'
 
 const ALGOLIA_SEARCH_URL = 'https://hn.algolia.com/api/v1/search'
-const ALGOLIA_ITEMS_URL = 'https://hn.algolia.com/api/v1/items'
 const MAX_RELATED_STORIES = 10
+const RELATED_STORY_ATTRIBUTES = 'objectID,title,points,num_comments,author,url'
+const SOURCE_STORY_ATTRIBUTES = 'title,url'
 
-type AlgoliaItem = {
-  id?: number
+type RelatedSourceStory = {
   title?: string | null
   url?: string | null
-  text?: string | null
 }
 
 type AlgoliaStoryHit = {
@@ -23,24 +25,17 @@ type AlgoliaStoryHit = {
 
 type AlgoliaCommentHit = {
   story_id?: number | string | null
-  story_title?: string | null
-  story_url?: string | null
 }
 
 type AlgoliaSearchResponse<T> = {
   hits?: T[]
 }
 
-type RelatedStory = {
-  title: string
-  objectID: string
-  points: number
-  num_comments: number
-  author: string
+type RelatedStoryCandidate = RelatedStory & {
   url: string
 }
 
-type ScoredStory = RelatedStory & {
+type ScoredStory = RelatedStoryCandidate & {
   score: number
 }
 
@@ -188,7 +183,10 @@ const searchAlgolia = async <T>(params: Record<string, string>) => {
 
 const fetchStoryHits = async (params: Record<string, string>, weight: number): Promise<SearchResult> => {
   try {
-    const hits = await searchAlgolia<AlgoliaStoryHit>(params)
+    const hits = await searchAlgolia<AlgoliaStoryHit>({
+      attributesToRetrieve: RELATED_STORY_ATTRIBUTES,
+      ...params,
+    })
     return { hits, weight }
   } catch (error) {
     console.warn('Failed to fetch related story candidates:', error)
@@ -199,6 +197,7 @@ const fetchStoryHits = async (params: Record<string, string>, weight: number): P
 const fetchCommentLinkedStories = async (query: string, excludeId: string): Promise<SearchResult> => {
   try {
     const comments = await searchAlgolia<AlgoliaCommentHit>({
+      attributesToRetrieve: 'story_id',
       query,
       tags: 'comment',
       hitsPerPage: '24'
@@ -225,6 +224,7 @@ const fetchCommentLinkedStories = async (query: string, excludeId: string): Prom
     const order = new Map(rankedStoryIds.map((storyId, index) => [storyId, index]))
     const filters = rankedStoryIds.map(storyId => `objectID:${storyId}`).join(' OR ')
     const hits = await searchAlgolia<AlgoliaStoryHit>({
+      attributesToRetrieve: RELATED_STORY_ATTRIBUTES,
       tags: 'story',
       filters,
       hitsPerPage: String(rankedStoryIds.length)
@@ -256,7 +256,7 @@ const getPopularityScore = (hit: AlgoliaStoryHit) => {
   return Math.min(16, Math.log10(points + 1) * 6) + Math.min(8, Math.log10(comments + 1) * 4)
 }
 
-const toRelatedStory = (hit: AlgoliaStoryHit): RelatedStory | null => {
+const toRelatedStory = (hit: AlgoliaStoryHit): RelatedStoryCandidate | null => {
   if (!hit.objectID || !hit.title) return null
 
   return {
@@ -269,7 +269,7 @@ const toRelatedStory = (hit: AlgoliaStoryHit): RelatedStory | null => {
   }
 }
 
-const rankRelatedStories = (results: SearchResult[], source: AlgoliaItem, excludeId: string) => {
+const rankRelatedStories = (results: SearchResult[], source: RelatedSourceStory, excludeId: string) => {
   const sourceTokens = tokenize(cleanTitle(source.title ?? ''), 12)
   const sourceHost = normalizeHost(source.url)
   const sourceUrl = canonicalizeUrl(source.url)
@@ -303,14 +303,25 @@ const rankRelatedStories = (results: SearchResult[], source: AlgoliaItem, exclud
   return Array.from(candidates.values())
     .sort((a, b) => b.score - a.score)
     .slice(0, MAX_RELATED_STORIES)
-    .map(({ score, ...story }) => story)
+    .map(({ score, url: _url, ...story }) => story)
+}
+
+const fetchSourceStory = async (id: string) => {
+  const stories = await searchAlgolia<RelatedSourceStory>({
+    attributesToRetrieve: SOURCE_STORY_ATTRIBUTES,
+    filters: `objectID:${id}`,
+    hitsPerPage: '1',
+    tags: 'story',
+  })
+
+  return stories[0] ?? null
 }
 
 export default defineEventHandler(async (event) => {
   const params = getRouterParams(event)
   const id = params.id
 
-  if (!id) {
+  if (!isValidHnItemId(id)) {
     throw createError({
       statusCode: 400,
       message: 'Story ID is required'
@@ -319,7 +330,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const sourceItemStartedAt = performance.now()
-    const story = await $fetch<AlgoliaItem>(`${ALGOLIA_ITEMS_URL}/${id}`)
+    const story = await fetchSourceStory(id)
     const sourceItemDuration = performance.now() - sourceItemStartedAt
     
     if (!story || !story.title) {
@@ -399,8 +410,8 @@ export default defineEventHandler(async (event) => {
 
     return relatedStories
 
-  } catch (error: any) {
-    if (error?.statusCode) {
+  } catch (error: unknown) {
+    if (getErrorStatusCode(error) !== null) {
       throw error
     }
 

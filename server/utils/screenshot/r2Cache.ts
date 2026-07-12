@@ -40,25 +40,17 @@ export type R2Screenshot = {
   contentType: string
   capturedAt: Date | null
   isFresh: boolean
-  key: string
-  policy?: ScreenshotPolicyName
   processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
-  skipReason?: ScreenshotSkipReason
-  sourceStrategy?: ScreenshotSourceStrategy
-  variant?: ScreenshotVariant
 }
 
 export type R2ScreenshotFailure = {
   capturedAt: Date | null
   isFailure: true
   isFresh: boolean
-  key: string
   policy?: ScreenshotPolicyName
-  reason?: string
   skipReason?: ScreenshotSkipReason
   sourceStrategy?: ScreenshotSourceStrategy
-  variant?: ScreenshotVariant
 }
 
 const normalizeTtlDays = (value: unknown) => {
@@ -194,12 +186,9 @@ export const readR2Screenshot = async (
       capturedAt,
       isFailure: true,
       isFresh: isFreshFailure(capturedAt, failureTtlMinutes),
-      key,
       policy: metadata.policy,
-      reason: metadata.reason,
       skipReason: metadata.skipReason,
       sourceStrategy: metadata.sourceStrategy,
-      variant: metadata.variant,
     }
   }
 
@@ -210,13 +199,8 @@ export const readR2Screenshot = async (
     contentType,
     capturedAt,
     isFresh: isFresh(capturedAt, ttlDays),
-    key,
-    policy: metadata.policy,
     processor: metadata.processor,
     provider: metadata.provider,
-    skipReason: metadata.skipReason,
-    sourceStrategy: metadata.sourceStrategy,
-    variant: metadata.variant,
   }
 }
 
@@ -246,7 +230,7 @@ export const writeR2Screenshot = async (
     policy: metadata.policy ?? 'capture',
     provider: result.provider,
     sourceUrlHash,
-    sourceStrategy: metadata.sourceStrategy ?? result.sourceStrategy,
+    sourceStrategy: metadata.sourceStrategy,
     status: 'ok',
     variant,
   }

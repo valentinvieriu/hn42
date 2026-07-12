@@ -6,11 +6,9 @@
     ref="cardRef"
     :data-screenshot-state="imageState"
     :data-screenshot-requested="imageSrc ? 'started' : 'pending'"
-    class="story-card seed-palette-surface group flex flex-col overflow-hidden rounded-2xl bg-white transition-[border-color,box-shadow,transform] duration-300 dark:bg-gray-900"
-    :class="[
-      { 'pointer-events-none': isScrolling }
-    ]" 
-    :style="cardPaletteStyle">
+    class="story-card seed-palette-surface flex flex-col overflow-hidden rounded-2xl bg-white transition-[border-color,box-shadow,transform] duration-300 dark:bg-gray-900"
+    :style="cardPaletteStyle"
+  >
     <div class="story-card-visual relative aspect-[4/4] shrink-0 overflow-hidden">
       <div class="story-card-topbar meta-text">
         <NuxtLink
@@ -25,7 +23,7 @@
         </NuxtLink>
         <span class="story-card-time">
           <LucideClock class="w-4 h-4" aria-hidden="true" />
-          {{ formatCompactDistanceToNow(story.created_at) }}
+          {{ formatCompactTimeAgo(story.created_at) }}
         </span>
       </div>
       <NuxtLink :to="`/item/${story.objectID}`" class="block h-full">
@@ -36,13 +34,7 @@
             :state="imageState"
             presentation="card"
           />
-          <div 
-            ref="imageContainerRef"
-            class="story-card-image-track relative w-full h-full transform transition-transform duration-500"
-            :class="{
-              scrolling: isTouchDevice && isInView,
-              'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
-            }">
+          <div class="story-card-image-track relative w-full h-full transform transition-transform duration-500">
             <img
               v-if="imageSrc"
               :alt="story.title"
@@ -59,23 +51,15 @@
           </div>
         </div>
         <div class="absolute inset-0">
-          <div 
-            class="absolute inset-0"
-            :style="radialGradientStyle"
-          ></div>
+          <div class="story-card-radial-overlay absolute inset-0"></div>
         </div>
       </NuxtLink>
     </div>
-    <div class="story-card-body flex flex-1 flex-col p-4 md:p-4">
+    <div class="story-card-body flex flex-1 flex-col p-4">
       <div class="story-card-body-backdrop" aria-hidden="true">
         <div
-          ref="bodyImageContainerRef"
           class="story-card-body-image-track relative w-full h-full transform transition-transform duration-500"
-          :class="{
-            scrolling: isTouchDevice && isInView,
-            'is-loaded': imageState === 'loaded',
-            'group-hover:translate-y-[-50%]': !isTouchDevice || !isInView
-          }"
+          :class="{ 'is-loaded': imageState === 'loaded' }"
         >
           <div class="story-card-body-image" :style="bodyBackdropImageStyle"></div>
         </div>
@@ -88,7 +72,7 @@
         </NuxtLink>
         <div class="story-card-status-row meta-text">
           <NuxtLink
-            :to="getUserPath(story.author)"
+            :to="getHnUserPath(story.author)"
             class="story-card-author"
           >
             {{ story.author }}
@@ -119,20 +103,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { LucideTrendingUp, LucideMessageSquare, LucideExternalLink, LucideClock } from '@lucide/vue'
-import { useScroll } from '~/composables/useScroll'
 import type { Story } from '#shared/types'
-import { useDebounce } from '~/composables/useDebounce'; // Import the new debounce function
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 import { normalizeStoryPlaceholderDomain } from '~/composables/useStoryPlaceholder'
 import { getScreenshotPath } from '#shared/utils/screenshot'
+import { formatCompactTimeAgo } from '#shared/utils/date'
+import { getHnItemUrl, getHnUserPath } from '#shared/utils/hn'
+import { observeStoryScreenshot, unobserveStoryScreenshot } from '~/utils/storyScreenshotObserver'
 
 const props = defineProps<{
   story: Story
 }>()
-
-const { isScrolling } = useScroll()
 
 const getDomainFromUrl = (url: string): string => {
   try {
@@ -142,62 +125,11 @@ const getDomainFromUrl = (url: string): string => {
   }
 }
 
-const getHnItemUrl = (id: string) => `https://news.ycombinator.com/item?id=${id}`
-const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
-
-const formatCompactDistanceToNow = (dateValue: string): string => {
-  const timestamp = new Date(dateValue).getTime()
-
-  if (Number.isNaN(timestamp)) {
-    return ''
-  }
-
-  const diffSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000))
-  const minute = 60
-  const hour = minute * 60
-  const day = hour * 24
-  const month = day * 30
-  const year = day * 365
-
-  if (diffSeconds < minute) {
-    return 'now'
-  }
-
-  if (diffSeconds < hour) {
-    return `${Math.floor(diffSeconds / minute)}m ago`
-  }
-
-  if (diffSeconds < day) {
-    return `${Math.floor(diffSeconds / hour)}h ago`
-  }
-
-  if (diffSeconds < month) {
-    return `${Math.floor(diffSeconds / day)}d ago`
-  }
-
-  if (diffSeconds < year) {
-    return `${Math.floor(diffSeconds / month)}mo ago`
-  }
-
-  return `${Math.floor(diffSeconds / year)}y ago`
-}
-
 const externalStoryUrl = computed(() => props.story.url || getHnItemUrl(props.story.objectID))
 const storyDomain = computed(() => getDomainFromUrl(externalStoryUrl.value))
 const paletteDomain = computed(() => normalizeStoryPlaceholderDomain(storyDomain.value))
-const cardPaletteStyle = computed(() => getSeedPaletteStyle(props.story.objectID, 'light', paletteDomain.value))
-
-const screenshotSrc = computed(() => getScreenshotPath(props.story.objectID))
-
-// Define the radial gradient style using OKLCH CSS variables
-const radialGradientStyle = computed(() => ({
-  background: `radial-gradient(
-    circle at center,
-    transparent 0%,
-    var(--seed-overlay-mid) 75%,
-    var(--seed-overlay-edge) 100%
-  )`
-}))
+const cardPaletteStyle = computed(() => getSeedPaletteStyle(props.story.objectID, paletteDomain.value))
+const screenshotSrc = getScreenshotPath(props.story.objectID)
 
 const pointsToneClass = computed(() => {
   if (props.story.points < 100 && props.story.num_comments < 50) {
@@ -229,17 +161,9 @@ const handleCardClick = () => {
   router.push(`/item/${props.story.objectID}`)
 }
 
-// Touch device detection starts false for SSR and initial hydration.
-const isTouchDevice = ref(false)
-
-// Refs for DOM elements
 const cardRef = ref<HTMLElement | null>(null)
-const imageContainerRef = ref<HTMLElement | null>(null)
-const bodyImageContainerRef = ref<HTMLElement | null>(null)
 const imageSrc = ref<string | null>(null)
 const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>('queued')
-const isWithinImageLoadMargin = ref(false)
-let imageLoadObserver: IntersectionObserver | null = null
 
 const bodyBackdropImageStyle = computed(() => {
   if (!imageSrc.value || imageState.value !== 'loaded') {
@@ -266,181 +190,17 @@ const loadScreenshot = () => {
   }
 
   imageState.value = 'loading'
-  imageSrc.value = screenshotSrc.value
-  imageLoadObserver?.disconnect()
-  imageLoadObserver = null
-}
-
-watch(
-  () => props.story.objectID,
-  async () => {
-    imageSrc.value = null
-    imageState.value = 'queued'
-    await nextTick()
-
-    if (isWithinImageLoadMargin.value) {
-      loadScreenshot()
-    }
-  },
-)
-
-// Visibility state
-const isInView = ref(false)
-
-// Animation frame ID
-let scrollAnimationFrameId: number | null = null
-let observer: IntersectionObserver | null = null
-let isListeningForTouchScroll = false
-
-// Scroll handling
-const scrollProgress = ref(0)
-
-let windowHeight = 0
-
-const getWindowHeight = () => window.innerHeight || document.documentElement.clientHeight
-
-const setImageTrackTransform = (transform: string) => {
-  if (imageContainerRef.value) {
-    imageContainerRef.value.style.transform = transform
-  }
-
-  if (bodyImageContainerRef.value) {
-    bodyImageContainerRef.value.style.transform = transform
-  }
-}
-
-const updateImageScrollTransform = () => {
-  if (!isInView.value || !isTouchDevice.value || !imageContainerRef.value) return;
-
-  const card = cardRef.value;
-  if (!card) return;
-
-  const rect = card.getBoundingClientRect();
-
-  // Calculate how much of the card is visible (0 to 1)
-  const visibleRatio = Math.max(0, Math.min(1, (windowHeight - rect.top) / (rect.height + windowHeight)));
-
-  // Update scroll progress based on visibility
-  scrollProgress.value = visibleRatio;
-
-  // Apply transform using translate3d for better performance
-  setImageTrackTransform(`translate3d(0, ${-50 * scrollProgress.value}%, 0)`);
-};
-
-const scheduleImageScrollUpdate = () => {
-  if (!isInView.value || !isTouchDevice.value || scrollAnimationFrameId !== null) {
-    return
-  }
-
-  scrollAnimationFrameId = requestAnimationFrame(() => {
-    scrollAnimationFrameId = null
-    updateImageScrollTransform()
-  })
-}
-
-const updateWindowHeight = useDebounce(() => {
-  windowHeight = getWindowHeight()
-  scheduleImageScrollUpdate()
-}, 150)
-
-const addTouchScrollListener = () => {
-  if (isListeningForTouchScroll) {
-    return
-  }
-
-  window.addEventListener('scroll', scheduleImageScrollUpdate, { passive: true })
-  isListeningForTouchScroll = true
-}
-
-const removeTouchScrollListener = () => {
-  if (!isListeningForTouchScroll) {
-    return
-  }
-
-  window.removeEventListener('scroll', scheduleImageScrollUpdate)
-  isListeningForTouchScroll = false
+  imageSrc.value = screenshotSrc
 }
 
 onMounted(() => {
-  if ('IntersectionObserver' in window) {
-    imageLoadObserver = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0]
-
-        if (!entry) {
-          return
-        }
-
-        isWithinImageLoadMargin.value = entry.isIntersecting
-
-        if (entry.isIntersecting) {
-          loadScreenshot()
-        }
-      },
-      {
-        rootMargin: '400px 0px',
-        threshold: 0.01,
-      },
-    )
-
-    if (cardRef.value) {
-      imageLoadObserver.observe(cardRef.value)
-    }
-  } else {
-    isWithinImageLoadMargin.value = true
+  if (!cardRef.value || !observeStoryScreenshot(cardRef.value, loadScreenshot)) {
     loadScreenshot()
-  }
-
-  isTouchDevice.value = ('ontouchstart' in window) || navigator.maxTouchPoints > 0
-  windowHeight = getWindowHeight()
-
-  if (isTouchDevice.value) {
-    if ('IntersectionObserver' in window) {
-      observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach(entry => {
-            isInView.value = entry.isIntersecting
-
-            if (entry.isIntersecting) {
-              addTouchScrollListener()
-              scheduleImageScrollUpdate()
-              return
-            }
-
-            removeTouchScrollListener()
-            if (scrollAnimationFrameId) {
-              cancelAnimationFrame(scrollAnimationFrameId)
-              scrollAnimationFrameId = null
-            }
-          })
-        },
-        {
-          threshold: [0, 0.1, 0.5, 1],
-          rootMargin: '25% 0px',
-        }
-      )
-
-      if (cardRef.value) {
-        observer.observe(cardRef.value)
-      }
-    } else {
-      isInView.value = true
-      addTouchScrollListener()
-      scheduleImageScrollUpdate()
-    }
-
-    window.addEventListener('resize', updateWindowHeight)
   }
 })
 
 onBeforeUnmount(() => {
-  if (scrollAnimationFrameId) {
-    cancelAnimationFrame(scrollAnimationFrameId)
-  }
-  imageLoadObserver?.disconnect()
-  observer?.disconnect()
-  removeTouchScrollListener()
-  window.removeEventListener('resize', updateWindowHeight)
+  unobserveStoryScreenshot(cardRef.value)
 })
 </script>
 
@@ -556,6 +316,15 @@ onBeforeUnmount(() => {
 .story-card-image-track {
   backface-visibility: hidden;
   transform-origin: center top;
+}
+
+.story-card-radial-overlay {
+  background: radial-gradient(
+    circle at center,
+    transparent 0%,
+    var(--seed-overlay-mid) 75%,
+    var(--seed-overlay-edge) 100%
+  );
 }
 
 .story-card-image {
@@ -871,6 +640,7 @@ onBeforeUnmount(() => {
 
   .story-card:hover .story-card-image-track,
   .story-card:hover .story-card-body-image-track {
+    transform: translateY(-50%);
     will-change: transform;
   }
 
@@ -880,12 +650,6 @@ onBeforeUnmount(() => {
       0 8px 26px rgb(0 0 0 / 0.3),
       0 1px 0 rgb(255 255 255 / 0.1) inset;
   }
-}
-
-.story-card-image-track.scrolling,
-.story-card-body-image-track.scrolling {
-  transition-duration: 0ms;
-  will-change: transform;
 }
 
 @media (pointer: coarse) {

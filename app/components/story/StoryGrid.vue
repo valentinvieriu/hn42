@@ -254,7 +254,6 @@ useSeoMeta({
 }
 
 .skeleton-line,
-.skeleton-pill,
 .skeleton-block {
   border: 1px solid var(--seed-metric-border);
   background:
