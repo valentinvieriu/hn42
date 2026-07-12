@@ -1,30 +1,29 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { defineNuxtConfig } from 'nuxt/config'
 
-const jsquashWasmModuleIds = new Set([
-  '@jsquash/jpeg/codec/dec/mozjpeg_dec.wasm?module',
-  '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?module',
-  '@jsquash/resize/lib/resize/pkg/squoosh_resize_bg.wasm?module',
-])
-const jsquashWasmDevStubId = '\0hn42-jsquash-wasm-dev-stub'
-
 export default defineNuxtConfig({
-  compatibilityDate: '2025-09-15',
+  compatibilityDate: '2026-07-11',
   devtools: { enabled: false },
   runtimeConfig: {
-    screenshotFetchConcurrency: '1',
+    screenshotBrowserActionTimeoutMs: '3000',
+    screenshotBrowserCacheTtlSeconds: '86400',
+    screenshotBrowserGotoTimeoutMs: '8000',
+    screenshotBrowserMinIntervalMs: '10000',
+    screenshotBrowserWaitAfterLoadMs: '200',
+    screenshotCaptureEnabled: process.env.NUXT_SCREENSHOT_CAPTURE_ENABLED
+      ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false'),
+    screenshotCaptureConcurrency: '1',
+    screenshotCaptureDailyLimit: '60',
+    screenshotCaptureQueueDepth: '5',
+    screenshotCaptureQueueTimeoutMs: '30000',
     screenshotFailureTtlMinutes: '360',
     screenshotPolicyBlockedHosts: '',
-    screenshotPolicyHeadProbeTimeoutMs: '1200',
-    screenshotR2TtlDays: '30',
-    screenshotThumbnailHeight: '1440',
-    screenshotThumbnailJpegQuality: '78',
-    screenshotThumbnailMaxInputBytes: '6000000',
-    screenshotThumbnailMaxInputPixels: '8000000',
-    screenshotThumbnailProcessingConcurrency: '1',
-    screenshotThumbnailProcessingQueueTimeoutMs: '15000',
-    screenshotThumbnailProcessingTimeoutMs: '5000',
-    screenshotThumbnailWidth: '720',
+    screenshotPolicyProbeTimeoutMs: '1200',
+    screenshotPreviewHeight: '1440',
+    screenshotPreviewJpegQuality: '72',
+    screenshotPreviewMaxBytes: '750000',
+    screenshotPreviewWidth: '720',
+    screenshotR2TtlDays: '180',
     screenshotXCancelBaseUrl: 'https://xcancel.com',
     public: {
       screenshotImageQueueConcurrency: '1',
@@ -34,13 +33,6 @@ export default defineNuxtConfig({
     preset: "cloudflare-module",
     cloudflare: {
       nodeCompat: true,
-    },
-    experimental: {
-      wasm: true,
-    },
-    wasm: {
-      esmImport: true,
-      lazy: false,
     },
   },
   modules: [
@@ -133,7 +125,6 @@ export default defineNuxtConfig({
       'xxl': 1536,
       '2xl': 1536
     },
-    domains: ['backup15.terasp.net'],
     presets: {
       detail: {
         modifiers: {
@@ -160,23 +151,16 @@ export default defineNuxtConfig({
   },
   routeRules: {
     '/': { redirect: '/top' },
+    '/best': { headers: { 'cache-control': 'no-store' } },
+    '/item/**': { headers: { 'cache-control': 'no-store' } },
+    '/new': { headers: { 'cache-control': 'no-store' } },
+    '/privacy': { headers: { 'cache-control': 'no-store' } },
+    '/show': { headers: { 'cache-control': 'no-store' } },
+    '/terms': { headers: { 'cache-control': 'no-store' } },
+    '/top': { headers: { 'cache-control': 'no-store' } },
+    '/user/**': { headers: { 'cache-control': 'no-store' } },
   },
   vite: {
-    plugins: [
-      {
-        name: 'hn42-jsquash-wasm-dev-stub',
-        enforce: 'pre',
-        apply: 'serve',
-        resolveId(id) {
-          return jsquashWasmModuleIds.has(id) ? jsquashWasmDevStubId : null
-        },
-        load(id) {
-          return id === jsquashWasmDevStubId
-            ? 'export default undefined'
-            : null
-        },
-      },
-    ],
     optimizeDeps: {
       include: [
         '@lucide/vue',

@@ -1,7 +1,7 @@
 #:schema node_modules/wrangler/config-schema.json
 name = "hn42"
 account_id = "b704c2550c9082fb06e9796e7c042412"
-compatibility_date = "2025-09-15"
+compatibility_date = "2026-07-11"
 compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public", binding = "ASSETS" }
@@ -9,10 +9,14 @@ assets = { directory = "./.output/public", binding = "ASSETS" }
 [[r2_buckets]]
 binding = "SCREENSHOTS_BUCKET"
 bucket_name = "hn42-screenshots"
-preview_bucket_name = "hn42-screenshots-dev"
+remote = true
 
-[images]
-binding = "IMAGES"
+[browser]
+binding = "BROWSER"
+remote = true
+
+[cache]
+enabled = true
 
 [observability]
 enabled = true

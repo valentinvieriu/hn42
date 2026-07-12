@@ -1,16 +1,18 @@
-import { captureWithBackup15 } from './backup15'
+import { captureWithBrowserRun } from './browserRun'
 import type {
+  ScreenshotEnv,
   ScreenshotProviderName,
   ScreenshotResult,
 } from './types'
 
 export const captureScreenshotWithProvider = async (
   provider: ScreenshotProviderName,
+  env: ScreenshotEnv | undefined,
   sourceUrl: string,
-  concurrency: unknown,
+  runtimeConfig: any,
 ): Promise<ScreenshotResult> => {
   switch (provider) {
-    case 'backup15':
-      return await captureWithBackup15(sourceUrl, concurrency)
+    case 'browser-run':
+      return await captureWithBrowserRun(env, sourceUrl, runtimeConfig)
   }
 }

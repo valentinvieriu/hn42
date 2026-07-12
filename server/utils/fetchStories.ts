@@ -25,7 +25,7 @@ export const fetchStories = async (
         num_comments: hit.num_comments || 0,
         created_at: hit.created_at || '',
         objectID: hit.objectID,
-        screenshotUrl: `/api/screenshot/${hit.objectID}?variant=thumbnail`,
+        screenshotUrl: `/api/screenshot/${hit.objectID}`,
       }))
   } catch (error) {
     console.error('Error fetching stories:', error)

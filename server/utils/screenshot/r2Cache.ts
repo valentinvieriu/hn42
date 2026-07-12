@@ -10,14 +10,15 @@ import type {
   ScreenshotVariant,
 } from './types'
 
-const R2_PREFIX = 'screenshots/v2'
-const DEFAULT_R2_TTL_DAYS = 30
+const R2_PREFIX = 'screenshots/v3'
+const DEFAULT_R2_TTL_DAYS = 180
 const DEFAULT_FAILURE_TTL_MINUTES = 6 * 60
-const DEFAULT_THUMBNAIL_WIDTH = 720
-const DEFAULT_THUMBNAIL_HEIGHT = 1440
-const DEFAULT_THUMBNAIL_QUALITY = 78
+const DEFAULT_PREVIEW_WIDTH = 720
+const DEFAULT_PREVIEW_HEIGHT = 1440
+const DEFAULT_PREVIEW_QUALITY = 72
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
+const SECONDS_PER_DAY = 24 * 60 * 60
 const EMPTY_FAILURE_MARKER = new Uint8Array()
 
 type R2ScreenshotMetadata = {
@@ -70,6 +71,26 @@ const normalizeTtlDays = (value: unknown) => {
   return Math.max(1, Math.floor(parsedValue))
 }
 
+export const getRemainingR2TtlSeconds = (
+  capturedAt: Date | null | undefined,
+  ttlDays: unknown,
+  maximumSeconds = Number.POSITIVE_INFINITY,
+) => {
+  const configuredTtlSeconds = Math.min(
+    maximumSeconds,
+    normalizeTtlDays(ttlDays) * SECONDS_PER_DAY,
+  )
+
+  if (!capturedAt) {
+    return configuredTtlSeconds
+  }
+
+  return Math.max(0, Math.min(
+    configuredTtlSeconds,
+    Math.floor((capturedAt.getTime() + normalizeTtlDays(ttlDays) * MS_PER_DAY - Date.now()) / 1000),
+  ))
+}
+
 const normalizeTtlMinutes = (value: unknown) => {
   const parsedValue = Number(value)
 
@@ -100,23 +121,20 @@ const normalizePositiveInteger = (value: unknown, fallback: number) => {
   return Math.max(1, Math.floor(parsedValue))
 }
 
-export const getR2OriginalScreenshotKey = (sourceUrlHash: string) => {
-  return `${R2_PREFIX}/${sourceUrlHash}/original.jpg`
-}
-
-export const getR2ThumbnailScreenshotKey = (
+export const getR2PreviewScreenshotKey = (
   sourceUrlHash: string,
-  width: unknown = DEFAULT_THUMBNAIL_WIDTH,
-  height: unknown = DEFAULT_THUMBNAIL_HEIGHT,
-  quality: unknown = DEFAULT_THUMBNAIL_QUALITY,
-  format: 'jpg' | 'webp' = 'jpg',
+  width: unknown = DEFAULT_PREVIEW_WIDTH,
+  height: unknown = DEFAULT_PREVIEW_HEIGHT,
+  quality: unknown = DEFAULT_PREVIEW_QUALITY,
 ) => {
-  const normalizedWidth = normalizePositiveInteger(width, DEFAULT_THUMBNAIL_WIDTH)
-  const normalizedHeight = normalizePositiveInteger(height, DEFAULT_THUMBNAIL_HEIGHT)
-  const normalizedQuality = normalizePositiveInteger(quality, DEFAULT_THUMBNAIL_QUALITY)
+  const normalizedWidth = normalizePositiveInteger(width, DEFAULT_PREVIEW_WIDTH)
+  const normalizedHeight = normalizePositiveInteger(height, DEFAULT_PREVIEW_HEIGHT)
+  const normalizedQuality = normalizePositiveInteger(quality, DEFAULT_PREVIEW_QUALITY)
 
-  return `${R2_PREFIX}/${sourceUrlHash}/thumbnail-${normalizedWidth}x${normalizedHeight}-q${normalizedQuality}.${format}`
+  return `${R2_PREFIX}/${sourceUrlHash}/preview-${normalizedWidth}x${normalizedHeight}-q${normalizedQuality}.jpg`
 }
+
+export const getR2ScreenshotFailureKey = (screenshotKey: string) => `${screenshotKey}.failure`
 
 const getCapturedAt = (metadata: R2ScreenshotMetadata) => {
   if (!metadata.capturedAt) {
@@ -244,7 +262,7 @@ export const writeR2Screenshot = async (
   await bucket.put(key, result.bytes, {
     httpMetadata: {
       contentType: result.contentType,
-      cacheControl: 'public, max-age=86400',
+      cacheControl: 'public, max-age=15552000, immutable',
     },
     customMetadata: toCustomMetadata(customMetadata),
   })
@@ -283,4 +301,11 @@ export const writeR2ScreenshotFailure = async (
       variant,
     }),
   })
+}
+
+export const deleteR2ScreenshotFailure = async (
+  env: ScreenshotEnv | undefined,
+  key: string,
+) => {
+  await env?.SCREENSHOTS_BUCKET?.delete(key)
 }

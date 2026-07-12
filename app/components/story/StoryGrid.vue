@@ -85,9 +85,10 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-7">
             <StoryCard
-              v-for="story in stories"
+              v-for="(story, index) in stories"
               :key="story.objectID"
               :story="story"
+              :priority="index < 3"
             />
           </div>
         </div>
@@ -109,10 +110,7 @@ const feedTheme = computed(() => getFeedTheme(props.endpoint));
 const feedThemeStyle = computed(() => getFeedThemeStyle(props.endpoint));
 const title = computed(() => feedTheme.value.title);
 const requestUrl = useRequestURL();
-const firstStoryImage = computed(() => {
-  const imagePath = stories.value[0]?.screenshotUrl || '/icon_x512.png';
-  return new URL(imagePath, requestUrl.origin).href;
-});
+const feedSocialImage = new URL('/icon_x512.png', requestUrl.origin).href;
 const skeletonTitleWidths = ['82%', '68%', '76%', '58%', '88%'];
 const skeletonPaletteStyle = (index: number) => {
   return getSeedPaletteStyle(`loading-${props.endpoint}-${index}`);
@@ -123,9 +121,9 @@ useSeoMeta({
   description: () => feedTheme.value.description,
   ogTitle: title,
   ogDescription: () => feedTheme.value.description,
-  ogImage: firstStoryImage,
+  ogImage: feedSocialImage,
   twitterCard: 'summary_large_image',
-  twitterImage: firstStoryImage,
+  twitterImage: feedSocialImage,
 });
 </script>
 

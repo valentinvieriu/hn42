@@ -187,7 +187,7 @@ export const fetchUserPosts = async (
         created_at: hit.created_at || '',
         created_at_i: hit.created_at_i ?? undefined,
         story_text: hit.story_text || null,
-        screenshotUrl: `/api/screenshot/${objectID}?variant=thumbnail`,
+        screenshotUrl: `/api/screenshot/${objectID}`,
       }
     },
   )

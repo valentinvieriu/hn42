@@ -59,7 +59,7 @@
             </span>
           </div>
           <a
-            v-if="storyExternalUrl"
+            v-if="storyExternalUrl && isCompactViewport"
             :href="storyExternalUrl"
             target="_blank"
             rel="noopener noreferrer"
@@ -98,6 +98,7 @@
             v-html="sanitizedText"
           ></div>
           <div
+            v-if="!isCompactViewport"
             class="source-screenshot-preview seed-palette-surface hidden lg:block mb-8"
             :data-screenshot-state="originalPreviewState"
             :style="screenshotPreviewStyle"
@@ -163,7 +164,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp } from '@lucide/vue';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
@@ -229,8 +230,9 @@ const error = computed(() => {
   return null
 })
 const isLoading = computed(() => pending.value)
-const thumbnailScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=thumbnail` : '')
-const originalScreenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}?variant=original` : '')
+const screenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}` : '')
+const thumbnailScreenshotSrc = screenshotSrc
+const originalScreenshotSrc = screenshotSrc
 const storyExternalUrl = computed(() => {
   if (story.value?.url) {
     return story.value.url
@@ -243,6 +245,22 @@ const storyExternalUrl = computed(() => {
 type ScreenshotPreviewState = 'loading' | 'loaded' | 'failed'
 const thumbnailPreviewState = ref<ScreenshotPreviewState>('loading')
 const originalPreviewState = ref<ScreenshotPreviewState>('loading')
+const isCompactViewport = ref(false)
+let compactViewportMediaQuery: MediaQueryList | null = null
+
+const updateCompactViewport = (event: MediaQueryList | MediaQueryListEvent) => {
+  isCompactViewport.value = event.matches
+}
+
+onMounted(() => {
+  compactViewportMediaQuery = window.matchMedia('(max-width: 1023px)')
+  updateCompactViewport(compactViewportMediaQuery)
+  compactViewportMediaQuery.addEventListener('change', updateCompactViewport)
+})
+
+onBeforeUnmount(() => {
+  compactViewportMediaQuery?.removeEventListener('change', updateCompactViewport)
+})
 const storyDomain = computed(() => {
   if (!storyExternalUrl.value) {
     return 'source'
@@ -344,7 +362,7 @@ const siteOrigin = requestUrl.origin
 const title = computed(() => story.value?.title ?? 'Loading...')
 const socialImage = computed(() => {
   const path = storyId.value
-    ? `/api/screenshot/${storyId.value}?variant=thumbnail`
+    ? `/api/screenshot/${storyId.value}`
     : '/icon_x512.png'
 
   return new URL(path, siteOrigin).href

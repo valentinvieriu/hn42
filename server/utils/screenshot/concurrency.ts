@@ -12,6 +12,13 @@ export class ScreenshotConcurrencyTimeoutError extends Error {
   }
 }
 
+export class ScreenshotConcurrencyQueueFullError extends Error {
+  constructor(label: string, maxQueueDepth: number) {
+    super(`${label} concurrency queue is full at ${maxQueueDepth} pending tasks`)
+    this.name = 'ScreenshotConcurrencyQueueFullError'
+  }
+}
+
 const normalizeConcurrency = (value: unknown, fallback: number) => {
   const parsedValue = Number(value)
 
@@ -34,6 +41,20 @@ const normalizeQueueTimeout = (value: unknown): number | null => {
   }
 
   return Math.max(1, Math.floor(parsedValue))
+}
+
+const normalizeQueueDepth = (value: unknown): number | null => {
+  if (value === null || value === false || value === undefined) {
+    return null
+  }
+
+  const parsedValue = Number(value)
+
+  if (!Number.isFinite(parsedValue)) {
+    return null
+  }
+
+  return Math.max(0, Math.floor(parsedValue))
 }
 
 export const createConcurrencyLimiter = (defaultConcurrency: number) => {
@@ -66,11 +87,16 @@ export const createConcurrencyLimiter = (defaultConcurrency: number) => {
 
   const acquire = async (
     concurrency: unknown,
-    options: { label?: string, maxQueueWaitMs?: unknown } = {},
+    options: { label?: string, maxQueueDepth?: unknown, maxQueueWaitMs?: unknown } = {},
   ) => {
     maxConcurrency = normalizeConcurrency(concurrency, defaultConcurrency)
+    const maxQueueDepth = normalizeQueueDepth(options.maxQueueDepth)
     const maxQueueWaitMs = normalizeQueueTimeout(options.maxQueueWaitMs)
     const label = options.label ?? 'Screenshot'
+
+    if (maxQueueDepth !== null && activeTasks >= maxConcurrency && pendingTasks.length >= maxQueueDepth) {
+      throw new ScreenshotConcurrencyQueueFullError(label, maxQueueDepth)
+    }
 
     return new Promise<() => void>((resolve, reject) => {
       const task: QueueTask = {

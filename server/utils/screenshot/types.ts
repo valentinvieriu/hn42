@@ -1,5 +1,5 @@
-export type ScreenshotProviderName = 'backup15'
-export type ScreenshotProcessorName = 'images' | 'wasm' | 'original'
+export type ScreenshotProviderName = 'browser-run'
+export type ScreenshotProcessorName = 'browser-run' | 'original'
 export type ScreenshotVariant = 'original' | 'thumbnail'
 export type ScreenshotPolicyName = 'capture' | 'skip'
 export type ScreenshotSourceStrategy =
@@ -15,14 +15,17 @@ export type ScreenshotSkipReason =
   | 'non-html-content'
   | 'pdf-content'
   | 'pdf-url'
+  | 'unavailable-content'
+  | 'unverified-content'
 
 export type ScreenshotEnv = {
-  IMAGES?: ImagesBinding
+  BROWSER?: BrowserRun
   SCREENSHOTS_BUCKET?: R2Bucket
 }
 
 export type ScreenshotResult = {
   bytes: ArrayBuffer
+  browserMsUsed?: number
   contentType: string
   processor?: ScreenshotProcessorName
   provider: ScreenshotProviderName
@@ -34,15 +37,4 @@ export type ScreenshotPolicyMetadata = {
   policy?: ScreenshotPolicyName
   skipReason?: ScreenshotSkipReason
   sourceStrategy?: ScreenshotSourceStrategy
-}
-
-export type ThumbnailRuntimeConfig = {
-  concurrency: unknown
-  height: unknown
-  jpegQuality: unknown
-  maxInputBytes: unknown
-  maxInputPixels: unknown
-  queueTimeoutMs: unknown
-  timeoutMs: unknown
-  width: unknown
 }

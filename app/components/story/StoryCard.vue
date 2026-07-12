@@ -50,7 +50,7 @@
               :src="queuedImageSrc"
               loading="eager"
               decoding="async"
-              fetchpriority="low"
+              :fetchpriority="priority ? 'high' : 'low'"
               class="story-card-image w-full object-cover transition-opacity duration-500"
               :class="imageState === 'loaded' ? 'opacity-100' : 'opacity-0'"
               :aria-hidden="imageState !== 'loaded'"
@@ -130,8 +130,11 @@ import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 import { normalizeStoryPlaceholderDomain } from '~/composables/useStoryPlaceholder'
 
 const props = defineProps<{
+  priority?: boolean
   story: Story
 }>()
+
+const IMAGE_LOAD_TIMEOUT_MS = 45_000
 
 const { isScrolling } = useScroll()
 
@@ -188,7 +191,7 @@ const storyDomain = computed(() => getDomainFromUrl(externalStoryUrl.value))
 const paletteDomain = computed(() => normalizeStoryPlaceholderDomain(storyDomain.value))
 const cardPaletteStyle = computed(() => getSeedPaletteStyle(props.story.objectID, 'light', paletteDomain.value))
 
-const screenshotSrc = computed(() => `/api/screenshot/${props.story.objectID}?variant=thumbnail`)
+const screenshotSrc = computed(() => props.story.screenshotUrl || `/api/screenshot/${props.story.objectID}`)
 
 // Define the radial gradient style using OKLCH CSS variables
 const radialGradientStyle = computed(() => ({
@@ -240,9 +243,11 @@ const bodyImageContainerRef = ref<HTMLElement | null>(null)
 const queuedImageSrc = ref<string | null>(null)
 const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>('queued')
 const hasRequestedImageLoad = ref(false)
+const isWithinImageLoadMargin = ref(false)
 const { enqueueImageLoad } = useImageLoadQueue()
 let imageQueueHandle: ImageLoadQueueHandle | null = null
 let imageLoadObserver: IntersectionObserver | null = null
+let imageLoadTimeout: ReturnType<typeof setTimeout> | null = null
 
 const bodyBackdropImageStyle = computed(() => {
   if (!queuedImageSrc.value || imageState.value !== 'loaded') {
@@ -255,6 +260,11 @@ const bodyBackdropImageStyle = computed(() => {
 })
 
 const releaseImageQueueSlot = () => {
+  if (imageLoadTimeout) {
+    clearTimeout(imageLoadTimeout)
+    imageLoadTimeout = null
+  }
+
   imageQueueHandle?.complete()
   imageQueueHandle = null
 }
@@ -280,19 +290,31 @@ const queueScreenshotLoad = () => {
   imageQueueHandle = enqueueImageLoad(() => {
     imageState.value = 'loading'
     queuedImageSrc.value = screenshotSrc.value
+    imageLoadObserver?.disconnect()
+    imageLoadObserver = null
+    imageLoadTimeout = setTimeout(() => {
+      imageState.value = 'failed'
+      queuedImageSrc.value = null
+      releaseImageQueueSlot()
+    }, IMAGE_LOAD_TIMEOUT_MS)
   })
 }
 
 watch(
   () => props.story.objectID,
   async () => {
+    if (imageLoadTimeout) {
+      clearTimeout(imageLoadTimeout)
+      imageLoadTimeout = null
+    }
+
     imageQueueHandle?.cancel()
     imageQueueHandle = null
     queuedImageSrc.value = null
     imageState.value = 'queued'
     await nextTick()
 
-    if (hasRequestedImageLoad.value) {
+    if (hasRequestedImageLoad.value && isWithinImageLoadMargin.value) {
       queueScreenshotLoad()
     }
   },
@@ -379,14 +401,26 @@ onMounted(() => {
   if ('IntersectionObserver' in window) {
     imageLoadObserver = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
+        const entry = entries[0]
+
+        if (!entry) {
+          return
+        }
+
+        isWithinImageLoadMargin.value = entry.isIntersecting
+
+        if (entry.isIntersecting) {
           queueScreenshotLoad()
-          imageLoadObserver?.disconnect()
-          imageLoadObserver = null
+          return
+        }
+
+        if (!queuedImageSrc.value && imageQueueHandle) {
+          imageQueueHandle.cancel()
+          imageQueueHandle = null
         }
       },
       {
-        rootMargin: '700px 0px',
+        rootMargin: '400px 0px',
         threshold: 0.01,
       },
     )
@@ -395,6 +429,7 @@ onMounted(() => {
       imageLoadObserver.observe(cardRef.value)
     }
   } else {
+    isWithinImageLoadMargin.value = true
     queueScreenshotLoad()
   }
 
@@ -445,6 +480,9 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(scrollAnimationFrameId)
   }
   imageQueueHandle?.cancel()
+  if (imageLoadTimeout) {
+    clearTimeout(imageLoadTimeout)
+  }
   imageLoadObserver?.disconnect()
   observer?.disconnect()
   removeTouchScrollListener()

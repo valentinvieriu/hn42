@@ -7,12 +7,12 @@ const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY ?? process.env.AWS_SECR
 const sessionToken = process.env.R2_SESSION_TOKEN ?? process.env.AWS_SESSION_TOKEN
 const buckets = (
   process.env.HN42_SCREENSHOT_RESET_BUCKETS
-  ?? `${process.env.HN42_SCREENSHOT_PREVIEW_BUCKET ?? 'hn42-screenshots-dev'},${process.env.HN42_SCREENSHOT_BUCKET ?? 'hn42-screenshots'}`
+  ?? (process.env.HN42_SCREENSHOT_BUCKET ?? 'hn42-screenshots')
 )
   .split(',')
   .map((bucket) => bucket.trim())
   .filter(Boolean)
-const prefix = process.env.HN42_SCREENSHOT_RESET_PREFIX ?? 'screenshots/v1/'
+const prefix = process.env.HN42_SCREENSHOT_RESET_PREFIX ?? 'screenshots/v2/'
 const dryRun = process.argv.includes('--dry-run')
 
 if (!accountId || !accessKeyId || !secretAccessKey) {

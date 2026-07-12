@@ -7,7 +7,7 @@
     "check": "npm run typecheck && npm test && npm run build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
-    "preview": "npm run build && wrangler dev",
+    "preview": "NUXT_SCREENSHOT_CAPTURE_ENABLED=false npm run build && wrangler dev",
     "postinstall": "nuxt prepare",
     "test": "vitest run",
     "typecheck": "nuxi typecheck",
@@ -17,8 +17,6 @@
     "cf:screenshots:reset-cache": "node scripts/reset-cloudflare-screenshot-cache.mjs"
   },
   "dependencies": {
-    "@jsquash/jpeg": "^1.6.0",
-    "@jsquash/resize": "^2.1.1",
     "@lucide/vue": "^1.24.0",
     "@nuxt/image": "^2.0.0",
     "@nuxtjs/color-mode": "^4.0.1",

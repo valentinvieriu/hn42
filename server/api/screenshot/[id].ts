@@ -2,14 +2,17 @@ import {
   createError,
   defineEventHandler,
   getQuery,
-  getRequestURL,
   getRouterParams,
+  type H3Event,
 } from 'h3'
 import { useRuntimeConfig } from '#imports'
+import { isBrowserRunCapacityError } from '../../utils/screenshot/browserRun'
 import { captureScreenshotWithProvider } from '../../utils/screenshot/providers'
 import {
-  getR2OriginalScreenshotKey,
-  getR2ThumbnailScreenshotKey,
+  deleteR2ScreenshotFailure,
+  getR2PreviewScreenshotKey,
+  getRemainingR2TtlSeconds,
+  getR2ScreenshotFailureKey,
   getSourceUrlHash,
   isR2ScreenshotFailure,
   readR2Screenshot,
@@ -26,7 +29,6 @@ import {
   ScreenshotPolicySkipError,
   type ScreenshotCaptureDecision,
 } from '../../utils/screenshot/sourcePolicy'
-import { createAndPersistThumbnailWithPipeline } from '../../utils/screenshot/thumbnailPipeline'
 import type {
   ScreenshotEnv,
   ScreenshotPolicyMetadata,
@@ -34,75 +36,74 @@ import type {
   ScreenshotProviderName,
   ScreenshotResult,
   ScreenshotVariant,
-  ThumbnailRuntimeConfig,
 } from '../../utils/screenshot/types'
 
-const FALLBACK_MEMORY_TTL_MS = 15 * 60 * 1000
-const R2_MISS_MEMORY_TTL_MS = 2 * 60 * 1000
 const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
   255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
 ])
-const fallbackExpirations = new Map<string, { expiresAt: number, metadata: ScreenshotPolicyMetadata }>()
-const r2MissExpirations = new Map<string, number>()
-const pendingOriginalCaptures = new Map<string, Promise<ScreenshotResult>>()
+const pendingCaptures = new Map<string, Promise<ScreenshotResult>>()
 
-const SCREENSHOT_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=604800',
-  'CDN-Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400, stale-if-error=86400',
-  'Cloudflare-CDN-Cache-Control': 'public, max-age=604800, stale-while-revalidate=86400, stale-if-error=86400',
-} as const
+const BROWSER_SCREENSHOT_TTL_SECONDS = 30 * 24 * 60 * 60
+const MAX_EDGE_SCREENSHOT_TTL_SECONDS = 180 * 24 * 60 * 60
 
 const STALE_SCREENSHOT_CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=3600',
-  'CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=3600, stale-if-error=3600',
-  'Cloudflare-CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=3600, stale-if-error=3600',
+  'CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=3600, stale-if-error=86400',
+  'Cloudflare-CDN-Cache-Control': 'public, max-age=3600, stale-while-revalidate=3600, stale-if-error=86400',
 } as const
 
-const FALLBACK_CACHE_HEADERS = {
-  'Cache-Control': 'no-store',
-  'CDN-Cache-Control': 'no-store',
-  'Cloudflare-CDN-Cache-Control': 'no-store',
+const DETERMINISTIC_FALLBACK_CACHE_HEADERS = {
+  'Cache-Control': 'public, max-age=300',
+  'CDN-Cache-Control': 'public, max-age=21600, stale-if-error=86400',
+  'Cloudflare-CDN-Cache-Control': 'public, max-age=21600, stale-if-error=86400',
 } as const
 
-type ScreenshotCacheStatus = 'HIT' | 'R2' | 'MISS' | 'STALE' | 'FALLBACK'
-const R2_READ_FAILED = Symbol('R2_READ_FAILED')
+const TRANSIENT_FALLBACK_CACHE_HEADERS = {
+  'Cache-Control': 'public, max-age=60',
+  'CDN-Cache-Control': 'public, max-age=600, stale-if-error=3600',
+  'Cloudflare-CDN-Cache-Control': 'public, max-age=600, stale-if-error=3600',
+} as const
+
+type ScreenshotCacheStatus = 'R2' | 'MISS' | 'STALE' | 'FALLBACK'
 
 type HnFirebaseStory = {
+  dead?: unknown
+  deleted?: unknown
+  type?: unknown
   url?: unknown
 }
 
-type R2ReadResult = R2Screenshot | R2ScreenshotFailure | null | typeof R2_READ_FAILED
-
-const getWaitUntil = (event: any) => {
-  const cloudflareContext = event.context.cloudflare?.context
-
-  return cloudflareContext?.waitUntil?.bind(cloudflareContext)
-    ?? event.waitUntil?.bind(event)
+type ScreenshotRuntimeConfig = {
+  screenshotCaptureEnabled?: unknown
+  screenshotFailureTtlMinutes?: unknown
+  screenshotPolicyBlockedHosts?: unknown
+  screenshotPolicyProbeTimeoutMs?: unknown
+  screenshotPreviewHeight?: unknown
+  screenshotPreviewJpegQuality?: unknown
+  screenshotPreviewWidth?: unknown
+  screenshotR2TtlDays?: unknown
+  screenshotXCancelBaseUrl?: unknown
+  [key: string]: unknown
 }
 
-const runInBackground = (event: any, task: Promise<unknown>) => {
-  const waitUntil = getWaitUntil(event)
-
-  if (waitUntil) {
-    waitUntil(task)
-    return
-  }
-
-  task.catch(() => {})
-}
-
-const putCacheResponse = (
-  event: any,
-  cache: Cache | undefined,
-  cacheKey: Request | undefined,
-  response: Response,
+const getScreenshotCacheHeaders = (
+  image: ScreenshotResult | R2Screenshot,
+  ttlDays: unknown,
 ) => {
-  if (!cache || !cacheKey) {
-    return
-  }
+  const capturedAt = 'capturedAt' in image ? image.capturedAt : null
+  const edgeTtlSeconds = getRemainingR2TtlSeconds(
+    capturedAt,
+    ttlDays,
+    MAX_EDGE_SCREENSHOT_TTL_SECONDS,
+  )
+  const browserTtlSeconds = Math.min(BROWSER_SCREENSHOT_TTL_SECONDS, edgeTtlSeconds)
 
-  runInBackground(event, cache.put(cacheKey, response.clone()))
+  return {
+    'Cache-Control': `public, max-age=${browserTtlSeconds}, immutable`,
+    'CDN-Cache-Control': `public, max-age=${edgeTtlSeconds}, stale-while-revalidate=86400, stale-if-error=86400`,
+    'Cloudflare-CDN-Cache-Control': `public, max-age=${edgeTtlSeconds}, stale-while-revalidate=86400, stale-if-error=86400`,
+  }
 }
 
 const withScreenshotCacheStatus = (
@@ -112,6 +113,7 @@ const withScreenshotCacheStatus = (
   variant?: ScreenshotVariant,
   processor?: ScreenshotProcessorName,
   metadata: ScreenshotPolicyMetadata = {},
+  browserMsUsed?: number,
 ) => {
   const headers = new Headers(response.headers)
   headers.set('X-HN42-Screenshot-Cache', status)
@@ -140,6 +142,10 @@ const withScreenshotCacheStatus = (
     headers.set('X-HN42-Screenshot-Skip-Reason', metadata.skipReason)
   }
 
+  if (browserMsUsed !== undefined) {
+    headers.set('X-HN42-Browser-Ms-Used', String(browserMsUsed))
+  }
+
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -149,56 +155,14 @@ const withScreenshotCacheStatus = (
 
 const getFallbackKey = (id: string, variant: ScreenshotVariant) => `${id}:${variant}`
 
-const getFreshFallbackMetadata = (fallbackKey: string) => {
-  const fallback = fallbackExpirations.get(fallbackKey)
-
-  if (!fallback) {
-    return null
-  }
-
-  if (fallback.expiresAt <= Date.now()) {
-    fallbackExpirations.delete(fallbackKey)
-    return null
-  }
-
-  return fallback.metadata
-}
-
-const hasFreshR2Miss = (key: string) => {
-  const expiresAt = r2MissExpirations.get(key)
-
-  if (!expiresAt) {
-    return false
-  }
-
-  if (expiresAt <= Date.now()) {
-    r2MissExpirations.delete(key)
-    return false
-  }
-
-  return true
-}
-
-const noteR2Miss = (key: string) => {
-  r2MissExpirations.set(key, Date.now() + R2_MISS_MEMORY_TTL_MS)
-}
-
-const forgetR2Miss = (key: string) => {
-  r2MissExpirations.delete(key)
-}
-
 const createFallbackResponse = (
   fallbackKey?: string,
   variant: ScreenshotVariant = 'original',
   metadata: ScreenshotPolicyMetadata = {},
 ) => {
-  if (fallbackKey) {
-    fallbackExpirations.set(fallbackKey, {
-      expiresAt: Date.now() + FALLBACK_MEMORY_TTL_MS,
-      metadata,
-    })
-  }
-
+  const cacheHeaders = metadata.policy === 'skip'
+    ? DETERMINISTIC_FALLBACK_CACHE_HEADERS
+    : TRANSIENT_FALLBACK_CACHE_HEADERS
   const response = new Response(TRANSPARENT_GIF, {
     headers: {
       'Content-Type': 'image/gif',
@@ -207,31 +171,11 @@ const createFallbackResponse = (
       'Accept-Ranges': 'bytes',
       'X-HN42-Screenshot-Fallback': '1',
       'X-HN42-Screenshot-Format': 'gif',
-      ...FALLBACK_CACHE_HEADERS,
+      ...cacheHeaders,
     },
   })
 
   return withScreenshotCacheStatus(response, 'FALLBACK', undefined, variant, undefined, metadata)
-}
-
-const getImageFormat = (contentType: string) => {
-  return contentType.replace(/^image\//, '') || 'unknown'
-}
-
-const getScreenshotProcessor = (
-  image: ScreenshotResult | R2Screenshot,
-  variant: ScreenshotVariant,
-  thumbnailFallback?: boolean,
-): ScreenshotProcessorName => {
-  if (thumbnailFallback) {
-    return 'original'
-  }
-
-  if (image.processor) {
-    return image.processor
-  }
-
-  return variant === 'thumbnail' ? 'wasm' : 'original'
 }
 
 const createImageResponse = (
@@ -239,32 +183,30 @@ const createImageResponse = (
   sourceUrlHash: string,
   variant: ScreenshotVariant,
   cacheStatus: ScreenshotCacheStatus,
-  provider?: ScreenshotProviderName,
-  options: { metadata?: ScreenshotPolicyMetadata, thumbnailFallback?: boolean } = {},
+  metadata: ScreenshotPolicyMetadata,
+  ttlDays: unknown,
 ) => {
-  const format = getImageFormat(image.contentType)
-  const processor = getScreenshotProcessor(image, variant, options.thumbnailFallback)
-  const fallbackSuffix = options.thumbnailFallback ? '-fallback-original' : ''
+  const format = image.contentType.replace(/^image\//, '') || 'unknown'
+  const processor = image.processor ?? (image.provider === 'browser-run' ? 'browser-run' : 'original')
   const headers = new Headers({
     'Content-Type': image.contentType,
     'Content-Length': String(image.bytes.byteLength),
-    'ETag': `W/"hn42-screenshot-v2-${variant}-${format}-${processor}${fallbackSuffix}-${sourceUrlHash.slice(0, 16)}"`,
+    'ETag': `W/"hn42-screenshot-v3-${format}-${processor}-${sourceUrlHash.slice(0, 16)}"`,
     'Accept-Ranges': 'bytes',
     'X-HN42-Screenshot-Format': format,
-    ...(cacheStatus === 'STALE' ? STALE_SCREENSHOT_CACHE_HEADERS : SCREENSHOT_CACHE_HEADERS),
+    ...(cacheStatus === 'STALE'
+      ? STALE_SCREENSHOT_CACHE_HEADERS
+      : getScreenshotCacheHeaders(image, ttlDays)),
   })
-
-  if (options.thumbnailFallback) {
-    headers.set('X-HN42-Screenshot-Thumbnail-Fallback', 'original')
-  }
 
   return withScreenshotCacheStatus(
     new Response(image.bytes, { headers }),
     cacheStatus,
-    provider ?? image.provider,
+    image.provider,
     variant,
     processor,
-    options.metadata,
+    metadata,
+    'browserMsUsed' in image ? image.browserMsUsed : undefined,
   )
 }
 
@@ -273,47 +215,23 @@ const readR2Cache = async (
   key: string,
   ttlDays: unknown,
   failureTtlMinutes: unknown,
-): Promise<R2ReadResult> => {
-  if (hasFreshR2Miss(key)) {
-    return null
-  }
-
-  const result = await readR2Screenshot(env, key, ttlDays, failureTtlMinutes).catch((error): typeof R2_READ_FAILED => {
-    console.warn(`R2 screenshot read failed: ${error instanceof Error ? error.message : String(error)}`)
-    return R2_READ_FAILED
+) => {
+  return await readR2Screenshot(env, key, ttlDays, failureTtlMinutes).catch((error) => {
+    console.warn(JSON.stringify({
+      message: 'R2 screenshot read failed',
+      key,
+      error: error instanceof Error ? error.message : String(error),
+    }))
+    throw error
   })
-
-  if (result === null) {
-    noteR2Miss(key)
-  }
-
-  return result
 }
 
-const getR2Screenshot = (result: R2ReadResult) => {
-  return result && result !== R2_READ_FAILED && !isR2ScreenshotFailure(result)
-    ? result
-    : null
+const getR2Screenshot = (result: R2Screenshot | R2ScreenshotFailure | null) => {
+  return result && !isR2ScreenshotFailure(result) ? result : null
 }
 
-const getR2Failure = (result: R2ReadResult) => {
-  return result && result !== R2_READ_FAILED && isR2ScreenshotFailure(result)
-    ? result
-    : null
-}
-
-const toScreenshotResult = (
-  image: R2Screenshot,
-  variant: ScreenshotVariant,
-): ScreenshotResult => {
-  return {
-    bytes: image.bytes,
-    contentType: image.contentType,
-    processor: image.processor,
-    provider: image.provider ?? 'backup15',
-    sourceStrategy: image.sourceStrategy,
-    variant,
-  }
+const getR2Failure = (result: R2Screenshot | R2ScreenshotFailure | null) => {
+  return result && isR2ScreenshotFailure(result) ? result : null
 }
 
 const getCaptureMetadata = (decision: ScreenshotCaptureDecision): ScreenshotPolicyMetadata => ({
@@ -330,25 +248,21 @@ const getFailureMetadata = (
   sourceStrategy: failure.sourceStrategy ?? decision.sourceStrategy,
 })
 
-const getSkipErrorMetadata = (
-  error: ScreenshotPolicySkipError,
-): ScreenshotPolicyMetadata => ({
+const getSkipErrorMetadata = (error: ScreenshotPolicySkipError): ScreenshotPolicyMetadata => ({
   policy: 'skip',
   skipReason: error.skipReason,
   sourceStrategy: error.sourceStrategy,
 })
 
-const captureAndPersistOriginal = (
-  event: any,
+const captureAndPersistPreview = (
   env: ScreenshotEnv | undefined,
-  originalKey: string,
+  previewKey: string,
+  failureKey: string,
   sourceUrlHash: string,
   sourceDecision: ScreenshotCaptureDecision,
-  runtimeConfig: any,
-  concurrency: unknown,
-  writeFailureMarker: boolean,
+  runtimeConfig: ScreenshotRuntimeConfig,
 ) => {
-  const pendingCapture = pendingOriginalCaptures.get(originalKey)
+  const pendingCapture = pendingCaptures.get(previewKey)
 
   if (pendingCapture) {
     return pendingCapture
@@ -362,67 +276,95 @@ const captureAndPersistOriginal = (
 
       return captureScreenshotWithProvider(
         sourceDecision.captureProvider,
-        sourceDecision.captureUrl,
-        concurrency,
+        env,
+        probeResult.captureUrl,
+        runtimeConfig,
       )
     })
-    .then((screenshot) => {
-      const original: ScreenshotResult = {
+    .then(async (screenshot) => {
+      const preview: ScreenshotResult = {
         ...screenshot,
-        processor: 'original',
         sourceStrategy: sourceDecision.sourceStrategy,
         variant: 'original',
       }
 
-      forgetR2Miss(originalKey)
-      runInBackground(
-        event,
-        writeR2Screenshot(env, originalKey, sourceUrlHash, original, 'original', getCaptureMetadata(sourceDecision)).catch((error) => {
-          console.warn(`R2 original screenshot write failed: ${error instanceof Error ? error.message : String(error)}`)
-        }),
-      )
+      try {
+        await writeR2Screenshot(
+          env,
+          previewKey,
+          sourceUrlHash,
+          preview,
+          'original',
+          getCaptureMetadata(sourceDecision),
+        )
+        await deleteR2ScreenshotFailure(env, failureKey)
+      } catch (error) {
+        console.warn(JSON.stringify({
+          message: 'R2 preview persistence failed',
+          error: error instanceof Error ? error.message : String(error),
+        }))
+      }
 
-      return original
+      console.info(JSON.stringify({
+        message: 'Browser Run screenshot captured',
+        browserMsUsed: preview.browserMsUsed,
+        bytes: preview.bytes.byteLength,
+        sourceStrategy: preview.sourceStrategy,
+        sourceUrlHash: sourceUrlHash.slice(0, 16),
+      }))
+
+      return preview
     })
-    .catch((error) => {
-      if (writeFailureMarker) {
-        const metadata = isScreenshotPolicySkipError(error)
-          ? getSkipErrorMetadata(error)
-          : getCaptureMetadata(sourceDecision)
-
-        runInBackground(
-          event,
-          writeR2ScreenshotFailure(
+    .catch(async (error) => {
+      if (!isBrowserRunCapacityError(error) && !isScreenshotPolicySkipError(error)) {
+        try {
+          await writeR2ScreenshotFailure(
             env,
-            originalKey,
+            failureKey,
             sourceUrlHash,
             error instanceof Error ? error.message : String(error),
             'original',
-            metadata,
-          ).catch((writeError) => {
-            console.warn(`R2 original failure write failed: ${writeError instanceof Error ? writeError.message : String(writeError)}`)
-          }),
-        )
+            getCaptureMetadata(sourceDecision),
+          )
+        } catch (writeError) {
+          console.warn(JSON.stringify({
+            message: 'R2 preview failure write failed',
+            error: writeError instanceof Error ? writeError.message : String(writeError),
+          }))
+        }
       }
 
       throw error
     })
     .finally(() => {
-      pendingOriginalCaptures.delete(originalKey)
+      pendingCaptures.delete(previewKey)
     })
 
-  pendingOriginalCaptures.set(originalKey, capture)
+  pendingCaptures.set(previewKey, capture)
 
   return capture
 }
 
 const isValidStoryId = (id: unknown): id is string => {
-  return typeof id === 'string' && /^\d+$/.test(id)
+  if (typeof id !== 'string' || !/^[1-9]\d{0,14}$/.test(id)) {
+    return false
+  }
+
+  return Number.isSafeInteger(Number(id))
 }
 
-const getRequestedVariant = (event: any): ScreenshotVariant => {
-  const rawVariant = getQuery(event).variant
-  const variant = Array.isArray(rawVariant) ? rawVariant[0] : rawVariant
+const getRequestedVariant = (event: H3Event): ScreenshotVariant => {
+  const query = getQuery(event)
+  const queryKeys = Object.keys(query)
+
+  if (queryKeys.some((key) => key !== 'variant')) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: 'Only the screenshot variant query parameter is supported',
+    })
+  }
+
+  const variant = query.variant
 
   if (variant === undefined || variant === null || variant === '') {
     return 'original'
@@ -439,340 +381,171 @@ const getRequestedVariant = (event: any): ScreenshotVariant => {
 }
 
 const resolveStorySourceUrl = async (id: string) => {
-  const story = await $fetch<HnFirebaseStory>(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+  const story = await $fetch<HnFirebaseStory>(
+    `https://hacker-news.firebaseio.com/v0/item/${id}.json`,
+    { timeout: 3000 },
+  )
 
-  return normalizeSourceUrl(story?.url)
+  if (story?.type !== 'story' || story.dead === true || story.deleted === true) {
+    return null
+  }
+
+  return normalizeSourceUrl(story.url)
 }
 
-const serveOriginal = async (
-  event: any,
+const isCaptureEnabled = (value: unknown) => {
+  if (typeof value === 'boolean') {
+    return value
+  }
+
+  if (typeof value === 'string') {
+    return !['0', 'false', 'no', 'off'].includes(value.trim().toLowerCase())
+  }
+
+  return true
+}
+
+const servePreview = async (
   options: {
-    cache: Cache | undefined
-    cacheKey: Request | undefined
+    captureEnabled: boolean
     env: ScreenshotEnv | undefined
+    failureKey: string
     fallbackKey: string
-    id: string
-    originalKey: string
-    runtimeConfig: any
+    previewKey: string
+    runtimeConfig: ScreenshotRuntimeConfig
     sourceDecision: ScreenshotCaptureDecision
     sourceUrlHash: string
+    variant: ScreenshotVariant
   },
 ) => {
   const captureMetadata = getCaptureMetadata(options.sourceDecision)
-  const originalResult = await readR2Cache(
+  const previewResult = await readR2Cache(
     options.env,
-    options.originalKey,
+    options.previewKey,
     options.runtimeConfig.screenshotR2TtlDays,
     options.runtimeConfig.screenshotFailureTtlMinutes,
   )
-  const originalFailure = getR2Failure(originalResult)
+  const legacyFailure = getR2Failure(previewResult)
 
-  if (originalFailure) {
-    if (originalFailure.isFresh) {
-      return createFallbackResponse(options.fallbackKey, 'original', getFailureMetadata(originalFailure, options.sourceDecision))
-    }
-
-    noteR2Miss(options.originalKey)
+  if (legacyFailure?.isFresh) {
+    return createFallbackResponse(
+      options.fallbackKey,
+      options.variant,
+      getFailureMetadata(legacyFailure, options.sourceDecision),
+    )
   }
 
-  const originalScreenshot = getR2Screenshot(originalResult)
+  const previewScreenshot = getR2Screenshot(previewResult)
 
-  if (originalScreenshot?.isFresh) {
-    const response = createImageResponse(
-      originalScreenshot,
+  if (previewScreenshot?.isFresh) {
+    return createImageResponse(
+      previewScreenshot,
       options.sourceUrlHash,
-      'original',
+      options.variant,
       'R2',
-      originalScreenshot.provider,
-      { metadata: captureMetadata },
+      captureMetadata,
+      options.runtimeConfig.screenshotR2TtlDays,
     )
+  }
 
-    putCacheResponse(event, options.cache, options.cacheKey, response)
+  const failureResult = await readR2Cache(
+    options.env,
+    options.failureKey,
+    options.runtimeConfig.screenshotR2TtlDays,
+    options.runtimeConfig.screenshotFailureTtlMinutes,
+  )
+  const failure = getR2Failure(failureResult)
 
-    return response
+  if (failure?.isFresh) {
+    if (previewScreenshot) {
+      return createImageResponse(
+        previewScreenshot,
+        options.sourceUrlHash,
+        options.variant,
+        'STALE',
+        getFailureMetadata(failure, options.sourceDecision),
+        options.runtimeConfig.screenshotR2TtlDays,
+      )
+    }
+
+    return createFallbackResponse(
+      options.fallbackKey,
+      options.variant,
+      getFailureMetadata(failure, options.sourceDecision),
+    )
+  }
+
+  if (!options.captureEnabled || !options.env?.SCREENSHOTS_BUCKET || !options.env.BROWSER) {
+    if (previewScreenshot) {
+      return createImageResponse(
+        previewScreenshot,
+        options.sourceUrlHash,
+        options.variant,
+        'STALE',
+        captureMetadata,
+        options.runtimeConfig.screenshotR2TtlDays,
+      )
+    }
+
+    return createFallbackResponse(options.fallbackKey, options.variant, captureMetadata)
   }
 
   try {
-    const screenshot = await captureAndPersistOriginal(
-      event,
+    const preview = await captureAndPersistPreview(
       options.env,
-      options.originalKey,
+      options.previewKey,
+      options.failureKey,
       options.sourceUrlHash,
       options.sourceDecision,
       options.runtimeConfig,
-      options.runtimeConfig.screenshotFetchConcurrency,
-      originalResult !== R2_READ_FAILED && !originalScreenshot,
     )
-    const response = createImageResponse(
-      screenshot,
+
+    return createImageResponse(
+      preview,
       options.sourceUrlHash,
-      'original',
+      options.variant,
       'MISS',
-      screenshot.provider,
-      { metadata: captureMetadata },
+      captureMetadata,
+      options.runtimeConfig.screenshotR2TtlDays,
     )
-
-    putCacheResponse(event, options.cache, options.cacheKey, response)
-
-    return response
   } catch (error) {
     if (isScreenshotPolicySkipError(error)) {
-      if (originalScreenshot) {
-        const response = createImageResponse(
-          originalScreenshot,
+      if (previewScreenshot) {
+        return createImageResponse(
+          previewScreenshot,
           options.sourceUrlHash,
-          'original',
+          options.variant,
           'STALE',
-          originalScreenshot.provider,
-          { metadata: getSkipErrorMetadata(error) },
+          getSkipErrorMetadata(error),
+          options.runtimeConfig.screenshotR2TtlDays,
         )
-
-        putCacheResponse(event, options.cache, options.cacheKey, response)
-
-        return response
       }
 
-      return createFallbackResponse(options.fallbackKey, 'original', getSkipErrorMetadata(error))
+      return createFallbackResponse(options.fallbackKey, options.variant, getSkipErrorMetadata(error))
     }
 
-    console.warn(`screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.warn(JSON.stringify({
+      message: 'Screenshot capture failed',
+      error: error instanceof Error ? error.message : String(error),
+    }))
   }
 
-  if (originalScreenshot) {
-    const response = createImageResponse(
-      originalScreenshot,
+  if (previewScreenshot) {
+    return createImageResponse(
+      previewScreenshot,
       options.sourceUrlHash,
-      'original',
+      options.variant,
       'STALE',
-      originalScreenshot.provider,
-      { metadata: captureMetadata },
+      captureMetadata,
+      options.runtimeConfig.screenshotR2TtlDays,
     )
-
-    putCacheResponse(event, options.cache, options.cacheKey, response)
-
-    return response
   }
 
-  return createFallbackResponse(options.fallbackKey, 'original', captureMetadata)
-}
-
-const serveThumbnail = async (
-  event: any,
-  options: {
-    cache: Cache | undefined
-    cacheKey: Request | undefined
-    env: ScreenshotEnv | undefined
-    fallbackKey: string
-    id: string
-    originalKey: string
-    runtimeConfig: any
-    sourceDecision: ScreenshotCaptureDecision
-    sourceUrlHash: string
-    thumbnailConfig: ThumbnailRuntimeConfig
-    thumbnailJpegKey: string
-    thumbnailWebpKey: string
-  },
-) => {
-  const captureMetadata = getCaptureMetadata(options.sourceDecision)
-  const webpThumbnailResult = await readR2Cache(
-    options.env,
-    options.thumbnailWebpKey,
-    options.runtimeConfig.screenshotR2TtlDays,
-    options.runtimeConfig.screenshotFailureTtlMinutes,
-  )
-  const webpThumbnailFailure = getR2Failure(webpThumbnailResult)
-
-  if (webpThumbnailFailure && !webpThumbnailFailure.isFresh) {
-    noteR2Miss(options.thumbnailWebpKey)
-  }
-
-  const webpThumbnailScreenshot = getR2Screenshot(webpThumbnailResult)
-
-  if (webpThumbnailScreenshot?.isFresh) {
-    const response = createImageResponse(
-      webpThumbnailScreenshot,
-      options.sourceUrlHash,
-      'thumbnail',
-      'R2',
-      webpThumbnailScreenshot.provider,
-      { metadata: captureMetadata },
-    )
-
-    putCacheResponse(event, options.cache, options.cacheKey, response)
-
-    return response
-  }
-
-  const jpegThumbnailResult = await readR2Cache(
-    options.env,
-    options.thumbnailJpegKey,
-    options.runtimeConfig.screenshotR2TtlDays,
-    options.runtimeConfig.screenshotFailureTtlMinutes,
-  )
-  const jpegThumbnailFailure = getR2Failure(jpegThumbnailResult)
-
-  if (jpegThumbnailFailure && !jpegThumbnailFailure.isFresh) {
-    noteR2Miss(options.thumbnailJpegKey)
-  }
-
-  const jpegThumbnailScreenshot = getR2Screenshot(jpegThumbnailResult)
-
-  if (jpegThumbnailScreenshot?.isFresh) {
-    const response = createImageResponse(
-      jpegThumbnailScreenshot,
-      options.sourceUrlHash,
-      'thumbnail',
-      'R2',
-      jpegThumbnailScreenshot.provider,
-      { metadata: captureMetadata },
-    )
-
-    putCacheResponse(event, options.cache, options.cacheKey, response)
-
-    return response
-  }
-
-  const staleThumbnailScreenshot = webpThumbnailScreenshot ?? jpegThumbnailScreenshot
-
-  const originalResult = await readR2Cache(
-    options.env,
-    options.originalKey,
-    options.runtimeConfig.screenshotR2TtlDays,
-    options.runtimeConfig.screenshotFailureTtlMinutes,
-  )
-  const originalFailure = getR2Failure(originalResult)
-
-  if (originalFailure) {
-    if (originalFailure.isFresh) {
-      const failureMetadata = getFailureMetadata(originalFailure, options.sourceDecision)
-
-      if (staleThumbnailScreenshot) {
-        const response = createImageResponse(
-          staleThumbnailScreenshot,
-          options.sourceUrlHash,
-          'thumbnail',
-          'STALE',
-          staleThumbnailScreenshot.provider,
-          { metadata: failureMetadata },
-        )
-
-        putCacheResponse(event, options.cache, options.cacheKey, response)
-
-        return response
-      }
-
-      return createFallbackResponse(options.fallbackKey, 'thumbnail', failureMetadata)
-    }
-
-    noteR2Miss(options.originalKey)
-  }
-
-  const originalScreenshot = getR2Screenshot(originalResult)
-  let original = originalScreenshot ? toScreenshotResult(originalScreenshot, 'original') : null
-  let originalCacheStatus: ScreenshotCacheStatus = originalScreenshot ? 'R2' : 'MISS'
-
-  if (!original) {
-    try {
-      original = await captureAndPersistOriginal(
-        event,
-        options.env,
-        options.originalKey,
-        options.sourceUrlHash,
-        options.sourceDecision,
-        options.runtimeConfig,
-        options.runtimeConfig.screenshotFetchConcurrency,
-        originalResult !== R2_READ_FAILED && !originalScreenshot,
-      )
-      originalCacheStatus = 'MISS'
-    } catch (error) {
-      if (isScreenshotPolicySkipError(error)) {
-        if (staleThumbnailScreenshot) {
-          const response = createImageResponse(
-            staleThumbnailScreenshot,
-            options.sourceUrlHash,
-            'thumbnail',
-            'STALE',
-            staleThumbnailScreenshot.provider,
-            { metadata: getSkipErrorMetadata(error) },
-          )
-
-          putCacheResponse(event, options.cache, options.cacheKey, response)
-
-          return response
-        }
-
-        return createFallbackResponse(options.fallbackKey, 'thumbnail', getSkipErrorMetadata(error))
-      }
-
-      console.warn(`screenshot capture failed: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  if (!original) {
-    if (staleThumbnailScreenshot) {
-      const response = createImageResponse(
-        staleThumbnailScreenshot,
-        options.sourceUrlHash,
-        'thumbnail',
-        'STALE',
-        staleThumbnailScreenshot.provider,
-        { metadata: captureMetadata },
-      )
-
-      putCacheResponse(event, options.cache, options.cacheKey, response)
-
-      return response
-    }
-
-    return createFallbackResponse(options.fallbackKey, 'thumbnail', captureMetadata)
-  }
-
-  if (!webpThumbnailFailure?.isFresh) {
-    const thumbnail = await createAndPersistThumbnailWithPipeline({
-      config: options.thumbnailConfig,
-      env: options.env,
-      forgetR2Miss,
-      jpegKey: options.thumbnailJpegKey,
-      original,
-      scheduleBackground: (task) => runInBackground(event, task),
-      sourceUrlHash: options.sourceUrlHash,
-      webpKey: options.thumbnailWebpKey,
-      writeFailureMarker: webpThumbnailResult !== R2_READ_FAILED && !webpThumbnailScreenshot && !jpegThumbnailScreenshot,
-    })
-
-    if (thumbnail) {
-      const response = createImageResponse(
-        thumbnail,
-        options.sourceUrlHash,
-        'thumbnail',
-        originalCacheStatus === 'MISS' ? 'MISS' : 'R2',
-        thumbnail.provider,
-        { metadata: captureMetadata },
-      )
-
-      putCacheResponse(event, options.cache, options.cacheKey, response)
-
-      return response
-    }
-  }
-
-  const response = createImageResponse(
-    original,
-    options.sourceUrlHash,
-    'thumbnail',
-    'STALE',
-    original.provider,
-    { metadata: captureMetadata, thumbnailFallback: true },
-  )
-
-  putCacheResponse(event, options.cache, options.cacheKey, response)
-
-  return response
+  return createFallbackResponse(options.fallbackKey, options.variant, captureMetadata)
 }
 
 export default defineEventHandler(async (event) => {
-  const params = getRouterParams(event)
-  const id = params.id
+  const id = getRouterParams(event).id
 
   if (!isValidStoryId(id)) {
     throw createError({
@@ -783,23 +556,10 @@ export default defineEventHandler(async (event) => {
 
   const variant = getRequestedVariant(event)
   const fallbackKey = getFallbackKey(id, variant)
-  const cache = (globalThis.caches as CacheStorage & { default?: Cache } | undefined)?.default
-  const cacheKey = cache ? new Request(getRequestURL(event).toString(), { method: 'GET' }) : undefined
-  const cachedResponse = cacheKey ? await cache?.match(cacheKey) : undefined
-
-  if (cachedResponse) {
-    return withScreenshotCacheStatus(cachedResponse, 'HIT')
-  }
 
   try {
-    const runtimeConfig = useRuntimeConfig(event)
+    const runtimeConfig = useRuntimeConfig(event) as ScreenshotRuntimeConfig
     const env = event.context.cloudflare?.env as ScreenshotEnv | undefined
-
-    const fallbackMetadata = getFreshFallbackMetadata(fallbackKey)
-
-    if (fallbackMetadata) {
-      return createFallbackResponse(undefined, variant, fallbackMetadata)
-    }
 
     const sourceUrl = await resolveStorySourceUrl(id)
 
@@ -821,60 +581,30 @@ export default defineEventHandler(async (event) => {
     }
 
     const sourceUrlHash = await getSourceUrlHash(sourceDecision.cacheIdentityUrl)
-    const originalKey = getR2OriginalScreenshotKey(sourceUrlHash)
-    const thumbnailWebpKey = getR2ThumbnailScreenshotKey(
+    const previewKey = getR2PreviewScreenshotKey(
       sourceUrlHash,
-      runtimeConfig.screenshotThumbnailWidth,
-      runtimeConfig.screenshotThumbnailHeight,
-      runtimeConfig.screenshotThumbnailJpegQuality,
-      'webp',
-    )
-    const thumbnailJpegKey = getR2ThumbnailScreenshotKey(
-      sourceUrlHash,
-      runtimeConfig.screenshotThumbnailWidth,
-      runtimeConfig.screenshotThumbnailHeight,
-      runtimeConfig.screenshotThumbnailJpegQuality,
+      runtimeConfig.screenshotPreviewWidth,
+      runtimeConfig.screenshotPreviewHeight,
+      runtimeConfig.screenshotPreviewJpegQuality,
     )
 
-    if (variant === 'thumbnail') {
-      return await serveThumbnail(event, {
-        cache,
-        cacheKey,
-        env,
-        fallbackKey,
-        id,
-        originalKey,
-        runtimeConfig,
-        sourceDecision,
-        sourceUrlHash,
-        thumbnailConfig: {
-          concurrency: runtimeConfig.screenshotThumbnailProcessingConcurrency,
-          height: runtimeConfig.screenshotThumbnailHeight,
-          jpegQuality: runtimeConfig.screenshotThumbnailJpegQuality,
-          maxInputBytes: runtimeConfig.screenshotThumbnailMaxInputBytes,
-          maxInputPixels: runtimeConfig.screenshotThumbnailMaxInputPixels,
-          queueTimeoutMs: runtimeConfig.screenshotThumbnailProcessingQueueTimeoutMs,
-          timeoutMs: runtimeConfig.screenshotThumbnailProcessingTimeoutMs,
-          width: runtimeConfig.screenshotThumbnailWidth,
-        },
-        thumbnailJpegKey,
-        thumbnailWebpKey,
-      })
-    }
-
-    return await serveOriginal(event, {
-      cache,
-      cacheKey,
+    return await servePreview({
+      captureEnabled: isCaptureEnabled(runtimeConfig.screenshotCaptureEnabled),
       env,
+      failureKey: getR2ScreenshotFailureKey(previewKey),
       fallbackKey,
-      id,
-      originalKey,
+      previewKey,
       runtimeConfig,
       sourceDecision,
       sourceUrlHash,
+      variant,
     })
   } catch (error) {
-    console.warn(`Screenshot route failed: ${error instanceof Error ? error.message : String(error)}`)
+    console.warn(JSON.stringify({
+      message: 'Screenshot route failed',
+      id,
+      error: error instanceof Error ? error.message : String(error),
+    }))
     return createFallbackResponse(fallbackKey, variant)
   }
 })

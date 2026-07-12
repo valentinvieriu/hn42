@@ -5,8 +5,8 @@ import type {
 } from './types'
 
 const DEFAULT_XCANCEL_BASE_URL = 'https://xcancel.com'
-const DEFAULT_HEAD_PROBE_TIMEOUT_MS = 1200
-const MAX_HEAD_PROBE_REDIRECTS = 3
+const DEFAULT_PROBE_TIMEOUT_MS = 1200
+const MAX_PROBE_REDIRECTS = 3
 const DEFAULT_BLOCKED_HOSTS = [
   'amazon.com',
   'bestbuy.com',
@@ -86,8 +86,8 @@ export class ScreenshotPolicySkipError extends Error {
   }
 }
 
-type HeadProbeResult =
-  | { policy: 'capture' }
+type ContentProbeResult =
+  | { captureUrl: string, policy: 'capture' }
   | { policy: 'skip', skipReason: ScreenshotSkipReason }
 
 const normalizePositiveInteger = (value: unknown, fallback: number) => {
@@ -101,7 +101,11 @@ const normalizePositiveInteger = (value: unknown, fallback: number) => {
 }
 
 const normalizeHostname = (hostname: string) => {
-  return hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1').replace(/^www\./, '')
+  return hostname
+    .toLowerCase()
+    .replace(/^\[(.*)\]$/, '$1')
+    .replace(/\.+$/, '')
+    .replace(/^www\./, '')
 }
 
 const parseCommaSeparatedHosts = (value: unknown) => {
@@ -140,16 +144,26 @@ export const isPrivateIpv4Address = (hostname: string) => {
 }
 
 export const isBlockedHostname = (hostname: string) => {
-  const normalizedHostname = hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1')
+  const normalizedHostname = normalizeHostname(hostname)
   const isIpv6Literal = normalizedHostname.includes(':')
+  const ipv4MappedMatch = normalizedHostname.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
+  const mappedIpv4 = ipv4MappedMatch
+    ? [
+        Number.parseInt(ipv4MappedMatch[1] ?? '0', 16) >> 8,
+        Number.parseInt(ipv4MappedMatch[1] ?? '0', 16) & 0xff,
+        Number.parseInt(ipv4MappedMatch[2] ?? '0', 16) >> 8,
+        Number.parseInt(ipv4MappedMatch[2] ?? '0', 16) & 0xff,
+      ].join('.')
+    : null
 
   return normalizedHostname === 'localhost'
     || normalizedHostname.endsWith('.localhost')
     || normalizedHostname.endsWith('.local')
-    || (isIpv6Literal && normalizedHostname === '::1')
+    || (isIpv6Literal && (normalizedHostname === '::' || normalizedHostname === '::1'))
     || (isIpv6Literal && normalizedHostname.startsWith('fc'))
     || (isIpv6Literal && normalizedHostname.startsWith('fd'))
     || (isIpv6Literal && normalizedHostname.startsWith('fe80:'))
+    || (mappedIpv4 !== null && isPrivateIpv4Address(mappedIpv4))
     || isPrivateIpv4Address(normalizedHostname)
 }
 
@@ -287,7 +301,7 @@ export const createScreenshotSourceDecision = (
   if (arxivAbsUrl) {
     return {
       cacheIdentityUrl: getScopedCacheIdentityUrl('arxiv-abs', arxivAbsUrl, sourceUrl),
-      captureProvider: 'backup15',
+      captureProvider: 'browser-run',
       captureUrl: arxivAbsUrl,
       originalUrl: sourceUrl,
       policy: 'capture',
@@ -318,7 +332,7 @@ export const createScreenshotSourceDecision = (
   if (xcancelUrl) {
     return {
       cacheIdentityUrl: getScopedCacheIdentityUrl('xcancel', xcancelUrl, sourceUrl),
-      captureProvider: 'backup15',
+      captureProvider: 'browser-run',
       captureUrl: xcancelUrl,
       originalUrl: sourceUrl,
       policy: 'capture',
@@ -328,7 +342,7 @@ export const createScreenshotSourceDecision = (
 
   return {
     cacheIdentityUrl: sourceUrl,
-    captureProvider: 'backup15',
+    captureProvider: 'browser-run',
     captureUrl: sourceUrl,
     originalUrl: sourceUrl,
     policy: 'capture',
@@ -348,6 +362,16 @@ const isPdfResponse = (headers: Headers) => {
     || /filename\*?=[^;]*\.pdf(?:["']|$|;)/i.test(contentDisposition)
 }
 
+const getContentType = (headers: Headers) => {
+  return headers.get('Content-Type')?.toLowerCase().split(';')[0]?.trim() ?? ''
+}
+
+const isHtmlResponse = (headers: Headers) => {
+  const contentType = getContentType(headers)
+
+  return contentType === 'text/html' || contentType === 'application/xhtml+xml'
+}
+
 const isNonHtmlBinaryResponse = (headers: Headers) => {
   const contentType = headers.get('Content-Type')?.toLowerCase().split(';')[0]?.trim()
   const contentDisposition = headers.get('Content-Disposition')?.toLowerCase() ?? ''
@@ -363,16 +387,23 @@ const isNonHtmlBinaryResponse = (headers: Headers) => {
     || BINARY_FILENAME_PATTERN.test(contentDisposition)
 }
 
-const fetchHeadWithTimeout = async (url: string, timeoutMs: number) => {
+const fetchGetHeadersWithTimeout = async (url: string, timeoutMs: number) => {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
-    return await fetch(url, {
-      method: 'HEAD',
+    const response = await fetch(url, {
+      headers: {
+        Range: 'bytes=0-4095',
+      },
+      method: 'GET',
       redirect: 'manual',
       signal: controller.signal,
     })
+
+    await response.body?.cancel().catch(() => {})
+
+    return response
   } finally {
     clearTimeout(timeout)
   }
@@ -381,60 +412,61 @@ const fetchHeadWithTimeout = async (url: string, timeoutMs: number) => {
 export const probeCaptureUrlContent = async (
   captureUrl: string,
   runtimeConfig: any,
-): Promise<HeadProbeResult> => {
+): Promise<ContentProbeResult> => {
   const timeoutMs = normalizePositiveInteger(
-    runtimeConfig.screenshotPolicyHeadProbeTimeoutMs,
-    DEFAULT_HEAD_PROBE_TIMEOUT_MS,
+    runtimeConfig.screenshotPolicyProbeTimeoutMs
+      ?? runtimeConfig.screenshotPolicyHeadProbeTimeoutMs,
+    DEFAULT_PROBE_TIMEOUT_MS,
   )
   let currentUrl = captureUrl
 
-  for (let redirectCount = 0; redirectCount <= MAX_HEAD_PROBE_REDIRECTS; redirectCount += 1) {
-    let response: Response
-
+  for (let redirectCount = 0; redirectCount <= MAX_PROBE_REDIRECTS; redirectCount += 1) {
     try {
-      response = await fetchHeadWithTimeout(currentUrl, timeoutMs)
+      const response = await fetchGetHeadersWithTimeout(currentUrl, timeoutMs)
+
+      if (isPdfResponse(response.headers)) {
+        return { policy: 'skip', skipReason: 'pdf-content' }
+      }
+
+      if (isNonHtmlBinaryResponse(response.headers)) {
+        return { policy: 'skip', skipReason: 'non-html-content' }
+      }
+
+      if (response.status >= 400) {
+        return { policy: 'skip', skipReason: 'unavailable-content' }
+      }
+
+      if (!isRedirectStatus(response.status)) {
+        return isHtmlResponse(response.headers)
+          ? { captureUrl: currentUrl, policy: 'capture' }
+          : { policy: 'skip', skipReason: 'non-html-content' }
+      }
+
+      const location = response.headers.get('Location')
+
+      if (!location) {
+        return { policy: 'skip', skipReason: 'unverified-content' }
+      }
+
+      let nextUrl: string | null = null
+
+      try {
+        nextUrl = normalizeSourceUrl(new URL(location, currentUrl).toString())
+      } catch {
+        return { policy: 'skip', skipReason: 'unverified-content' }
+      }
+
+      if (!nextUrl) {
+        return { policy: 'skip', skipReason: 'blocked-hostname' }
+      }
+
+      currentUrl = nextUrl
     } catch {
-      return { policy: 'capture' }
+      return { policy: 'skip', skipReason: 'unverified-content' }
     }
-
-    if (response.status === 405) {
-      return { policy: 'capture' }
-    }
-
-    if (isPdfResponse(response.headers)) {
-      return { policy: 'skip', skipReason: 'pdf-content' }
-    }
-
-    if (isNonHtmlBinaryResponse(response.headers)) {
-      return { policy: 'skip', skipReason: 'non-html-content' }
-    }
-
-    if (!isRedirectStatus(response.status)) {
-      return { policy: 'capture' }
-    }
-
-    const location = response.headers.get('Location')
-
-    if (!location) {
-      return { policy: 'capture' }
-    }
-
-    let nextUrl: string | null = null
-
-    try {
-      nextUrl = normalizeSourceUrl(new URL(location, currentUrl).toString())
-    } catch {
-      return { policy: 'capture' }
-    }
-
-    if (!nextUrl) {
-      return { policy: 'skip', skipReason: 'blocked-hostname' }
-    }
-
-    currentUrl = nextUrl
   }
 
-  return { policy: 'capture' }
+  return { policy: 'skip', skipReason: 'unverified-content' }
 }
 
 export const isScreenshotPolicySkipError = (error: unknown): error is ScreenshotPolicySkipError => {
