@@ -93,11 +93,11 @@ Caching expectations:
 - Related stories use longer cache headers because they are derived and less time-sensitive.
 - User profile/activity routes cache briefly.
 - Screenshot responses use long browser/CDN cache headers and Wrangler Workers Caching, which runs before the Worker and works on the production `workers.dev` hostname. Edge TTLs must use only the remaining R2 freshness window. Do not reintroduce `caches.default`; Cache API operations have no effect on `workers.dev`.
-- Successful previews are persisted under `screenshots/v3/<source-url-hash>/preview-720x1440-q72.jpg`. Both public variants serve this one bounded object.
+- Successful previews are persisted under `screenshots/v7/<source-url-hash>/preview-1440x4096-q68.jpg`. Both public variants serve this one bounded object.
 - Direct screenshot captures hash the normalized story URL exactly as before. Transformed captures hash `hn42:<source-strategy>:<capture-url>` so alternate provider targets do not poison direct URL cache entries.
-- Feed cards, story detail pages, and story social metadata request the canonical `/api/screenshot/:id` URL. The legacy `variant=thumbnail|original` query remains accepted, but both values serve the same bounded v3 JPEG; do not fragment first-party edge-cache entries with them. Responsive detail rendering mounts only the image used at the current breakpoint.
+- Feed cards, story detail pages, and story social metadata request the same profile-versioned `/api/screenshot/:id?profile=v7` URL. The profile parameter is the single intentional cache-busting dimension for capture migrations. The legacy `variant=thumbnail|original` query remains accepted, but both values serve the same bounded v7 JPEG; do not use them in first-party URLs. Responsive detail rendering mounts only the image used at the current breakpoint, and desktop detail pages can expand the preview to its 1440-pixel capture width.
 - The public screenshot route accepts only a numeric HN item ID. It must fetch the item from HN Firebase, require a live story, and derive the capture URL server-side; never add a caller-provided URL parameter.
-- Browser Run uses a 720x1440 viewport, JPEG quality 72, `fullPage: false`, `scrollPage: false`, `domcontentloaded`, a short post-load wait, and the maximum 24-hour Quick Action cache TTL. Keep captures bounded.
+- Browser Run uses a wide desktop 1440x900 viewport and an injected script that measures the rendered page before clamping it to 4096 pixels, producing a bounded deep-preview JPEG at quality 68. Keep `fullPage: true` and `captureBeyondViewport: true` paired with that measured ceiling, keep `scrollPage: false`, use `domcontentloaded`, a short post-load wait, and keep the Quick Action response cache disabled so profile changes cannot reuse incompatible output. R2 remains the canonical shared reuse layer.
 - The `BROWSER` and `SCREENSHOTS_BUCKET` bindings use `remote = true`. Quick Actions are unavailable in the local browser runtime, and the shared production R2 bucket prevents dev/prod duplicate captures. New captures are disabled by default in local development; deliberate opt-in can mutate production screenshot objects and consume real Browser Run usage.
 - Screenshot fallbacks are transparent GIFs with short browser/edge TTLs. The client recognizes the 1x1 response and keeps the generated wireframe visible.
 - The transparent screenshot fallback exposes a shared client-rendered wireframe underneath the image. Keep it deterministic and SSR-safe, preserve the existing seed palette, and keep its five-to-eight primitive budget so feeds with many failures remain inexpensive.
@@ -161,9 +161,9 @@ Screenshot generation is best-effort and follows this order:
 
 Preserve these strategic guardrails:
 
-- A representative first viewport is the product requirement; full-page archival fidelity and 100% screenshot coverage are not.
+- A bounded deep preview is the product requirement; full-page archival fidelity and 100% screenshot coverage are not.
 - Optimize in this order: edge reuse, deterministic source policy, R2 reuse, bounded capture. Do not retry a known skip or bypass a capacity guard to improve coverage.
-- Do not add full-page originals, another stored size/format, scheduled backfills, or a second provider without measured evidence that the browsing experience needs it.
+- Do not remove the deep-preview height ceiling, add another stored size/format, schedule backfills, or add a second provider without measured evidence that the browsing experience needs it.
 - Before increasing daily admissions, retention, dimensions, quality, or byte limits, recalculate the worst-case Browser Run and R2 envelope. Review `CF-Cache-Status`, `X-HN42-Screenshot-Cache`, `X-HN42-Browser-Ms-Used`, capture success/skip ratios, and average/p95 object size.
 - Routine local development is reuse-only. Enable cold captures deliberately and narrowly because local and production use the same remote bindings and R2 bucket.
 
@@ -219,9 +219,9 @@ Production app URL: `https://hn42.vv42.workers.dev/`.
 - Keep Wrangler Workers Caching enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
 - R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.
 - Production and local development share the remote R2 bucket `hn42-screenshots`; do not add a separate preview bucket without reintroducing cross-environment captures.
-- R2 lifecycle should delete the `screenshots/v3/` prefix after 180 days.
-- At the default 60 admitted captures per UTC day, 180-day retention, and 750 KB hard object limit, steady-state screenshot storage is bounded to about 8.1 GB before small coordinator and failure-marker overhead. Monitor average and p95 object size.
-- Use `npm run cf:screenshots:bootstrap` to create missing screenshot R2 buckets, add the lifecycle rule, and verify its enabled state, prefix, and expiry. The script is idempotent and fails on a drifted same-ID rule.
+- R2 lifecycle should delete the active `screenshots/v7/` prefix and legacy `screenshots/v3/` through `screenshots/v6/` prefixes after 180 days.
+- At the default 60 admitted captures per UTC day, 180-day retention, and 2 MB hard object limit, steady-state v7 screenshot storage is bounded to about 21.6 GB before small coordinator and failure-marker overhead. Monitor average and p95 object size.
+- Use `npm run cf:screenshots:bootstrap` to create missing screenshot R2 buckets, add the v3 through v7 lifecycle rules, and verify their enabled state, prefix, and expiry. The script is idempotent and fails on a drifted same-ID rule.
 - Use `npm run cf:screenshots:reset-cache` only when intentionally deleting old cached objects under `screenshots/v2/`.
 - Do not switch scripts back to `wrangler pages deploy` or `wrangler pages dev`.
 

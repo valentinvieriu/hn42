@@ -40,7 +40,7 @@ const createRateLimitBucket = () => {
 }
 
 describe('Browser Run screenshot provider', () => {
-  it('uses the bounded first-viewport preview profile', async () => {
+  it('uses the bounded deep-preview profile', async () => {
     const quickAction = vi.fn().mockResolvedValue(createJpegResponse())
     const env = { BROWSER: { quickAction } } as unknown as ScreenshotEnv
 
@@ -55,26 +55,50 @@ describe('Browser Run screenshot provider', () => {
       provider: 'browser-run',
     })
     expect(quickAction).toHaveBeenCalledWith('screenshot', expect.objectContaining({
-      cacheTTL: 86400,
+      actionTimeout: 5000,
+      cacheTTL: 0,
       gotoOptions: {
         timeout: 8000,
         waitUntil: 'domcontentloaded',
       },
       scrollPage: false,
       screenshotOptions: {
-        fullPage: false,
+        captureBeyondViewport: true,
+        fullPage: true,
         optimizeForSpeed: true,
-        quality: 72,
+        quality: 68,
         type: 'jpeg',
       },
       url: 'https://example.com/article',
       viewport: {
         deviceScaleFactor: 1,
-        height: 1440,
-        width: 720,
+        height: 900,
+        width: 1440,
       },
       waitForTimeout: 200,
     }))
+    expect(quickAction.mock.calls[0]?.[1]?.addScriptTag?.[0]?.content)
+      .toContain('Math.min(\n              4096')
+    expect(quickAction.mock.calls[0]?.[1]?.addScriptTag?.[0]?.content)
+      .toContain('Math.max(900, naturalHeight)')
+    expect(quickAction.mock.calls[0]?.[1]?.addScriptTag?.[0]?.content)
+      .toContain("element.style.setProperty('overflow', 'clip', 'important')")
+  })
+
+  it('never lets the browser viewport exceed the preview height ceiling', async () => {
+    const quickAction = vi.fn().mockResolvedValue(createJpegResponse())
+    const env = { BROWSER: { quickAction } } as unknown as ScreenshotEnv
+
+    await captureWithBrowserRun(env, 'https://example.com/article', {
+      screenshotBrowserMinIntervalMs: 0,
+      screenshotBrowserViewportHeight: 1200,
+      screenshotPreviewHeight: 800,
+    })
+
+    expect(quickAction.mock.calls[0]?.[1]?.viewport).toMatchObject({
+      height: 800,
+      width: 1440,
+    })
   })
 
   it('disposes remote Quick Action response stubs after reading them', async () => {

@@ -5,20 +5,23 @@ import {
 } from './concurrency'
 import type { ScreenshotEnv, ScreenshotResult } from './types'
 
+// Keep the existing coordinator key during the v3-to-v4 rollout so old and new
+// Worker versions share one account-wide Browser Run budget.
 const BROWSER_RUN_RATE_KEY = 'screenshots/v3/_control/browser-run-rate-limit'
-const DEFAULT_ACTION_TIMEOUT_MS = 3000
-const DEFAULT_CACHE_TTL_SECONDS = 86400
+const DEFAULT_ACTION_TIMEOUT_MS = 5000
+const DEFAULT_CACHE_TTL_SECONDS = 0
 const DEFAULT_CAPTURE_CONCURRENCY = 1
 const DEFAULT_DAILY_CAPTURE_LIMIT = 60
 const DEFAULT_GOTO_TIMEOUT_MS = 8000
-const DEFAULT_HEIGHT = 1440
-const DEFAULT_MAX_BYTES = 750_000
+const DEFAULT_HEIGHT = 4096
+const DEFAULT_MAX_BYTES = 2_000_000
 const DEFAULT_MIN_INTERVAL_MS = 10_000
 const DEFAULT_QUEUE_DEPTH = 5
 const DEFAULT_QUEUE_TIMEOUT_MS = 30_000
-const DEFAULT_QUALITY = 72
+const DEFAULT_QUALITY = 68
+const DEFAULT_VIEWPORT_HEIGHT = 900
 const DEFAULT_WAIT_AFTER_LOAD_MS = 200
-const DEFAULT_WIDTH = 720
+const DEFAULT_WIDTH = 1440
 const MAX_GLOBAL_RATE_ATTEMPTS = 6
 const MAX_RATE_WAIT_MS = 30_000
 const MIN_SCREENSHOT_BYTES = 1024
@@ -291,6 +294,28 @@ export const captureWithBrowserRun = async (
     throw new Error('Browser Run binding is not configured')
   }
 
+  const previewHeight = normalizeInteger(
+    runtimeConfig.screenshotPreviewHeight,
+    DEFAULT_HEIGHT,
+    1,
+    10000,
+  )
+  const previewWidth = normalizeInteger(
+    runtimeConfig.screenshotPreviewWidth,
+    DEFAULT_WIDTH,
+    1,
+    10000,
+  )
+  const viewportHeight = Math.min(
+    previewHeight,
+    normalizeInteger(
+      runtimeConfig.screenshotBrowserViewportHeight,
+      DEFAULT_VIEWPORT_HEIGHT,
+      1,
+      10000,
+    ),
+  )
+
   const concurrency = normalizeInteger(
     runtimeConfig.screenshotCaptureConcurrency,
     DEFAULT_CAPTURE_CONCURRENCY,
@@ -337,6 +362,35 @@ export const captureWithBrowserRun = async (
         1,
         120000,
       ),
+      addScriptTag: [{
+        content: `
+          (() => {
+            const root = document.documentElement
+            const body = document.body
+            const naturalHeight = Math.max(
+              root.scrollHeight,
+              root.offsetHeight,
+              body?.scrollHeight ?? 0,
+              body?.offsetHeight ?? 0,
+            )
+            const captureHeight = Math.min(
+              ${previewHeight},
+              Math.max(${viewportHeight}, naturalHeight),
+            )
+
+            for (const element of [root, body]) {
+              if (!element) continue
+
+              element.style.setProperty('box-sizing', 'border-box', 'important')
+              element.style.setProperty('height', captureHeight + 'px', 'important')
+              element.style.setProperty('max-height', captureHeight + 'px', 'important')
+              element.style.setProperty('overflow', 'clip', 'important')
+            }
+
+            body?.style.setProperty('margin-block', '0', 'important')
+          })()
+        `,
+      }],
       addStyleTag: [{
         content: `
           *, *::before, *::after {
@@ -370,7 +424,8 @@ export const captureWithBrowserRun = async (
         'ping',
       ],
       screenshotOptions: {
-        fullPage: false,
+        captureBeyondViewport: true,
+        fullPage: true,
         optimizeForSpeed: true,
         quality: normalizeInteger(
           runtimeConfig.screenshotPreviewJpegQuality,
@@ -384,18 +439,8 @@ export const captureWithBrowserRun = async (
       url: sourceUrl,
       viewport: {
         deviceScaleFactor: 1,
-        height: normalizeInteger(
-          runtimeConfig.screenshotPreviewHeight,
-          DEFAULT_HEIGHT,
-          1,
-          10000,
-        ),
-        width: normalizeInteger(
-          runtimeConfig.screenshotPreviewWidth,
-          DEFAULT_WIDTH,
-          1,
-          10000,
-        ),
+        height: viewportHeight,
+        width: previewWidth,
       },
       waitForTimeout: normalizeInteger(
         runtimeConfig.screenshotBrowserWaitAfterLoadMs,

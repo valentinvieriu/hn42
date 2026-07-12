@@ -5,10 +5,11 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-07-11',
   devtools: { enabled: false },
   runtimeConfig: {
-    screenshotBrowserActionTimeoutMs: '3000',
-    screenshotBrowserCacheTtlSeconds: '86400',
+    screenshotBrowserActionTimeoutMs: '5000',
+    screenshotBrowserCacheTtlSeconds: '0',
     screenshotBrowserGotoTimeoutMs: '8000',
     screenshotBrowserMinIntervalMs: '10000',
+    screenshotBrowserViewportHeight: '900',
     screenshotBrowserWaitAfterLoadMs: '200',
     screenshotCaptureEnabled: process.env.NUXT_SCREENSHOT_CAPTURE_ENABLED
       ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false'),
@@ -19,10 +20,10 @@ export default defineNuxtConfig({
     screenshotFailureTtlMinutes: '360',
     screenshotPolicyBlockedHosts: '',
     screenshotPolicyProbeTimeoutMs: '1200',
-    screenshotPreviewHeight: '1440',
-    screenshotPreviewJpegQuality: '72',
-    screenshotPreviewMaxBytes: '750000',
-    screenshotPreviewWidth: '720',
+    screenshotPreviewHeight: '4096',
+    screenshotPreviewJpegQuality: '68',
+    screenshotPreviewMaxBytes: '2000000',
+    screenshotPreviewWidth: '1440',
     screenshotR2TtlDays: '180',
     screenshotXCancelBaseUrl: 'https://xcancel.com',
     public: {

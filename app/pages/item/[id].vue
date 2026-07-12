@@ -77,8 +77,8 @@
             />
             <img
               :alt="`Preview of ${story.title}`"
-              width="720"
-              height="450"
+              width="1440"
+              height="900"
               :src="thumbnailScreenshotSrc"
               loading="eager"
               decoding="async"
@@ -111,7 +111,7 @@
             />
             <img
               :alt="story.title"
-              width="600"
+              width="1440"
               :src="originalScreenshotSrc"
               loading="lazy"
               decoding="async"
@@ -121,6 +121,16 @@
               @load="handleOriginalPreviewLoad"
               @error="handleOriginalPreviewError"
             />
+            <button
+              v-if="originalPreviewState === 'loaded'"
+              type="button"
+              class="source-preview-expand-button"
+              aria-label="Expand source preview"
+              @click="openScreenshotPreview"
+            >
+              <LucideMaximize2 class="h-4 w-4" aria-hidden="true" />
+              <span>Expand</span>
+            </button>
           </div>
         </article>
         <aside id="comments" class="min-w-0 scroll-mt-24 lg:col-start-2 lg:row-start-1 lg:row-span-2">
@@ -158,6 +168,38 @@
         <section class="min-w-0 lg:col-start-1">
           <RelatedStories v-if="storyId" :story-id="storyId" />
         </section>
+        <dialog
+          ref="screenshotDialog"
+          class="source-preview-dialog"
+          aria-labelledby="source-preview-dialog-title"
+          @click.self="closeScreenshotPreview"
+        >
+          <div class="source-preview-dialog-shell">
+            <div class="source-preview-dialog-header">
+              <div class="min-w-0">
+                <p id="source-preview-dialog-title" class="font-display font-semibold">Source preview</p>
+                <p class="meta-text truncate text-gray-500 dark:text-gray-400">{{ storyDomain }}</p>
+              </div>
+              <button
+                type="button"
+                class="source-preview-dialog-close"
+                aria-label="Close source preview"
+                @click="closeScreenshotPreview"
+              >
+                <LucideX class="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <div class="source-preview-dialog-scroll">
+              <img
+                :alt="`Expanded preview of ${story.title}`"
+                width="1440"
+                :src="originalScreenshotSrc"
+                decoding="async"
+                class="source-preview-dialog-image"
+              />
+            </div>
+          </div>
+        </dialog>
       </div>
     </div>
   </div>
@@ -165,11 +207,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
-import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp } from '@lucide/vue';
+import { LucideExternalLink, LucideTrendingUp, LucideMessageSquare, LucideClock, LucideChevronsDown, LucideChevronsUp, LucideMaximize2, LucideX } from '@lucide/vue';
 import { formatDistanceToNow } from 'date-fns';
 import { useSanitizer } from '~/composables/useSanitizer';
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
 import type { Comment } from '#shared/types'
+import { getScreenshotPath } from '#shared/utils/screenshot'
 
 const route = useRoute();
 const expandAllComments = ref(false);
@@ -230,7 +273,7 @@ const error = computed(() => {
   return null
 })
 const isLoading = computed(() => pending.value)
-const screenshotSrc = computed(() => storyId.value ? `/api/screenshot/${storyId.value}` : '')
+const screenshotSrc = computed(() => storyId.value ? getScreenshotPath(storyId.value) : '')
 const thumbnailScreenshotSrc = screenshotSrc
 const originalScreenshotSrc = screenshotSrc
 const storyExternalUrl = computed(() => {
@@ -246,6 +289,7 @@ type ScreenshotPreviewState = 'loading' | 'loaded' | 'failed'
 const thumbnailPreviewState = ref<ScreenshotPreviewState>('loading')
 const originalPreviewState = ref<ScreenshotPreviewState>('loading')
 const isCompactViewport = ref(false)
+const screenshotDialog = ref<HTMLDialogElement | null>(null)
 let compactViewportMediaQuery: MediaQueryList | null = null
 
 const updateCompactViewport = (event: MediaQueryList | MediaQueryListEvent) => {
@@ -260,6 +304,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   compactViewportMediaQuery?.removeEventListener('change', updateCompactViewport)
+  screenshotDialog.value?.close()
 })
 const storyDomain = computed(() => {
   if (!storyExternalUrl.value) {
@@ -297,6 +342,22 @@ const handleOriginalPreviewLoad = (event: Event) => {
 
 const handleOriginalPreviewError = () => {
   originalPreviewState.value = 'failed'
+}
+
+const openScreenshotPreview = () => {
+  if (
+    originalPreviewState.value !== 'loaded'
+    || !screenshotDialog.value
+    || screenshotDialog.value.open
+  ) {
+    return
+  }
+
+  screenshotDialog.value.showModal()
+}
+
+const closeScreenshotPreview = () => {
+  screenshotDialog.value?.close()
 }
 
 watch(thumbnailScreenshotSrc, () => {
@@ -362,7 +423,7 @@ const siteOrigin = requestUrl.origin
 const title = computed(() => story.value?.title ?? 'Loading...')
 const socialImage = computed(() => {
   const path = storyId.value
-    ? `/api/screenshot/${storyId.value}`
+    ? getScreenshotPath(storyId.value)
     : '/icon_x512.png'
 
   return new URL(path, siteOrigin).href
@@ -490,6 +551,105 @@ useSeoMeta({
   opacity: 1;
 }
 
+.source-preview-expand-button {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 3;
+  display: inline-flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgb(255 255 255 / 0.68);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.9);
+  color: rgb(31 41 55);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 8px 22px -14px rgb(15 23 42 / 0.75);
+  backdrop-filter: blur(12px);
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.source-preview-expand-button:hover,
+.source-preview-expand-button:focus-visible {
+  background: white;
+  transform: translateY(-1px);
+}
+
+.source-preview-dialog {
+  width: min(calc(100vw - 2rem), 90rem);
+  height: min(calc(100vh - 2rem), 56rem);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgb(148 163 184 / 0.32);
+  border-radius: 1rem;
+  background: white;
+  color: rgb(17 24 39);
+  box-shadow: 0 36px 90px rgb(15 23 42 / 0.32);
+}
+
+.source-preview-dialog::backdrop {
+  background: rgb(15 23 42 / 0.72);
+  backdrop-filter: blur(5px);
+}
+
+.source-preview-dialog-shell {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.source-preview-dialog-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0.9rem;
+  border-bottom: 1px solid rgb(148 163 184 / 0.24);
+  background: rgb(255 255 255 / 0.96);
+}
+
+.source-preview-dialog-close {
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(148 163 184 / 0.3);
+  border-radius: 999px;
+  background: rgb(148 163 184 / 0.08);
+  color: rgb(55 65 81);
+}
+
+.source-preview-dialog-close:hover,
+.source-preview-dialog-close:focus-visible {
+  background: rgb(148 163 184 / 0.16);
+  color: rgb(17 24 39);
+}
+
+.source-preview-dialog-scroll {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  background: rgb(241 245 249);
+}
+
+.source-preview-dialog-image {
+  display: block;
+  width: min(100%, 90rem);
+  height: auto;
+  margin: 0 auto;
+  background: white;
+}
+
 .dark .compact-source-preview {
   border-color: color-mix(in oklch, var(--seed-border) 82%, rgb(148 163 184 / 0.28));
   background:
@@ -502,6 +662,44 @@ useSeoMeta({
   background:
     linear-gradient(145deg, color-mix(in oklch, var(--seed-highlight) 50%, transparent), transparent 34%),
     linear-gradient(180deg, var(--seed-surface-raised), var(--seed-surface));
+}
+
+.dark .source-preview-expand-button {
+  border-color: rgb(255 255 255 / 0.16);
+  background: rgb(15 23 42 / 0.82);
+  color: rgb(226 232 240);
+}
+
+.dark .source-preview-expand-button:hover,
+.dark .source-preview-expand-button:focus-visible {
+  background: rgb(30 41 59 / 0.96);
+}
+
+.dark .source-preview-dialog {
+  border-color: rgb(148 163 184 / 0.28);
+  background: rgb(17 24 39);
+  color: rgb(243 244 246);
+}
+
+.dark .source-preview-dialog-header {
+  border-color: rgb(148 163 184 / 0.18);
+  background: rgb(17 24 39 / 0.97);
+}
+
+.dark .source-preview-dialog-close {
+  border-color: rgb(148 163 184 / 0.22);
+  background: rgb(148 163 184 / 0.1);
+  color: rgb(209 213 219);
+}
+
+.dark .source-preview-dialog-close:hover,
+.dark .source-preview-dialog-close:focus-visible {
+  background: rgb(148 163 184 / 0.18);
+  color: white;
+}
+
+.dark .source-preview-dialog-scroll {
+  background: rgb(15 23 42);
 }
 
 .dark .compact-source-preview-chip {

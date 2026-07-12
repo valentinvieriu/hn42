@@ -66,9 +66,9 @@ describe('screenshot R2 failure markers', () => {
   it('uses one bounded preview key and a separate failure key', () => {
     const previewKey = getR2PreviewScreenshotKey('hash')
 
-    expect(previewKey).toBe('screenshots/v3/hash/preview-720x1440-q72.jpg')
+    expect(previewKey).toBe('screenshots/v7/hash/preview-1440x4096-q68.jpg')
     expect(getR2ScreenshotFailureKey(previewKey))
-      .toBe('screenshots/v3/hash/preview-720x1440-q72.jpg.failure')
+      .toBe('screenshots/v7/hash/preview-1440x4096-q68.jpg.failure')
   })
 
   it('limits edge freshness to the remaining R2 lifetime', () => {

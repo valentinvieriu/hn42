@@ -1,4 +1,5 @@
 import type { HNHit, Story } from '#shared/types'
+import { getScreenshotPath } from '#shared/utils/screenshot'
 
 type AlgoliaStoryResponse = {
   hits?: HNHit[]
@@ -25,7 +26,7 @@ export const fetchStories = async (
         num_comments: hit.num_comments || 0,
         created_at: hit.created_at || '',
         objectID: hit.objectID,
-        screenshotUrl: `/api/screenshot/${hit.objectID}`,
+        screenshotUrl: getScreenshotPath(hit.objectID),
       }))
   } catch (error) {
     console.error('Error fetching stories:', error)

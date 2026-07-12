@@ -1,4 +1,5 @@
 import type { UserActivityPage, UserComment, UserPost } from '#shared/types'
+import { getScreenshotPath } from '#shared/utils/screenshot'
 
 const ALGOLIA_SEARCH_BY_DATE_URL = 'https://hn.algolia.com/api/v1/search_by_date'
 const ALGOLIA_RESULT_WINDOW = 1000
@@ -187,7 +188,7 @@ export const fetchUserPosts = async (
         created_at: hit.created_at || '',
         created_at_i: hit.created_at_i ?? undefined,
         story_text: hit.story_text || null,
-        screenshotUrl: `/api/screenshot/${objectID}`,
+        screenshotUrl: getScreenshotPath(objectID),
       }
     },
   )

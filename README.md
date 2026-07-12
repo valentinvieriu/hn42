@@ -134,9 +134,10 @@ npx wrangler deploy --dry-run
 ### Screenshot generation strategy
 
 Screenshots are a best-effort evaluation surface, not an archival copy of every
-source page. HN42 needs a representative first viewport that helps a reader
-decide whether a link is worth opening; complete page coverage is less valuable
-than fast reuse, predictable cost, and a graceful fallback.
+source page. HN42 uses a bounded deep preview that helps a reader evaluate a
+link from the feed and inspect several screens of it on the detail page. Complete
+page coverage is less valuable than fast reuse, predictable cost, and a graceful
+fallback.
 
 The pipeline follows this decision order:
 
@@ -149,35 +150,42 @@ The pipeline follows this decision order:
 4. On a genuine miss, verify that a bounded GET resolves to public HTML and
    admit the request only if capture is enabled and the shared Browser Run rate,
    queue, and daily budgets have capacity.
-5. Capture one bounded first viewport, persist one JPEG in R2, and let all feed,
+5. Capture one bounded deep preview, persist one JPEG in R2, and let all feed,
    detail, and social-preview consumers reuse the same canonical URL.
 6. If any stage cannot justify or complete a capture, return the transparent
    response and keep the deterministic client wireframe visible.
 
 Missing screenshots are acceptable; uncontrolled retries and duplicate assets
-are not. Do not add full-page originals, a second stored variant, scheduled
-backfills, or another processing provider without a measured product need and a
-new Browser Run, R2 storage, and request-cost calculation.
+are not. Do not remove the deep-preview height ceiling, add a second stored
+variant, schedule backfills, or add another processing provider without a
+measured product need and a new Browser Run, R2 storage, and request-cost
+calculation.
 
 Article screenshots are generated with the Cloudflare Browser Run `screenshot`
-Quick Action and proxied through `/api/screenshot/:id`. The legacy
-`?variant=original|thumbnail` values remain accepted, but the app uses the one
-canonical URL so browsers and Cloudflare share a single cache entry. The public
+Quick Action and proxied through `/api/screenshot/:id`. The app appends the
+single current `?profile=v7` cache version so intentional capture-profile
+migrations bypass old immutable browser and edge entries. The legacy
+`variant=original|thumbnail` values remain accepted, but the app does not use
+them. The public
 route accepts only a numeric Hacker News item ID; callers cannot provide a
 capture URL. On a cache miss the Worker resolves the item through HN Firebase,
 requires a live story, extracts its public HTTP(S) URL, applies the screenshot
 source policy, and checks R2 before invoking the private `BROWSER` binding.
 
-Browser Run produces one bounded 720x1440 JPEG preview at quality 72. Full-page
-capture and page scrolling are disabled, navigation waits for
-`domcontentloaded`, unnecessary streaming resource types are rejected, and a
+Browser Run uses a wide desktop 1440x900 viewport and produces one JPEG deep
+preview up to 1440x4096 at quality 68. Full-page capture and capture beyond the
+viewport are enabled only after an injected script measures the rendered page
+and clamps it to 4096 pixels; page scrolling remains disabled. Navigation waits
+for `domcontentloaded`, unnecessary
+streaming resource types are rejected, and a
 short post-load wait allows the initial viewport to settle. Both API variants
 serve that same object, so a story requires one browser navigation, one R2 image,
 and no image-transformation service. Successful previews are stored at
-`screenshots/v3/<source-url-hash>/preview-720x1440-q72.jpg`. Direct captures use
+`screenshots/v7/<source-url-hash>/preview-1440x4096-q68.jpg`. Direct captures use
 the normalized story URL as the hash input, allowing repeat HN submissions of a
 link to reuse the object. Transformed capture targets scope the hash to their
-source strategy and transformed URL.
+source strategy and transformed URL. Existing v3 through v6 objects are not
+migrated or deleted early; their lifecycle rules let them expire naturally.
 
 Wrangler Workers Caching is enabled in front of the Worker. This is the effective
 edge cache on the production `workers.dev` hostname; the manual Cache API does
@@ -219,9 +227,11 @@ non-semantic wireframe from the story ID and source domain. It is rendered
 directly by Vue on feed and detail pages and is never stored as a screenshot.
 
 Feed cards, story detail previews, and story social metadata use the same
-canonical screenshot URL and bounded JPEG. Responsive detail rendering mounts
-only the preview used at the current breakpoint, and offscreen feed tasks are
-canceled before their network request starts. Responses expose
+profile-versioned screenshot URL and bounded JPEG. Responsive detail rendering mounts
+only the preview used at the current breakpoint. Desktop detail pages can open
+the preview at its 1440-pixel capture width, while compact layouts retain a
+scroll-safe crop. Offscreen feed tasks are canceled before their network request
+starts. Responses expose
 `X-HN42-Screenshot-Format`, `X-HN42-Screenshot-Processor`, and
 `X-HN42-Browser-Ms-Used` for capture diagnostics. Tune Browser Run with
 `NUXT_SCREENSHOT_CAPTURE_ENABLED`,
@@ -232,6 +242,7 @@ canceled before their network request starts. Responses expose
 `NUXT_SCREENSHOT_BROWSER_GOTO_TIMEOUT_MS`,
 `NUXT_SCREENSHOT_BROWSER_ACTION_TIMEOUT_MS`,
 `NUXT_SCREENSHOT_BROWSER_MIN_INTERVAL_MS`,
+`NUXT_SCREENSHOT_BROWSER_VIEWPORT_HEIGHT`,
 `NUXT_SCREENSHOT_BROWSER_WAIT_AFTER_LOAD_MS`,
 `NUXT_SCREENSHOT_BROWSER_CACHE_TTL_SECONDS`,
 `NUXT_SCREENSHOT_PREVIEW_WIDTH`,
@@ -250,9 +261,10 @@ metadata, not proof that the current request consumed browser time.
 
 The route coalesces concurrent captures for the same source URL within a Worker
 isolate, spaces Browser Run starts through a shared R2 coordinator, uses Browser
-Run's 24-hour Quick Action cache as an additional duplicate safeguard, and writes
-short-lived R2 failure markers for admitted provider failures at keys separate
-from successful images. Policy skips use only the cached transparent response,
+Run without its provider-level response cache so capture-profile changes cannot
+reuse incompatible output, and writes short-lived R2 failure markers for
+admitted provider failures at keys separate from successful images. R2 remains
+the canonical shared reuse layer. Policy skips use only the cached transparent response,
 so arbitrary non-HTML stories cannot amplify R2 writes. Separate
 keys prevent a late failure in one isolate from overwriting a successful capture
 from another isolate.
@@ -272,8 +284,8 @@ As of July 2026, the relevant free allowances are:
 
 HN42 defaults to one concurrent capture, a shared 10-second start interval, a
 five-request queue with a 30-second timeout, and at most 60 admitted cold
-captures per UTC day. With 180-day retention and a 750 KB hard object limit,
-that caps steady-state screenshot storage at about 8.1 GB before the small
+captures per UTC day. With 180-day retention and a 2 MB hard object limit,
+that caps steady-state screenshot storage at about 21.6 GB before the small
 coordinator and failure-marker overhead. Average and p95 object size should
 still be monitored. Browser time can stop captures before the daily
 count limit when pages are slow. Browser Run on Workers Free stops at its limit;
@@ -282,8 +294,9 @@ R2 and paid-plan usage can be billed beyond included allowances. See [Browser Ru
 [R2 pricing](https://developers.cloudflare.com/r2/pricing/), and
 [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/).
 
-The storage bound depends on the 180-day v3 lifecycle rule being active; the
-bootstrap command below verifies the rule rather than assuming it exists.
+The storage bound depends on the 180-day v7 lifecycle rule being active. The
+bootstrap command below verifies the active v7 rule and the legacy v3 through
+v6 rules rather than assuming any exists.
 
 Screenshot storage bootstrap can be rerun safely:
 

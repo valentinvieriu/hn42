@@ -37,6 +37,7 @@ import type {
   ScreenshotResult,
   ScreenshotVariant,
 } from '../../utils/screenshot/types'
+import { SCREENSHOT_PROFILE_VERSION } from '#shared/utils/screenshot'
 
 const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
@@ -191,7 +192,7 @@ const createImageResponse = (
   const headers = new Headers({
     'Content-Type': image.contentType,
     'Content-Length': String(image.bytes.byteLength),
-    'ETag': `W/"hn42-screenshot-v3-${format}-${processor}-${sourceUrlHash.slice(0, 16)}"`,
+    'ETag': `W/"hn42-screenshot-v7-${format}-${processor}-${sourceUrlHash.slice(0, 16)}"`,
     'Accept-Ranges': 'bytes',
     'X-HN42-Screenshot-Format': format,
     ...(cacheStatus === 'STALE'
@@ -357,10 +358,21 @@ const getRequestedVariant = (event: H3Event): ScreenshotVariant => {
   const query = getQuery(event)
   const queryKeys = Object.keys(query)
 
-  if (queryKeys.some((key) => key !== 'variant')) {
+  if (queryKeys.some((key) => key !== 'variant' && key !== 'profile')) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'Only the screenshot variant query parameter is supported',
+      statusMessage: 'Only screenshot variant and profile query parameters are supported',
+    })
+  }
+
+  if (
+    query.profile !== undefined
+    && query.profile !== null
+    && query.profile !== SCREENSHOT_PROFILE_VERSION
+  ) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: `Screenshot profile must be ${SCREENSHOT_PROFILE_VERSION}`,
     })
   }
 

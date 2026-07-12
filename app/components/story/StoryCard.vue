@@ -128,6 +128,7 @@ import { useDebounce } from '~/composables/useDebounce'; // Import the new debou
 import { useImageLoadQueue, type ImageLoadQueueHandle } from '~/composables/useImageLoadQueue'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 import { normalizeStoryPlaceholderDomain } from '~/composables/useStoryPlaceholder'
+import { getScreenshotPath } from '#shared/utils/screenshot'
 
 const props = defineProps<{
   priority?: boolean
@@ -191,7 +192,7 @@ const storyDomain = computed(() => getDomainFromUrl(externalStoryUrl.value))
 const paletteDomain = computed(() => normalizeStoryPlaceholderDomain(storyDomain.value))
 const cardPaletteStyle = computed(() => getSeedPaletteStyle(props.story.objectID, 'light', paletteDomain.value))
 
-const screenshotSrc = computed(() => props.story.screenshotUrl || `/api/screenshot/${props.story.objectID}`)
+const screenshotSrc = computed(() => getScreenshotPath(props.story.objectID))
 
 // Define the radial gradient style using OKLCH CSS variables
 const radialGradientStyle = computed(() => ({

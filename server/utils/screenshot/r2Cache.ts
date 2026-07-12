@@ -10,12 +10,12 @@ import type {
   ScreenshotVariant,
 } from './types'
 
-const R2_PREFIX = 'screenshots/v3'
+const R2_PREFIX = 'screenshots/v7'
 const DEFAULT_R2_TTL_DAYS = 180
 const DEFAULT_FAILURE_TTL_MINUTES = 6 * 60
-const DEFAULT_PREVIEW_WIDTH = 720
-const DEFAULT_PREVIEW_HEIGHT = 1440
-const DEFAULT_PREVIEW_QUALITY = 72
+const DEFAULT_PREVIEW_WIDTH = 1440
+const DEFAULT_PREVIEW_HEIGHT = 4096
+const DEFAULT_PREVIEW_QUALITY = 68
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
 const SECONDS_PER_DAY = 24 * 60 * 60
