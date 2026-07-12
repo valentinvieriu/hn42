@@ -1,5 +1,6 @@
 import { createError, defineEventHandler, getRouterParams, setHeader } from 'h3'
 import type { HNUserProfile } from '#shared/types'
+import { formatServerTiming } from '#shared/utils/serverTiming'
 import { isValidHNUsername } from '../../utils/userActivity'
 
 type AlgoliaUserProfile = {
@@ -40,9 +41,11 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const algoliaUserStartedAt = performance.now()
     const profile = await $fetch<AlgoliaUserProfile>(
       `https://hn.algolia.com/api/v1/users/${encodeURIComponent(username)}`,
     )
+    const algoliaUserDuration = performance.now() - algoliaUserStartedAt
 
     if (!profile?.username) {
       throw createError({
@@ -51,14 +54,28 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    const userNormalizeStartedAt = performance.now()
     const userProfile: HNUserProfile = {
       username: profile.username,
       created_at: profile.created_at || '',
       karma: profile.karma || 0,
       about: profile.about || null,
     }
+    const userNormalizeDuration = performance.now() - userNormalizeStartedAt
 
     setHeader(event, 'Cache-Control', 'public, max-age=300, stale-while-revalidate=900')
+    setHeader(event, 'Server-Timing', formatServerTiming([
+      {
+        name: 'algolia-user',
+        duration: algoliaUserDuration,
+        description: 'Algolia user profile',
+      },
+      {
+        name: 'user-normalize',
+        duration: userNormalizeDuration,
+        description: 'HN42 user normalization',
+      },
+    ]))
 
     return userProfile
   } catch (error) {

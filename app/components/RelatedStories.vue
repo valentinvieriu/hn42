@@ -3,7 +3,7 @@
     <h2 class="section-title mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">
       Related Stories
     </h2>
-    <div v-if="status === 'pending'" class="text-gray-500">
+    <div v-if="status === 'idle' || status === 'pending'" class="text-gray-500">
       Loading related stories...
     </div>
     <div v-else-if="error" class="text-gray-500">
@@ -57,11 +57,11 @@ interface RelatedStory {
 const relatedPaletteStyle = (story: RelatedStory) => {
   return getSeedPaletteStyle(story.objectID)
 }
-const { data: stories, status, error } = await useFetch<RelatedStory[]>(
+const { data: stories, status, error } = useLazyFetch<RelatedStory[]>(
   () => `/api/related/${props.storyId}`,
   {
     default: () => [],
-    server: true,
+    server: false,
   },
 )
 </script>

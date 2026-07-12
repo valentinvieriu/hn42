@@ -1,4 +1,5 @@
-import { createError, defineEventHandler, getRouterParams, setHeaders, type H3Event } from 'h3'
+import { createError, defineEventHandler, getRouterParams, setHeader, setHeaders, type H3Event } from 'h3'
+import { formatServerTiming, type ServerTimingMetric } from '#shared/utils/serverTiming'
 
 const ALGOLIA_SEARCH_URL = 'https://hn.algolia.com/api/v1/search'
 const ALGOLIA_ITEMS_URL = 'https://hn.algolia.com/api/v1/items'
@@ -317,7 +318,9 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const sourceItemStartedAt = performance.now()
     const story = await $fetch<AlgoliaItem>(`${ALGOLIA_ITEMS_URL}/${id}`)
+    const sourceItemDuration = performance.now() - sourceItemStartedAt
     
     if (!story || !story.title) {
       throw createError({
@@ -331,6 +334,11 @@ export default defineEventHandler(async (event) => {
 
     if (!titleQuery && !urlQuery) {
       setRelatedCacheHeaders(event)
+      setHeader(event, 'Server-Timing', formatServerTiming([{
+        name: 'source-item',
+        duration: sourceItemDuration,
+        description: 'Algolia source item',
+      }]))
       return []
     }
 
@@ -362,10 +370,32 @@ export default defineEventHandler(async (event) => {
       }, 28))
     }
 
+    const relatedSearchesStartedAt = performance.now()
     const results = await Promise.all(searches)
+    const relatedSearchesDuration = performance.now() - relatedSearchesStartedAt
+    const relatedRankStartedAt = performance.now()
     const relatedStories = rankRelatedStories(results, story, id)
+    const relatedRankDuration = performance.now() - relatedRankStartedAt
+    const timingMetrics: ServerTimingMetric[] = [
+      {
+        name: 'source-item',
+        duration: sourceItemDuration,
+        description: 'Algolia source item',
+      },
+      {
+        name: 'related-searches',
+        duration: relatedSearchesDuration,
+        description: 'Concurrent Algolia related searches',
+      },
+      {
+        name: 'related-rank',
+        duration: relatedRankDuration,
+        description: 'Related-story ranking',
+      },
+    ]
 
     setRelatedCacheHeaders(event)
+    setHeader(event, 'Server-Timing', formatServerTiming(timingMetrics))
 
     return relatedStories
 

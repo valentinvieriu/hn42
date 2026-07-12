@@ -173,6 +173,7 @@
           class="source-preview-dialog"
           aria-labelledby="source-preview-dialog-title"
           @click.self="closeScreenshotPreview"
+          @close="handleScreenshotDialogClose"
         >
           <div class="source-preview-dialog-shell">
             <div class="source-preview-dialog-header">
@@ -191,6 +192,7 @@
             </div>
             <div class="source-preview-dialog-scroll">
               <img
+                v-if="isScreenshotDialogOpen"
                 :alt="`Expanded preview of ${story.title}`"
                 width="1440"
                 :src="originalScreenshotSrc"
@@ -213,6 +215,7 @@ import { useSanitizer } from '~/composables/useSanitizer';
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette';
 import type { Comment } from '#shared/types'
 import { getScreenshotPath } from '#shared/utils/screenshot'
+import { appendServerTiming } from '#shared/utils/serverTiming'
 
 const route = useRoute();
 const expandAllComments = ref(false);
@@ -238,6 +241,20 @@ const normalizeStoryId = (param: unknown): string | null => {
 const storyId = computed(() => normalizeStoryId(route.params.id))
 const storyDataKey = computed(() => `story-detail:${storyId.value ?? 'missing'}`)
 const getUserPath = (author: string) => `/user/${encodeURIComponent(author)}`
+const serverTimingHeader = useResponseHeader('Server-Timing')
+const pageSsrStartedAt = import.meta.server ? performance.now() : null
+
+if (import.meta.server && pageSsrStartedAt !== null) {
+  useNuxtApp().hook('app:rendered', () => {
+    serverTimingHeader.value = appendServerTiming(serverTimingHeader.value, [
+      {
+        name: 'page-ssr',
+        duration: performance.now() - pageSsrStartedAt,
+        description: 'Nuxt page data and render',
+      },
+    ])
+  })
+}
 
 const { data: storyData, pending, error: fetchError } = useAsyncData<StoryDetail | null>(
   storyDataKey,
@@ -248,7 +265,20 @@ const { data: storyData, pending, error: fetchError } = useAsyncData<StoryDetail
       return null
     }
 
-    return await $fetch<StoryDetail>(`/api/item/${id}`)
+    const storyDataStartedAt = performance.now()
+    const response = await $fetch.raw<StoryDetail>(`/api/item/${id}`)
+
+    if (import.meta.server) {
+      serverTimingHeader.value = appendServerTiming(response.headers.get('server-timing'), [
+        {
+          name: 'story-data',
+          duration: performance.now() - storyDataStartedAt,
+          description: 'SSR story data request',
+        },
+      ])
+    }
+
+    return response._data ?? null
   },
   {
     default: () => null,
@@ -290,6 +320,7 @@ const thumbnailPreviewState = ref<ScreenshotPreviewState>('loading')
 const originalPreviewState = ref<ScreenshotPreviewState>('loading')
 const isCompactViewport = ref(false)
 const screenshotDialog = ref<HTMLDialogElement | null>(null)
+const isScreenshotDialogOpen = ref(false)
 let compactViewportMediaQuery: MediaQueryList | null = null
 
 const updateCompactViewport = (event: MediaQueryList | MediaQueryListEvent) => {
@@ -354,10 +385,15 @@ const openScreenshotPreview = () => {
   }
 
   screenshotDialog.value.showModal()
+  isScreenshotDialogOpen.value = true
 }
 
 const closeScreenshotPreview = () => {
   screenshotDialog.value?.close()
+}
+
+const handleScreenshotDialogClose = () => {
+  isScreenshotDialogOpen.value = false
 }
 
 watch(thumbnailScreenshotSrc, () => {

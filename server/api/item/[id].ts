@@ -1,5 +1,6 @@
 import { defineEventHandler, getRouterParams, createError, setHeader } from 'h3'
 import type { Comment, HNResponse } from '#shared/types'
+import { formatServerTiming } from '#shared/utils/serverTiming'
 
 type StoryDetail = {
   id: number
@@ -38,6 +39,7 @@ const getStatusCode = (error: unknown): number | null => {
 }
 
 export default defineEventHandler(async (event) => {
+  const itemApiStartedAt = performance.now()
   const params = getRouterParams(event)
   const id = params.id
 
@@ -49,7 +51,9 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
+    const algoliaStartedAt = performance.now()
     const hnResponse = await $fetch<HNResponse>(`https://hn.algolia.com/api/v1/items/${id}`)
+    const algoliaDuration = performance.now() - algoliaStartedAt
 
     if (!hnResponse?.id) {
       throw createError({
@@ -58,6 +62,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    const normalizeStartedAt = performance.now()
     const story: StoryDetail = {
       id: hnResponse.id,
       created_at: hnResponse.created_at,
@@ -69,8 +74,26 @@ export default defineEventHandler(async (event) => {
       parent_id: hnResponse.parent_id,
       children: hnResponse.children || [],
     }
+    const normalizeDuration = performance.now() - normalizeStartedAt
 
     setHeader(event, 'Cache-Control', 'public, max-age=120, stale-while-revalidate=600')
+    setHeader(event, 'Server-Timing', formatServerTiming([
+      {
+        name: 'algolia',
+        duration: algoliaDuration,
+        description: 'Algolia item fetch',
+      },
+      {
+        name: 'normalize',
+        duration: normalizeDuration,
+        description: 'HN42 story normalization',
+      },
+      {
+        name: 'item-api',
+        duration: performance.now() - itemApiStartedAt,
+        description: 'HN42 item API total',
+      },
+    ]))
 
     return story
   } catch (error) {
