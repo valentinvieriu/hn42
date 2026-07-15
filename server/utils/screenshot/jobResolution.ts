@@ -1,10 +1,4 @@
-import { SCREENSHOT_PROFILE_VERSION } from '#shared/utils/screenshot'
 import { isValidHnItemId } from '#shared/utils/hn'
-import {
-  getR2PreviewScreenshotKey,
-  getR2ScreenshotFailureKey,
-  getSourceUrlHash,
-} from './r2Cache'
 import {
   createScreenshotSourceDecision,
   normalizeSourceUrl,
@@ -26,21 +20,14 @@ type HnFirebaseStory = {
 }
 
 export type ResolvedScreenshotCaptureJob = {
-  failureKey: string
-  hostname: string
-  previewKey: string
-  profile: typeof SCREENSHOT_PROFILE_VERSION
   sourceDecision: ScreenshotCaptureDecision
-  sourceUrlHash: string
   status: 'capture'
-  storyId: string
 }
 
 export type ResolvedScreenshotSkipJob = {
   skipReason: ScreenshotSkipReason
   sourceStrategy?: ScreenshotSourceStrategy
   status: 'skip'
-  storyId: string
 }
 
 export type ResolvedScreenshotJob = ResolvedScreenshotCaptureJob | ResolvedScreenshotSkipJob
@@ -72,7 +59,6 @@ export const resolveScreenshotJob = async (
     return {
       skipReason: 'invalid-url',
       status: 'skip',
-      storyId,
     }
   }
 
@@ -82,7 +68,6 @@ export const resolveScreenshotJob = async (
     return {
       skipReason: 'invalid-url',
       status: 'skip',
-      storyId,
     }
   }
 
@@ -93,27 +78,11 @@ export const resolveScreenshotJob = async (
       skipReason: sourceDecision.skipReason,
       sourceStrategy: sourceDecision.sourceStrategy,
       status: 'skip',
-      storyId,
     }
   }
 
-  const sourceUrlHash = await getSourceUrlHash(sourceDecision.cacheIdentityUrl)
-  const previewKey = getR2PreviewScreenshotKey(
-    sourceUrlHash,
-    runtimeConfig.screenshotPreviewWidth,
-    runtimeConfig.screenshotPreviewHeight,
-    runtimeConfig.screenshotPreviewWebpQuality,
-  )
-
   return {
-    failureKey: getR2ScreenshotFailureKey(previewKey),
-    hostname: new URL(sourceDecision.captureUrl).hostname.toLowerCase(),
-    previewKey,
-    profile: SCREENSHOT_PROFILE_VERSION,
     sourceDecision,
-    sourceUrlHash,
     status: 'capture',
-    storyId,
   }
 }
-

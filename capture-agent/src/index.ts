@@ -4,6 +4,12 @@ import {
   type ScreenshotJobMessage,
   type ScreenshotPrepareResponse,
 } from '../../shared/utils/screenshotJobs'
+import {
+  SCREENSHOT_PREVIEW_HEIGHT,
+  SCREENSHOT_PREVIEW_MAX_BYTES,
+  SCREENSHOT_PREVIEW_QUALITY,
+  SCREENSHOT_PREVIEW_WIDTH,
+} from '../../shared/utils/screenshot'
 
 type PullMessage = {
   attempts?: number
@@ -39,9 +45,6 @@ type AgentConfig = {
   visibilityTimeoutMs: number
 }
 
-const MAX_SCREENSHOT_BYTES = 2_000_000
-const MAX_SCREENSHOT_HEIGHT = 11111
-const MAX_SCREENSHOT_WIDTH = 1440
 const REQUEST_TIMEOUT_MS = 45_000
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -219,10 +222,10 @@ const requireCaptureMetadata = (response: Response) => {
     || sourceRoute !== 'direct'
     || !Number.isSafeInteger(width)
     || width < 1
-    || width > MAX_SCREENSHOT_WIDTH
+    || width > SCREENSHOT_PREVIEW_WIDTH
     || !Number.isSafeInteger(height)
     || height < 1
-    || height > MAX_SCREENSHOT_HEIGHT
+    || height > SCREENSHOT_PREVIEW_HEIGHT
   ) {
     throw new TerminalCaptureError('Screenshot API returned invalid metadata', 'invalid-output')
   }
@@ -233,7 +236,7 @@ const validateWebp = (bytes: ArrayBuffer) => {
 
   if (
     view.byteLength < 1024
-    || view.byteLength > MAX_SCREENSHOT_BYTES
+    || view.byteLength > SCREENSHOT_PREVIEW_MAX_BYTES
     || view[0] !== 0x52
     || view[1] !== 0x49
     || view[2] !== 0x46
@@ -261,7 +264,7 @@ const captureScreenshot = async (config: AgentConfig, captureUrl: string) => {
       cleanup: 'nuisances',
       format: 'webp',
       profile: 'fullPage',
-      quality: 55,
+      quality: SCREENSHOT_PREVIEW_QUALITY,
       response: 'binary',
       settleMs: 200,
       timeoutMs: 8000,
@@ -270,7 +273,7 @@ const captureScreenshot = async (config: AgentConfig, captureUrl: string) => {
         deviceScaleFactor: 1,
         height: 900,
         isMobile: false,
-        width: 1440,
+        width: SCREENSHOT_PREVIEW_WIDTH,
       },
       waitUntil: 'domcontentloaded',
     }),
@@ -293,7 +296,7 @@ const captureScreenshot = async (config: AgentConfig, captureUrl: string) => {
   requireCaptureMetadata(response)
   const contentLength = Number(response.headers.get('content-length'))
 
-  if (Number.isFinite(contentLength) && contentLength > MAX_SCREENSHOT_BYTES) {
+  if (Number.isFinite(contentLength) && contentLength > SCREENSHOT_PREVIEW_MAX_BYTES) {
     await response.body?.cancel()
     throw new TerminalCaptureError('Screenshot API result exceeds the byte limit', 'invalid-output')
   }
@@ -348,35 +351,6 @@ const uploadResult = async (
   }
 }
 
-const reportTerminalFailure = async (
-  config: AgentConfig,
-  job: ScreenshotJobMessage,
-  error: TerminalCaptureError,
-) => {
-  const body = JSON.stringify({
-    kind: error.kind,
-    reason: error.message.slice(0, 200),
-  })
-  const response = await fetch(
-    `${config.hn42BaseUrl}/api/internal/screenshot-jobs/${encodeURIComponent(job.storyId)}/failure`,
-    {
-      method: 'POST',
-      headers: {
-        ...agentHeaders(config),
-        'Content-Length': String(Buffer.byteLength(body)),
-        'Content-Type': 'application/json',
-        'X-HN42-Screenshot-Profile': job.profile,
-      },
-      body,
-      signal: AbortSignal.timeout(10_000),
-    },
-  )
-
-  if (!response.ok) {
-    throw new Error(`Failure endpoint returned ${response.status}`)
-  }
-}
-
 const retryDelaySeconds = (attempts: number | undefined) => {
   const normalizedAttempts = Number.isSafeInteger(attempts) ? Math.max(1, Number(attempts)) : 1
 
@@ -419,21 +393,12 @@ const processMessage = async (
     return { action: 'ack', leaseId }
   } catch (error) {
     if (error instanceof TerminalCaptureError) {
-      try {
-        await reportTerminalFailure(config, job, error)
-        console.warn(JSON.stringify({
-          message: 'Terminal screenshot failure acknowledged',
-          kind: error.kind,
-          storyId: job.storyId,
-        }))
-        return { action: 'ack', leaseId }
-      } catch (reportError) {
-        console.warn(JSON.stringify({
-          message: 'Terminal screenshot failure report delayed',
-          error: reportError instanceof Error ? reportError.message : String(reportError),
-          storyId: job.storyId,
-        }))
-      }
+      console.warn(JSON.stringify({
+        message: 'Terminal screenshot failure acknowledged',
+        kind: error.kind,
+        storyId: job.storyId,
+      }))
+      return { action: 'ack', leaseId }
     }
 
     const delaySeconds = retryDelaySeconds(message.attempts)

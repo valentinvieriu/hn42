@@ -5,12 +5,13 @@ import {
 } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { isValidHnItemId } from '#shared/utils/hn'
+import { SCREENSHOT_PROFILE_VERSION } from '#shared/utils/screenshot'
 import type { ScreenshotPrepareResponse } from '#shared/utils/screenshotJobs'
 import { requireScreenshotAgent } from '../../../../utils/screenshot/agentAuth'
 import { resolveScreenshotJob } from '../../../../utils/screenshot/jobResolution'
 import {
-  isR2ScreenshotFailure,
-  readR2Screenshot,
+  getR2PreviewScreenshotKey,
+  headR2Screenshot,
 } from '../../../../utils/screenshot/r2Cache'
 import { resolveScreenshotRuntimeConfig } from '../../../../utils/screenshot/runtimeConfig'
 import { probeCaptureUrlContent } from '../../../../utils/screenshot/sourcePolicy'
@@ -38,38 +39,23 @@ export default defineEventHandler(async (event): Promise<ScreenshotPrepareRespon
     useRuntimeConfig(event) as ScreenshotRuntimeConfig,
     env,
   )
+  const previewKey = getR2PreviewScreenshotKey(storyId)
+  const preview = await headR2Screenshot(
+    env,
+    previewKey,
+    runtimeConfig.screenshotR2TtlDays,
+  )
+
+  if (preview?.isFresh) {
+    return { status: 'ready' }
+  }
+
   const job = await resolveScreenshotJob(storyId, runtimeConfig)
 
   if (job.status === 'skip') {
     return {
       reason: job.skipReason,
       status: 'skipped',
-    }
-  }
-
-  const [preview, failure] = await Promise.all([
-    readR2Screenshot(
-      env,
-      job.previewKey,
-      runtimeConfig.screenshotR2TtlDays,
-      runtimeConfig.screenshotFailureTtlMinutes,
-    ),
-    readR2Screenshot(
-      env,
-      job.failureKey,
-      runtimeConfig.screenshotR2TtlDays,
-      runtimeConfig.screenshotFailureTtlMinutes,
-    ),
-  ])
-
-  if (preview && !isR2ScreenshotFailure(preview) && preview.isFresh) {
-    return { status: 'ready' }
-  }
-
-  if (failure && isR2ScreenshotFailure(failure) && failure.isFresh) {
-    return {
-      reason: 'recent-capture-failure',
-      status: 'cooldown',
     }
   }
 
@@ -84,7 +70,7 @@ export default defineEventHandler(async (event): Promise<ScreenshotPrepareRespon
 
   return {
     captureUrl: probe.captureUrl,
-    profile: job.profile,
+    profile: SCREENSHOT_PROFILE_VERSION,
     status: 'capture',
   }
 })

@@ -11,12 +11,11 @@ binding = "SCREENSHOTS_BUCKET"
 bucket_name = "hn42-screenshots"
 remote = true
 
-[browser]
-binding = "BROWSER"
-remote = true
-
 [cache]
 enabled = true
+
+[secrets]
+required = ["HN42_SCREENSHOT_AGENT_TOKEN"]
 
 [observability]
 enabled = true

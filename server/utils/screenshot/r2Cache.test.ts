@@ -2,10 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getR2PreviewScreenshotKey,
   getRemainingR2TtlSeconds,
-  getR2ScreenshotFailureKey,
+  headR2Screenshot,
   readR2Screenshot,
   writeR2Screenshot,
-  writeR2ScreenshotFailure,
 } from './r2Cache'
 import type { ScreenshotEnv } from './types'
 
@@ -13,120 +12,69 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('screenshot R2 failure markers', () => {
-  it('stores failures as empty, non-image, no-store markers', async () => {
-    const put = vi.fn().mockResolvedValue(undefined)
-    const env = { SCREENSHOTS_BUCKET: { put } } as unknown as ScreenshotEnv
+describe('screenshot R2 storage', () => {
+  it('uses the HN item ID as the v9 object identity', () => {
+    const previewKey = getR2PreviewScreenshotKey('42424242')
 
-    const previewKey = getR2PreviewScreenshotKey('hash')
-
-    await writeR2ScreenshotFailure(
-      env,
-      getR2ScreenshotFailureKey(previewKey),
-      'hash',
-      'provider down',
-      'original',
-      { policy: 'capture', sourceStrategy: 'direct' },
-      'ordered:browser-run',
-    )
-
-    const [, body, options] = put.mock.calls[0] ?? []
-    expect(body).toHaveLength(0)
-    expect(options.httpMetadata).toEqual({
-      cacheControl: 'no-store',
-      contentType: 'application/vnd.hn42.screenshot-failure',
-    })
-    expect(options.customMetadata).toMatchObject({
-      policy: 'capture',
-      providerPlan: 'ordered:browser-run',
-      reason: 'provider down',
-      sourceStrategy: 'direct',
-      sourceUrlHash: 'hash',
-      status: 'failed',
-      variant: 'original',
-    })
+    expect(previewKey).toBe('screenshots/v9/items/42424242/preview-1440x11111-q55.webp')
   })
 
-  it('reads a failure marker without treating its body as a screenshot', async () => {
+  it('checks object metadata without reading the screenshot body', async () => {
     const arrayBuffer = vi.fn()
-    const env = {
-      SCREENSHOTS_BUCKET: {
-        get: vi.fn().mockResolvedValue({
-          arrayBuffer,
-          customMetadata: {
-            capturedAt: new Date().toISOString(),
-            providerPlan: 'balanced:provider-a,provider-b',
-            status: 'failed',
-            variant: 'thumbnail',
-          },
-          httpMetadata: { contentType: 'application/vnd.hn42.screenshot-failure' },
-        }),
+    const head = vi.fn().mockResolvedValue({
+      customMetadata: {
+        capturedAt: new Date().toISOString(),
+        status: 'ok',
+        storyId: '42424242',
       },
-    } as unknown as ScreenshotEnv
-
-    const result = await readR2Screenshot(env, 'marker', 30, 360)
-
-    expect(result).toMatchObject({
-      isFailure: true,
-      isFresh: true,
-      providerPlan: 'balanced:provider-a,provider-b',
+      httpMetadata: { contentType: 'image/webp' },
     })
-    expect(result).not.toHaveProperty('variant')
+    const env = { SCREENSHOTS_BUCKET: { head } } as unknown as ScreenshotEnv
+
+    await expect(headR2Screenshot(env, 'preview', 14)).resolves.toMatchObject({
+      contentType: 'image/webp',
+      isFresh: true,
+    })
     expect(arrayBuffer).not.toHaveBeenCalled()
   })
 
-  it('retains successful screenshot custom metadata when writing R2', async () => {
+  it('stores successful screenshot metadata with the story ID', async () => {
     const put = vi.fn().mockResolvedValue(undefined)
     const env = { SCREENSHOTS_BUCKET: { put } } as unknown as ScreenshotEnv
 
-    await writeR2Screenshot(env, 'preview', 'hash', {
+    await writeR2Screenshot(env, 'preview', '42424242', {
       bytes: new Uint8Array([1, 2, 3]).buffer,
       contentType: 'image/webp',
-      processor: 'browser-run',
-      provider: 'browser-run',
-    }, 'original', {
-      policy: 'capture',
-      sourceStrategy: 'xcancel',
-    })
+      processor: 'browserless-proxy',
+      provider: 'browserless-agent',
+    }, 'original')
 
     const [, , options] = put.mock.calls[0] ?? []
     expect(options.customMetadata).toMatchObject({
-      contentType: 'image/webp',
-      policy: 'capture',
-      processor: 'browser-run',
-      provider: 'browser-run',
-      sourceStrategy: 'xcancel',
-      sourceUrlHash: 'hash',
-      status: 'ok',
+      processor: 'browserless-proxy',
+      provider: 'browserless-agent',
+      storyId: '42424242',
       variant: 'original',
     })
+    expect(options.httpMetadata.cacheControl).toBe('public, max-age=1209600, immutable')
   })
 
-  it('propagates storage errors so callers can fail closed', async () => {
+  it('propagates storage errors so callers fail closed', async () => {
     const env = {
       SCREENSHOTS_BUCKET: {
         get: vi.fn().mockRejectedValue(new Error('R2 unavailable')),
       },
     } as unknown as ScreenshotEnv
 
-    await expect(readR2Screenshot(env, 'preview', 180, 360))
-      .rejects.toThrow('R2 unavailable')
-  })
-
-  it('uses one bounded preview key and a separate failure key', () => {
-    const previewKey = getR2PreviewScreenshotKey('hash')
-
-    expect(previewKey).toBe('screenshots/v8/hash/preview-1440x11111-q55.webp')
-    expect(getR2ScreenshotFailureKey(previewKey))
-      .toBe('screenshots/v8/hash/preview-1440x11111-q55.webp.failure')
+    await expect(readR2Screenshot(env, 'preview', 14)).rejects.toThrow('R2 unavailable')
   })
 
   it('limits edge freshness to the remaining R2 lifetime', () => {
     vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-07-12T00:00:00Z'))
-    const capturedAt = new Date('2026-01-14T00:00:00Z')
+    vi.setSystemTime(new Date('2026-07-15T00:00:00Z'))
+    const capturedAt = new Date('2026-07-02T00:00:00Z')
 
-    expect(getRemainingR2TtlSeconds(capturedAt, 180)).toBe(24 * 60 * 60)
-    expect(getRemainingR2TtlSeconds(null, 180, 1000)).toBe(1000)
+    expect(getRemainingR2TtlSeconds(capturedAt, 14)).toBe(24 * 60 * 60)
+    expect(getRemainingR2TtlSeconds(null, 14, 1000)).toBe(1000)
   })
 })

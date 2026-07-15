@@ -23,7 +23,7 @@ export type ScreenshotPrepareResponse =
     }
   | {
       reason: string
-      status: 'cooldown' | 'skipped'
+      status: 'skipped'
     }
   | {
       status: 'ready'
@@ -62,4 +62,3 @@ export const parseScreenshotJobMessage = (value: unknown): ScreenshotJobMessage 
     storyId: value.storyId,
   }
 }
-

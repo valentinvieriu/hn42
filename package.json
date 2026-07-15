@@ -8,7 +8,7 @@
     "check": "npm run typecheck && npm test && npm run build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
-    "preview": "NUXT_SCREENSHOT_CAPTURE_ENABLED=false npm run build && wrangler dev",
+    "preview": "npm run build && wrangler dev",
     "postinstall": "nuxt prepare",
     "test": "vitest run",
     "typecheck": "nuxi typecheck",
@@ -18,8 +18,7 @@
     "cf:screenshots:jobs:bootstrap": "bash scripts/bootstrap-cloudflare-screenshot-jobs.sh",
     "cf:screenshots:scheduler:deploy": "wrangler deploy --config workers/screenshot-scheduler/wrangler.jsonc",
     "cf:screenshots:scheduler:dry-run": "wrangler deploy --dry-run --config workers/screenshot-scheduler/wrangler.jsonc",
-    "cf:screenshots:scheduler:typegen": "wrangler types workers/screenshot-scheduler/worker-configuration.d.ts --config workers/screenshot-scheduler/wrangler.jsonc --env-interface SchedulerEnv --include-runtime false",
-    "cf:screenshots:reset-cache": "node scripts/reset-cloudflare-screenshot-cache.mjs"
+    "cf:screenshots:scheduler:typegen": "wrangler types workers/screenshot-scheduler/worker-configuration.d.ts --config workers/screenshot-scheduler/wrangler.jsonc --env-interface SchedulerEnv --include-runtime false"
   },
   "dependencies": {
     "@lucide/vue": "^1.24.0",

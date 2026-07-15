@@ -56,7 +56,6 @@ const BINARY_FILENAME_PATTERN = /\.(?:7z|avi|bz2|doc|docx|epub|gz|m4a|m4v|mkv|mo
 type ScreenshotCaptureStrategy = Exclude<ScreenshotSourceStrategy, 'skip-pdf' | 'skip-known-blocked'>
 
 export type ScreenshotCaptureDecision = {
-  cacheIdentityUrl: string
   captureUrl: string
   policy: 'capture'
   sourceStrategy: ScreenshotCaptureStrategy
@@ -69,18 +68,6 @@ export type ScreenshotSkipDecision = {
 }
 
 export type ScreenshotSourceDecision = ScreenshotCaptureDecision | ScreenshotSkipDecision
-
-export class ScreenshotPolicySkipError extends Error {
-  skipReason: ScreenshotSkipReason
-  sourceStrategy: ScreenshotSourceStrategy
-
-  constructor(skipReason: ScreenshotSkipReason, sourceStrategy: ScreenshotSourceStrategy) {
-    super(`Screenshot capture skipped by policy: ${skipReason}`)
-    this.name = 'ScreenshotPolicySkipError'
-    this.skipReason = skipReason
-    this.sourceStrategy = sourceStrategy
-  }
-}
 
 type ContentProbeResult =
   | { captureUrl: string, policy: 'capture' }
@@ -275,18 +262,6 @@ const isObviousPdfUrl = (url: URL) => {
   return url.pathname.toLowerCase().endsWith('.pdf') || hasPdfQueryShape(url)
 }
 
-const getScopedCacheIdentityUrl = (
-  sourceStrategy: ScreenshotCaptureStrategy,
-  captureUrl: string,
-  originalUrl: string,
-) => {
-  if (sourceStrategy === 'direct') {
-    return originalUrl
-  }
-
-  return `hn42:${sourceStrategy}:${captureUrl}`
-}
-
 export const createScreenshotSourceDecision = (
   sourceUrl: string,
   runtimeConfig: any,
@@ -296,7 +271,6 @@ export const createScreenshotSourceDecision = (
 
   if (arxivAbsUrl) {
     return {
-      cacheIdentityUrl: getScopedCacheIdentityUrl('arxiv-abs', arxivAbsUrl, sourceUrl),
       captureUrl: arxivAbsUrl,
       policy: 'capture',
       sourceStrategy: 'arxiv-abs',
@@ -323,7 +297,6 @@ export const createScreenshotSourceDecision = (
 
   if (xcancelUrl) {
     return {
-      cacheIdentityUrl: getScopedCacheIdentityUrl('xcancel', xcancelUrl, sourceUrl),
       captureUrl: xcancelUrl,
       policy: 'capture',
       sourceStrategy: 'xcancel',
@@ -331,7 +304,6 @@ export const createScreenshotSourceDecision = (
   }
 
   return {
-    cacheIdentityUrl: sourceUrl,
     captureUrl: sourceUrl,
     policy: 'capture',
     sourceStrategy: 'direct',
@@ -454,8 +426,4 @@ export const probeCaptureUrlContent = async (
   }
 
   return { policy: 'skip', skipReason: 'unverified-content' }
-}
-
-export const isScreenshotPolicySkipError = (error: unknown): error is ScreenshotPolicySkipError => {
-  return error instanceof ScreenshotPolicySkipError
 }

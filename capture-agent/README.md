@@ -21,3 +21,5 @@ Required environment variables:
 
 Optional tuning variables are `CAPTURE_CONCURRENCY`, `QUEUE_BATCH_SIZE`,
 `QUEUE_VISIBILITY_TIMEOUT_MS`, `QUEUE_IDLE_POLL_MS`, and `PORT`.
+Copy `capture-agent/.env.example` when configuring the container; keep the
+filled file outside version control.

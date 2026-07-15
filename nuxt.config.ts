@@ -8,42 +8,9 @@ export default defineNuxtConfig({
     inlineStyles: true,
   },
   runtimeConfig: {
-    screenshotBrowserlessProxyConcurrency: '1',
-    screenshotBrowserlessProxyNavigationTimeoutMs: '8000',
-    screenshotBrowserlessProxyQueueDepth: '5',
-    screenshotBrowserlessProxyQueueTimeoutMs: '10000',
-    screenshotBrowserlessProxyRequestTimeoutMs: '45000',
-    screenshotBrowserlessProxySettleMs: '200',
-    screenshotBrowserlessProxyToken: '',
-    screenshotBrowserlessProxyUrl: process.env.NODE_ENV === 'production'
-      ? ''
-      : 'https://screenshots.dev.localhost/v1/screenshots',
-    screenshotBrowserlessProxyViewportHeight: '900',
-    screenshotBrowserActionTimeoutMs: '5000',
-    screenshotBrowserCacheTtlSeconds: '0',
-    screenshotBrowserGotoTimeoutMs: '8000',
-    screenshotBrowserMinIntervalMs: '10000',
-    screenshotBrowserViewportHeight: '900',
-    screenshotBrowserWaitAfterLoadMs: '200',
-    screenshotCaptureEnabled: process.env.NUXT_SCREENSHOT_CAPTURE_ENABLED
-      ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false'),
-    screenshotCaptureConcurrency: '1',
-    screenshotCaptureDailyLimit: '60',
-    screenshotCaptureQueueDepth: '5',
-    screenshotCaptureQueueTimeoutMs: '30000',
-    screenshotFailureTtlMinutes: '360',
     screenshotPolicyBlockedHosts: '',
     screenshotPolicyProbeTimeoutMs: '1200',
-    screenshotPreviewHeight: '11111',
-    screenshotPreviewWebpQuality: '55',
-    screenshotPreviewMaxBytes: '2000000',
-    screenshotPreviewWidth: '1440',
-    screenshotProviders: process.env.NODE_ENV === 'production'
-      ? 'browser-run'
-      : 'browserless-proxy',
-    screenshotProviderStrategy: 'ordered',
-    screenshotRequestCaptureEnabled: 'false',
-    screenshotR2TtlDays: '30',
+    screenshotR2TtlDays: '14',
     screenshotXCancelBaseUrl: 'https://xcancel.com',
   },
   nitro: {
