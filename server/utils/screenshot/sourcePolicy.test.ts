@@ -29,7 +29,7 @@ describe('screenshot source policy', () => {
     })
   })
 
-  it('only sends HTML responses to Browser Run', async () => {
+  it('only sends HTML responses to the screenshot provider chain', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {
       headers: { 'Content-Type': 'image/jpeg' },
     })))

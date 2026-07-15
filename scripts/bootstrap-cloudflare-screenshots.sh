@@ -10,9 +10,15 @@ PREVIOUS_V5_RULE_ID="delete-screenshots-v5-after-180-days"
 PREVIOUS_V5_PREFIX="screenshots/v5/"
 PREVIOUS_V6_RULE_ID="delete-screenshots-v6-after-180-days"
 PREVIOUS_V6_PREFIX="screenshots/v6/"
-RULE_ID="${HN42_SCREENSHOT_LIFECYCLE_RULE:-delete-screenshots-v7-after-180-days}"
-PREFIX="${HN42_SCREENSHOT_PREFIX:-screenshots/v7/}"
-EXPIRE_DAYS="${HN42_SCREENSHOT_EXPIRE_DAYS:-180}"
+PREVIOUS_V7_RULE_ID="delete-screenshots-v7-after-180-days"
+PREVIOUS_V7_PREFIX="screenshots/v7/"
+LEGACY_EXPIRE_DAYS="180"
+RULE_ID="${HN42_SCREENSHOT_LIFECYCLE_RULE:-delete-screenshots-v8-after-30-days}"
+PREFIX="${HN42_SCREENSHOT_PREFIX:-screenshots/v8/}"
+EXPIRE_DAYS="${HN42_SCREENSHOT_EXPIRE_DAYS:-30}"
+ADMISSION_RULE_ID="delete-screenshot-jobs-v1-after-7-days"
+ADMISSION_PREFIX="screenshot-jobs/v1/"
+ADMISSION_EXPIRE_DAYS="7"
 
 WRANGLER=(npx wrangler)
 
@@ -91,10 +97,12 @@ ensure_lifecycle_rule() {
 }
 
 ensure_bucket "$PROD_BUCKET"
-ensure_lifecycle_rule "$PROD_BUCKET" "$LEGACY_RULE_ID" "$LEGACY_PREFIX" "$EXPIRE_DAYS"
-ensure_lifecycle_rule "$PROD_BUCKET" "$PREVIOUS_V4_RULE_ID" "$PREVIOUS_V4_PREFIX" "$EXPIRE_DAYS"
-ensure_lifecycle_rule "$PROD_BUCKET" "$PREVIOUS_V5_RULE_ID" "$PREVIOUS_V5_PREFIX" "$EXPIRE_DAYS"
-ensure_lifecycle_rule "$PROD_BUCKET" "$PREVIOUS_V6_RULE_ID" "$PREVIOUS_V6_PREFIX" "$EXPIRE_DAYS"
+ensure_lifecycle_rule "$PROD_BUCKET" "$LEGACY_RULE_ID" "$LEGACY_PREFIX" "$LEGACY_EXPIRE_DAYS"
+ensure_lifecycle_rule "$PROD_BUCKET" "$PREVIOUS_V4_RULE_ID" "$PREVIOUS_V4_PREFIX" "$LEGACY_EXPIRE_DAYS"
+ensure_lifecycle_rule "$PROD_BUCKET" "$PREVIOUS_V5_RULE_ID" "$PREVIOUS_V5_PREFIX" "$LEGACY_EXPIRE_DAYS"
+ensure_lifecycle_rule "$PROD_BUCKET" "$PREVIOUS_V6_RULE_ID" "$PREVIOUS_V6_PREFIX" "$LEGACY_EXPIRE_DAYS"
+ensure_lifecycle_rule "$PROD_BUCKET" "$PREVIOUS_V7_RULE_ID" "$PREVIOUS_V7_PREFIX" "$LEGACY_EXPIRE_DAYS"
 ensure_lifecycle_rule "$PROD_BUCKET" "$RULE_ID" "$PREFIX" "$EXPIRE_DAYS"
+ensure_lifecycle_rule "$PROD_BUCKET" "$ADMISSION_RULE_ID" "$ADMISSION_PREFIX" "$ADMISSION_EXPIRE_DAYS"
 
 echo "Cloudflare screenshot storage is ready."

@@ -1,4 +1,5 @@
 import type { ScreenshotResult, ScreenshotRuntimeConfig } from '../types'
+import { validateWebpScreenshot } from '../validation'
 import {
   ScreenshotProviderChainError,
   type ScreenshotProvider,
@@ -34,12 +35,6 @@ const normalizeInteger = (
   return Math.min(maximum, Math.max(minimum, Math.floor(parsedValue)))
 }
 
-const isJpeg = (bytes: ArrayBuffer) => {
-  const view = new Uint8Array(bytes)
-
-  return view.length >= 3 && view[0] === 0xff && view[1] === 0xd8 && view[2] === 0xff
-}
-
 const validateProviderResult = (
   provider: ScreenshotProvider,
   result: ScreenshotResult,
@@ -59,15 +54,17 @@ const validateProviderResult = (
     )
   }
 
-  if (
-    contentType !== 'image/jpeg'
-    || !(result.bytes instanceof ArrayBuffer)
-    || result.bytes.byteLength < MIN_SCREENSHOT_BYTES
-    || result.bytes.byteLength > maxBytes
-    || !isJpeg(result.bytes)
-  ) {
+  if (contentType !== 'image/webp' || !(result.bytes instanceof ArrayBuffer)) {
     throw new InvalidScreenshotProviderResultError(
-      `Provider ${provider.name} returned an invalid JPEG screenshot`,
+      `Provider ${provider.name} returned an invalid WebP screenshot`,
+    )
+  }
+
+  try {
+    validateWebpScreenshot(result.bytes, maxBytes)
+  } catch {
+    throw new InvalidScreenshotProviderResultError(
+      `Provider ${provider.name} returned an invalid WebP screenshot`,
     )
   }
 

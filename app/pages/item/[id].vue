@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-    <div class="max-w-7xl mx-auto p-4 md:p-8 lg:py-10">
+    <div class="mx-auto max-w-[112rem] p-4 md:p-8 lg:py-10">
       <div v-if="error" class="text-center mt-20">
         <h1 class="text-3xl font-display font-semibold mb-4">Error</h1>
         <p class="mb-6 leading-7">{{ error }}</p>
@@ -61,6 +61,7 @@
           </div>
           <div
             class="source-screenshot-preview seed-palette-surface mb-6 lg:mb-8"
+            :data-screenshot-attempt="screenshotRequestAttempt + 1"
             :data-screenshot-state="screenshotPreviewState"
             :style="screenshotPreviewStyle"
             data-testid="source-screenshot-preview"
@@ -72,10 +73,11 @@
               presentation="detail"
             />
             <img
+              :key="`${screenshotSrc}:${screenshotRequestAttempt}`"
               ref="screenshotImage"
               :alt="`Preview of ${story.title}`"
               width="1440"
-              height="900"
+              height="11111"
               :src="screenshotSrc"
               loading="eager"
               fetchpriority="high"
@@ -103,11 +105,11 @@
               v-if="screenshotPreviewState === 'loaded'"
               type="button"
               class="source-preview-expand-button"
-              aria-label="Expand source preview"
+              aria-label="Open source preview at full size"
               @click="openScreenshotPreview"
             >
               <LucideMaximize2 class="h-4 w-4" aria-hidden="true" />
-              <span>Expand</span>
+              <span>Full size</span>
             </button>
           </div>
           <div
@@ -282,12 +284,19 @@ const storyExternalUrl = computed(() => {
     : ''
 })
 type ScreenshotPreviewState = 'loading' | 'loaded' | 'failed'
+const SCREENSHOT_RETRY_DELAYS_MS = [16_000, 45_000] as const
 const screenshotPreviewState = ref<ScreenshotPreviewState>('loading')
+const screenshotRequestAttempt = ref(0)
 const screenshotImage = ref<HTMLImageElement | null>(null)
 const screenshotDialog = ref<HTMLDialogElement | null>(null)
 const isScreenshotDialogOpen = ref(false)
+let screenshotRetryTimer: ReturnType<typeof setTimeout> | undefined
 
 onBeforeUnmount(() => {
+  if (screenshotRetryTimer) {
+    clearTimeout(screenshotRetryTimer)
+  }
+
   screenshotDialog.value?.close()
 })
 const storyDomain = computed(() => {
@@ -310,17 +319,40 @@ const getPreviewStateFromImage = (image: HTMLImageElement): ScreenshotPreviewSta
   return image.naturalWidth > 1 && image.naturalHeight > 1 ? 'loaded' : 'failed'
 }
 
+const scheduleScreenshotRetry = () => {
+  const retryDelay = SCREENSHOT_RETRY_DELAYS_MS[screenshotRequestAttempt.value]
+
+  if (retryDelay === undefined || screenshotRetryTimer) {
+    return
+  }
+
+  screenshotRetryTimer = setTimeout(() => {
+    screenshotRetryTimer = undefined
+    screenshotPreviewState.value = 'loading'
+    screenshotRequestAttempt.value += 1
+  }, retryDelay)
+}
+
+const updateScreenshotPreviewState = (image: HTMLImageElement) => {
+  screenshotPreviewState.value = getPreviewStateFromImage(image)
+
+  if (screenshotPreviewState.value === 'failed') {
+    scheduleScreenshotRetry()
+  }
+}
+
 const handleScreenshotPreviewLoad = (event: Event) => {
-  screenshotPreviewState.value = getPreviewStateFromImage(event.target as HTMLImageElement)
+  updateScreenshotPreviewState(event.target as HTMLImageElement)
 }
 
 const handleScreenshotPreviewError = () => {
   screenshotPreviewState.value = 'failed'
+  scheduleScreenshotRetry()
 }
 
 onMounted(() => {
   if (screenshotImage.value?.complete) {
-    screenshotPreviewState.value = getPreviewStateFromImage(screenshotImage.value)
+    updateScreenshotPreviewState(screenshotImage.value)
   }
 })
 
@@ -346,6 +378,12 @@ const handleScreenshotDialogClose = () => {
 }
 
 watch(screenshotSrc, () => {
+  if (screenshotRetryTimer) {
+    clearTimeout(screenshotRetryTimer)
+    screenshotRetryTimer = undefined
+  }
+
+  screenshotRequestAttempt.value = 0
   screenshotPreviewState.value = 'loading'
 })
 
@@ -551,6 +589,17 @@ useSeoMeta({
     aspect-ratio: 4 / 3;
   }
 
+  .source-screenshot-preview[data-screenshot-state="loaded"] {
+    aspect-ratio: auto;
+  }
+
+  .source-screenshot-preview[data-screenshot-state="loaded"] .source-screenshot-preview-image {
+    position: relative;
+    inset: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
   .source-screenshot-preview::after,
   .source-preview-mobile-link {
     display: none;
@@ -558,6 +607,13 @@ useSeoMeta({
 
   .source-preview-expand-button {
     display: inline-flex;
+  }
+}
+
+@media (min-width: 1536px) {
+  .story-detail-layout {
+    grid-template-columns: minmax(0, 1.35fr) minmax(34rem, 0.9fr);
+    gap: 3rem;
   }
 }
 

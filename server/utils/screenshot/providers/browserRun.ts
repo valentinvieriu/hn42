@@ -17,18 +17,19 @@ const DEFAULT_CACHE_TTL_SECONDS = 0
 const DEFAULT_CAPTURE_CONCURRENCY = 1
 const DEFAULT_DAILY_CAPTURE_LIMIT = 60
 const DEFAULT_GOTO_TIMEOUT_MS = 8000
-const DEFAULT_HEIGHT = 4096
+const DEFAULT_HEIGHT = 11111
 const DEFAULT_MAX_BYTES = 2_000_000
 const DEFAULT_MIN_INTERVAL_MS = 10_000
 const DEFAULT_QUEUE_DEPTH = 5
 const DEFAULT_QUEUE_TIMEOUT_MS = 30_000
-const DEFAULT_QUALITY = 68
+const DEFAULT_QUALITY = 55
 const DEFAULT_VIEWPORT_HEIGHT = 900
 const DEFAULT_WAIT_AFTER_LOAD_MS = 200
 const DEFAULT_WIDTH = 1440
 const MAX_GLOBAL_RATE_ATTEMPTS = 6
 const MAX_RATE_WAIT_MS = 30_000
 const MAX_PROVIDER_ERROR_BYTES = 1024
+const MAX_RENDERED_PIXELS = 16_000_000
 const browserRunLimiter = createConcurrencyLimiter(1)
 let localNextCaptureAt = 0
 let localCaptureDay = ''
@@ -345,17 +346,20 @@ export const captureWithBrowserRun = async (
     throw new Error('Browser Run binding is not configured')
   }
 
-  const previewHeight = normalizeInteger(
-    runtimeConfig.screenshotPreviewHeight,
-    DEFAULT_HEIGHT,
-    1,
-    10000,
-  )
   const previewWidth = normalizeInteger(
     runtimeConfig.screenshotPreviewWidth,
     DEFAULT_WIDTH,
     1,
     10000,
+  )
+  const previewHeight = Math.min(
+    Math.floor(MAX_RENDERED_PIXELS / previewWidth),
+    normalizeInteger(
+      runtimeConfig.screenshotPreviewHeight,
+      DEFAULT_HEIGHT,
+      1,
+      12000,
+    ),
   )
   const viewportHeight = Math.min(
     previewHeight,
@@ -479,12 +483,12 @@ export const captureWithBrowserRun = async (
         fullPage: true,
         optimizeForSpeed: true,
         quality: normalizeInteger(
-          runtimeConfig.screenshotPreviewJpegQuality,
+          runtimeConfig.screenshotPreviewWebpQuality,
           DEFAULT_QUALITY,
           1,
           100,
         ),
-        type: 'jpeg',
+        type: 'webp',
       },
       scrollPage: false,
       url: sourceUrl,

@@ -1,27 +1,21 @@
 import { createError, defineEventHandler, getRouterParams, setHeader, setHeaders, type H3Event } from 'h3'
-import type { RelatedStory } from '#shared/types'
 import { isValidHnItemId } from '#shared/utils/hn'
 import { formatServerTiming, type ServerTimingMetric } from '#shared/utils/serverTiming'
 import { getErrorStatusCode } from '../../utils/error'
+import {
+  buildTitleQuery,
+  getUrlTerms,
+  rankRelatedStories,
+  type AlgoliaStoryHit,
+  type RelatedSearchKind,
+  type RelatedSourceStory,
+  type SearchResult,
+} from '../../utils/relatedStories'
 
 const ALGOLIA_SEARCH_URL = 'https://hn.algolia.com/api/v1/search'
-const MAX_RELATED_STORIES = 10
-const RELATED_STORY_ATTRIBUTES = 'objectID,title,points,num_comments,author,url'
+const ALGOLIA_SEARCH_BY_DATE_URL = 'https://hn.algolia.com/api/v1/search_by_date'
+const RELATED_STORY_ATTRIBUTES = 'objectID,title,created_at,created_at_i,points,num_comments,author,url'
 const SOURCE_STORY_ATTRIBUTES = 'title,url'
-
-type RelatedSourceStory = {
-  title?: string | null
-  url?: string | null
-}
-
-type AlgoliaStoryHit = {
-  objectID?: string
-  title?: string | null
-  points?: number | null
-  num_comments?: number | null
-  author?: string | null
-  url?: string | null
-}
 
 type AlgoliaCommentHit = {
   story_id?: number | string | null
@@ -31,46 +25,6 @@ type AlgoliaSearchResponse<T> = {
   hits?: T[]
 }
 
-type RelatedStoryCandidate = RelatedStory & {
-  url: string
-}
-
-type ScoredStory = RelatedStoryCandidate & {
-  score: number
-}
-
-type SearchResult = {
-  hits: AlgoliaStoryHit[]
-  weight: number
-}
-
-const STOPWORDS = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from',
-  'how', 'i', 'in', 'into', 'is', 'it', 'its', 'new', 'of', 'on',
-  'or', 'our', 'over', 'show', 'that', 'the', 'their', 'this', 'to',
-  'using', 'was', 'we', 'what', 'when', 'where', 'which', 'why',
-  'with', 'you', 'your', 'hn', 'pdf', 'video', 'write', 'writing',
-  'written', 'build', 'building', 'built', 'make', 'making', 'made',
-  'create', 'creating', 'created', 'intro', 'introduction', 'guide',
-  'law', 'laws', 'rule', 'rules'
-])
-
-const SHORT_TECH_TERMS = new Set([
-  'ai', 'ar', 'c#', 'c++', 'db', 'go', 'js', 'llm', 'ml',
-  'os', 'ts', 'ui', 'ux', 'vm', 'vr'
-])
-
-const GENERIC_HOST_TERMS = new Set([
-  'github', 'gitlab', 'medium', 'substack', 'youtube', 'youtu',
-  'twitter', 'x', 'reddit', 'wikipedia', 'arxiv', 'archive',
-  'google', 'docs', 'drive', 'dropbox'
-])
-
-const HOST_NOISE_TERMS = new Set([
-  'www', 'm', 'mobile', 'amp', 'blog', 'blogs', 'news', 'docs',
-  'developer', 'developers', 'www2', 'com', 'net', 'org', 'io',
-  'dev', 'app', 'co', 'ai', 'edu', 'gov'
-])
 
 const setRelatedCacheHeaders = (event: H3Event) => {
   setHeaders(event, {
@@ -81,116 +35,27 @@ const setRelatedCacheHeaders = (event: H3Event) => {
   })
 }
 
-const stripHtml = (value: string) => value.replace(/<[^>]*>/g, ' ')
-
-const cleanTitle = (title: string) => title
-  .replace(/^\s*(ask|launch|show|tell)\s+hn:\s*/i, '')
-  .replace(/\s*\[(pdf|video|audio|slides?)\]\s*$/i, '')
-  .replace(/\s*\((\d{4}|pdf|video|audio|slides?)\)\s*$/i, '')
-  .replace(/\s+/g, ' ')
-  .trim()
-
-const tokenize = (value: string, maxTokens = 12): string[] => {
-  const words = stripHtml(value)
-    .toLowerCase()
-    .replace(/&[#a-z0-9]+;/g, ' ')
-    .match(/[a-z0-9][a-z0-9+#.-]*/g) ?? []
-
-  const tokens: string[] = []
-  const seen = new Set<string>()
-
-  for (const word of words) {
-    const token = word.replace(/^[.-]+|[.-]+$/g, '')
-
-    if (!token) continue
-    if (STOPWORDS.has(token)) continue
-    if (token.length < 3 && !SHORT_TECH_TERMS.has(token)) continue
-    if (seen.has(token)) continue
-
-    seen.add(token)
-    tokens.push(token)
-
-    if (tokens.length === maxTokens) break
-  }
-
-  return tokens
-}
-
-const buildTitleQuery = (title: string) => {
-  const tokens = tokenize(cleanTitle(title), 6)
-  return tokens.length > 0 ? tokens.join(' ') : cleanTitle(title)
-}
-
-const normalizeHost = (url?: string | null) => {
-  if (!url) return ''
-
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, '')
-  } catch {
-    return ''
-  }
-}
-
-const canonicalizeUrl = (value?: string | null) => {
-  if (!value) return ''
-
-  try {
-    const url = new URL(value)
-    url.hash = ''
-
-    for (const key of Array.from(url.searchParams.keys())) {
-      if (key.startsWith('utm_') || ['fbclid', 'gclid', 'ref', 'source'].includes(key)) {
-        url.searchParams.delete(key)
-      }
-    }
-
-    const host = url.hostname.toLowerCase().replace(/^www\./, '')
-    const pathname = url.pathname.replace(/\/+$/, '')
-    const search = url.searchParams.toString()
-
-    return `${host}${pathname}${search ? `?${search}` : ''}`
-  } catch {
-    return value
-  }
-}
-
-const getUrlTerms = (value?: string | null) => {
-  if (!value) return []
-
-  try {
-    const url = new URL(value)
-    const hostTerms = url.hostname
-      .toLowerCase()
-      .replace(/^www\./, '')
-      .split('.')
-      .filter(term => term && !HOST_NOISE_TERMS.has(term))
-
-    const specificHostTerms = hostTerms.filter(term => !GENERIC_HOST_TERMS.has(term))
-    if (specificHostTerms.length > 0) {
-      return specificHostTerms.slice(0, 2)
-    }
-
-    return tokenize(url.pathname.replace(/[/-]/g, ' '), 5)
-  } catch {
-    return []
-  }
-}
-
-const searchAlgolia = async <T>(params: Record<string, string>) => {
-  const response = await $fetch<AlgoliaSearchResponse<T>>(`${ALGOLIA_SEARCH_URL}?${new URLSearchParams(params)}`)
+const searchAlgolia = async <T>(params: Record<string, string>, order: 'relevance' | 'date' = 'relevance') => {
+  const endpoint = order === 'date' ? ALGOLIA_SEARCH_BY_DATE_URL : ALGOLIA_SEARCH_URL
+  const response = await $fetch<AlgoliaSearchResponse<T>>(`${endpoint}?${new URLSearchParams(params)}`)
   return response.hits ?? []
 }
 
-const fetchStoryHits = async (params: Record<string, string>, weight: number): Promise<SearchResult> => {
+const fetchStoryHits = async (
+  params: Record<string, string>,
+  weight: number,
+  kind: RelatedSearchKind,
+  order: 'relevance' | 'date' = 'relevance',
+): Promise<SearchResult> => {
   try {
     const hits = await searchAlgolia<AlgoliaStoryHit>({
       attributesToRetrieve: RELATED_STORY_ATTRIBUTES,
       ...params,
-    })
-    return { hits, weight }
+    }, order)
+    return { hits, kind, weight }
   } catch (error) {
     console.warn('Failed to fetch related story candidates:', error)
-    return { hits: [], weight }
+    return { hits: [], kind, weight }
   }
 }
 
@@ -218,7 +83,7 @@ const fetchCommentLinkedStories = async (query: string, excludeId: string): Prom
     }
 
     if (rankedStoryIds.length === 0) {
-      return { hits: [], weight: 26 }
+      return { hits: [], kind: 'comment', weight: 26 }
     }
 
     const order = new Map(rankedStoryIds.map((storyId, index) => [storyId, index]))
@@ -232,78 +97,13 @@ const fetchCommentLinkedStories = async (query: string, excludeId: string): Prom
 
     return {
       hits: hits.sort((a, b) => (order.get(a.objectID ?? '') ?? 99) - (order.get(b.objectID ?? '') ?? 99)),
+      kind: 'comment',
       weight: 26
     }
   } catch (error) {
     console.warn('Failed to fetch comment-linked related stories:', error)
-    return { hits: [], weight: 26 }
+    return { hits: [], kind: 'comment', weight: 26 }
   }
-}
-
-const getOverlapScore = (sourceTokens: string[], candidateTitle: string) => {
-  const candidateTokens = new Set(tokenize(candidateTitle, 12))
-  const overlap = sourceTokens.filter(token => candidateTokens.has(token)).length
-
-  if (overlap === 0) return 0
-
-  return overlap * 8 + (overlap > 1 ? 10 : 0)
-}
-
-const getPopularityScore = (hit: AlgoliaStoryHit) => {
-  const points = Math.max(hit.points ?? 0, 0)
-  const comments = Math.max(hit.num_comments ?? 0, 0)
-
-  return Math.min(16, Math.log10(points + 1) * 6) + Math.min(8, Math.log10(comments + 1) * 4)
-}
-
-const toRelatedStory = (hit: AlgoliaStoryHit): RelatedStoryCandidate | null => {
-  if (!hit.objectID || !hit.title) return null
-
-  return {
-    title: hit.title,
-    objectID: hit.objectID,
-    points: hit.points ?? 0,
-    num_comments: hit.num_comments ?? 0,
-    author: hit.author ?? 'Unknown',
-    url: hit.url ?? ''
-  }
-}
-
-const rankRelatedStories = (results: SearchResult[], source: RelatedSourceStory, excludeId: string) => {
-  const sourceTokens = tokenize(cleanTitle(source.title ?? ''), 12)
-  const sourceHost = normalizeHost(source.url)
-  const sourceUrl = canonicalizeUrl(source.url)
-  const candidates = new Map<string, ScoredStory>()
-
-  for (const result of results) {
-    result.hits.forEach((hit, index) => {
-      const story = toRelatedStory(hit)
-
-      if (!story) return
-      if (story.objectID === excludeId) return
-      if (sourceUrl && canonicalizeUrl(story.url) === sourceUrl) return
-
-      const existing = candidates.get(story.objectID)
-      const candidateHost = normalizeHost(story.url)
-      const sameHostScore = sourceHost && candidateHost === sourceHost ? 16 : 0
-      const score = result.weight
-        - index
-        + getOverlapScore(sourceTokens, story.title)
-        + sameHostScore
-        + getPopularityScore(hit)
-
-      if (existing) {
-        existing.score += score
-      } else {
-        candidates.set(story.objectID, { ...story, score })
-      }
-    })
-  }
-
-  return Array.from(candidates.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_RELATED_STORIES)
-    .map(({ score, url: _url, ...story }) => story)
 }
 
 const fetchSourceStory = async (id: string) => {
@@ -341,6 +141,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const titleQuery = buildTitleQuery(story.title)
+    const optionalTitleWords = titleQuery.split(' ').join(',')
     const urlQuery = getUrlTerms(story.url).join(' ')
 
     if (!titleQuery && !urlQuery) {
@@ -358,16 +159,25 @@ export default defineEventHandler(async (event) => {
     if (titleQuery) {
       searches.push(fetchStoryHits({
         query: titleQuery,
+        optionalWords: optionalTitleWords,
         tags: 'story',
         restrictSearchableAttributes: 'title',
         hitsPerPage: '24'
-      }, 80))
+      }, 80, 'title'))
+
+      searches.push(fetchStoryHits({
+        query: titleQuery,
+        optionalWords: optionalTitleWords,
+        tags: 'story',
+        restrictSearchableAttributes: 'title',
+        hitsPerPage: '18'
+      }, 62, 'recent-title', 'date'))
 
       searches.push(fetchStoryHits({
         query: titleQuery,
         tags: 'story',
         hitsPerPage: '18'
-      }, 52))
+      }, 52, 'full-text'))
 
       searches.push(fetchCommentLinkedStories(titleQuery, id))
     }
@@ -378,7 +188,7 @@ export default defineEventHandler(async (event) => {
         tags: 'story',
         restrictSearchableAttributes: 'url',
         hitsPerPage: '16'
-      }, 28))
+      }, 28, 'url'))
     }
 
     const relatedSearchesStartedAt = performance.now()

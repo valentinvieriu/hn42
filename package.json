@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
+    "build:screenshot-agent": "tsc -p capture-agent/tsconfig.json && esbuild capture-agent/src/index.ts --bundle --format=esm --platform=node --target=node24 --outfile=capture-agent/dist/index.mjs",
     "check": "npm run typecheck && npm test && npm run build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
@@ -14,6 +15,10 @@
     "deploy": "npm run build && wrangler deploy",
     "cf-typegen": "wrangler types --include-runtime false",
     "cf:screenshots:bootstrap": "bash scripts/bootstrap-cloudflare-screenshots.sh",
+    "cf:screenshots:jobs:bootstrap": "bash scripts/bootstrap-cloudflare-screenshot-jobs.sh",
+    "cf:screenshots:scheduler:deploy": "wrangler deploy --config workers/screenshot-scheduler/wrangler.jsonc",
+    "cf:screenshots:scheduler:dry-run": "wrangler deploy --dry-run --config workers/screenshot-scheduler/wrangler.jsonc",
+    "cf:screenshots:scheduler:typegen": "wrangler types workers/screenshot-scheduler/worker-configuration.d.ts --config workers/screenshot-scheduler/wrangler.jsonc --env-interface SchedulerEnv --include-runtime false",
     "cf:screenshots:reset-cache": "node scripts/reset-cloudflare-screenshot-cache.mjs"
   },
   "dependencies": {

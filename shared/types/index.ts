@@ -60,6 +60,7 @@ export interface StoryDetail {
 export interface RelatedStory {
   title: string;
   objectID: string;
+  created_at: string;
   points: number;
   num_comments: number;
   author: string;

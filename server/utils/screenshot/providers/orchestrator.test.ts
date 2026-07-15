@@ -9,13 +9,14 @@ import {
   type ScreenshotProvider,
 } from './types'
 
-const createJpegResult = (provider: string) => {
+const createWebpResult = (provider: string) => {
   const bytes = new Uint8Array(1200)
-  bytes.set([0xff, 0xd8, 0xff])
+  bytes.set([0x52, 0x49, 0x46, 0x46], 0)
+  bytes.set([0x57, 0x45, 0x42, 0x50], 8)
 
   return {
     bytes: bytes.buffer,
-    contentType: 'image/jpeg',
+    contentType: 'image/webp',
     provider,
   }
 }
@@ -45,8 +46,8 @@ const capture = (
 
 describe('screenshot provider orchestration', () => {
   it('stops after the first provider succeeds', async () => {
-    const firstCapture = vi.fn().mockResolvedValue(createJpegResult('first'))
-    const secondCapture = vi.fn().mockResolvedValue(createJpegResult('second'))
+    const firstCapture = vi.fn().mockResolvedValue(createWebpResult('first'))
+    const secondCapture = vi.fn().mockResolvedValue(createWebpResult('second'))
 
     await expect(capture([
       createProvider('first', firstCapture),
@@ -59,7 +60,7 @@ describe('screenshot provider orchestration', () => {
 
   it('falls through when a provider has exhausted its capacity', async () => {
     const capacityError = new Error('credits exhausted')
-    const fallbackCapture = vi.fn().mockResolvedValue(createJpegResult('fallback'))
+    const fallbackCapture = vi.fn().mockResolvedValue(createWebpResult('fallback'))
 
     await expect(capture([
       createProvider('primary', vi.fn().mockRejectedValue(capacityError), {
@@ -80,7 +81,7 @@ describe('screenshot provider orchestration', () => {
 
     await expect(capture([
       createProvider('invalid', invalidCapture),
-      createProvider('valid', vi.fn().mockResolvedValue(createJpegResult('valid'))),
+      createProvider('valid', vi.fn().mockResolvedValue(createWebpResult('valid'))),
     ])).resolves.toMatchObject({ provider: 'valid' })
   })
 
@@ -91,7 +92,7 @@ describe('screenshot provider orchestration', () => {
           throw new Error('classifier failed')
         },
       }),
-      createProvider('fallback', vi.fn().mockResolvedValue(createJpegResult('fallback'))),
+      createProvider('fallback', vi.fn().mockResolvedValue(createWebpResult('fallback'))),
     ])).resolves.toMatchObject({ provider: 'fallback' })
   })
 
@@ -100,7 +101,7 @@ describe('screenshot provider orchestration', () => {
 
     await expect(capture([
       createProvider('unavailable', unavailableCapture, { isAvailable: () => false }),
-      createProvider('available', vi.fn().mockResolvedValue(createJpegResult('available'))),
+      createProvider('available', vi.fn().mockResolvedValue(createWebpResult('available'))),
     ])).resolves.toMatchObject({ provider: 'available' })
 
     expect(unavailableCapture).not.toHaveBeenCalled()
@@ -108,7 +109,7 @@ describe('screenshot provider orchestration', () => {
 
   it('uses stable source-based rotation for balanced plans', () => {
     const providers = ['a', 'b', 'c'].map((name) => {
-      return createProvider(name, vi.fn().mockResolvedValue(createJpegResult(name)))
+      return createProvider(name, vi.fn().mockResolvedValue(createWebpResult(name)))
     })
     const stableOrder = orderScreenshotProviders(providers, 'balanced', 'same-source')
       .map((provider) => provider.name)
@@ -128,8 +129,8 @@ describe('screenshot provider orchestration', () => {
   it('balances only across providers that are currently available', async () => {
     const unavailableCapture = vi.fn()
     const captures = {
-      availableA: vi.fn().mockImplementation(async () => createJpegResult('available-a')),
-      availableB: vi.fn().mockImplementation(async () => createJpegResult('available-b')),
+      availableA: vi.fn().mockImplementation(async () => createWebpResult('available-a')),
+      availableB: vi.fn().mockImplementation(async () => createWebpResult('available-b')),
     }
     const providers = [
       createProvider('unavailable', unavailableCapture, { isAvailable: () => false }),

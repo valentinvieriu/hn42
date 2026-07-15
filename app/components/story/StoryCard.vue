@@ -38,7 +38,11 @@
             :state="imageState"
             presentation="card"
           />
-          <div class="story-card-image-track relative w-full h-full transform transition-transform duration-500">
+          <div
+            ref="imageContainerRef"
+            class="story-card-image-track relative w-full h-full transform transition-transform duration-500"
+            :class="{ scrolling: isTouchScrollAnimationActive }"
+          >
             <img
               v-if="imageSrc"
               ref="imageRef"
@@ -65,8 +69,12 @@
     <div class="story-card-body flex flex-1 flex-col p-4">
       <div class="story-card-body-backdrop" aria-hidden="true">
         <div
+          ref="bodyImageContainerRef"
           class="story-card-body-image-track relative w-full h-full transform transition-transform duration-500"
-          :class="{ 'is-loaded': imageState === 'loaded' }"
+          :class="{
+            scrolling: isTouchScrollAnimationActive,
+            'is-loaded': imageState === 'loaded',
+          }"
         >
           <div class="story-card-body-image" :style="bodyBackdropImageStyle"></div>
         </div>
@@ -173,8 +181,19 @@ const handleCardClick = () => {
 
 const cardRef = ref<HTMLElement | null>(null)
 const imageRef = ref<HTMLImageElement | null>(null)
+const imageContainerRef = ref<HTMLElement | null>(null)
+const bodyImageContainerRef = ref<HTMLElement | null>(null)
 const imageSrc = ref<string | null>(props.priority ? screenshotSrc : null)
 const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>(props.priority ? 'loading' : 'queued')
+const isTouchDevice = ref(false)
+const isInView = ref(false)
+const isTouchScrollAnimationActive = computed(() => isTouchDevice.value && isInView.value)
+let scrollAnimationFrameId: number | null = null
+let scrollObserver: IntersectionObserver | null = null
+let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null
+let isListeningForTouchScroll = false
+let windowHeight = 0
+
 const imageIsVisible = computed(() => {
   if (props.priority) {
     return imageState.value !== 'failed'
@@ -214,7 +233,118 @@ const loadScreenshot = () => {
   imageSrc.value = screenshotSrc
 }
 
+const setImageTrackTransform = (transform: string) => {
+  if (imageContainerRef.value) {
+    imageContainerRef.value.style.transform = transform
+  }
+
+  if (bodyImageContainerRef.value) {
+    bodyImageContainerRef.value.style.transform = transform
+  }
+}
+
+const updateImageScrollTransform = () => {
+  if (!isInView.value || !isTouchDevice.value || !cardRef.value) {
+    return
+  }
+
+  const rect = cardRef.value.getBoundingClientRect()
+  const progress = Math.max(0, Math.min(1, (windowHeight - rect.top) / (rect.height + windowHeight)))
+
+  setImageTrackTransform(`translate3d(0, ${-50 * progress}%, 0)`)
+}
+
+const scheduleImageScrollUpdate = () => {
+  if (!isInView.value || !isTouchDevice.value || scrollAnimationFrameId !== null) {
+    return
+  }
+
+  scrollAnimationFrameId = requestAnimationFrame(() => {
+    scrollAnimationFrameId = null
+    updateImageScrollTransform()
+  })
+}
+
+const addTouchScrollListener = () => {
+  if (isListeningForTouchScroll) {
+    return
+  }
+
+  window.addEventListener('scroll', scheduleImageScrollUpdate, { passive: true })
+  isListeningForTouchScroll = true
+}
+
+const removeTouchScrollListener = () => {
+  if (!isListeningForTouchScroll) {
+    return
+  }
+
+  window.removeEventListener('scroll', scheduleImageScrollUpdate)
+  isListeningForTouchScroll = false
+}
+
+const handleViewportResize = () => {
+  if (resizeTimeoutId !== null) {
+    clearTimeout(resizeTimeoutId)
+  }
+
+  resizeTimeoutId = setTimeout(() => {
+    resizeTimeoutId = null
+    windowHeight = window.innerHeight || document.documentElement.clientHeight
+    scheduleImageScrollUpdate()
+  }, 150)
+}
+
+const setupTouchScrollAnimation = () => {
+  const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches
+  const hasTouchInput = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  isTouchDevice.value = (hasCoarsePointer || hasTouchInput) && !prefersReducedMotion
+  if (!isTouchDevice.value) {
+    return
+  }
+
+  windowHeight = window.innerHeight || document.documentElement.clientHeight
+  window.addEventListener('resize', handleViewportResize)
+
+  if (!('IntersectionObserver' in window)) {
+    isInView.value = true
+    addTouchScrollListener()
+    scheduleImageScrollUpdate()
+    return
+  }
+
+  scrollObserver = new IntersectionObserver(
+    ([entry]) => {
+      isInView.value = entry?.isIntersecting ?? false
+
+      if (isInView.value) {
+        addTouchScrollListener()
+        scheduleImageScrollUpdate()
+        return
+      }
+
+      removeTouchScrollListener()
+      if (scrollAnimationFrameId !== null) {
+        cancelAnimationFrame(scrollAnimationFrameId)
+        scrollAnimationFrameId = null
+      }
+    },
+    {
+      threshold: [0, 0.1, 0.5, 1],
+      rootMargin: '25% 0px',
+    },
+  )
+
+  if (cardRef.value) {
+    scrollObserver.observe(cardRef.value)
+  }
+}
+
 onMounted(() => {
+  setupTouchScrollAnimation()
+
   if (props.priority) {
     if (imageRef.value?.complete) {
       settleImageState(imageRef.value)
@@ -230,6 +360,17 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   unobserveStoryScreenshot(cardRef.value)
+  scrollObserver?.disconnect()
+  removeTouchScrollListener()
+  window.removeEventListener('resize', handleViewportResize)
+
+  if (scrollAnimationFrameId !== null) {
+    cancelAnimationFrame(scrollAnimationFrameId)
+  }
+
+  if (resizeTimeoutId !== null) {
+    clearTimeout(resizeTimeoutId)
+  }
 })
 </script>
 
@@ -678,6 +819,12 @@ onBeforeUnmount(() => {
       0 8px 26px rgb(0 0 0 / 0.3),
       0 1px 0 rgb(255 255 255 / 0.1) inset;
   }
+}
+
+.story-card-image-track.scrolling,
+.story-card-body-image-track.scrolling {
+  transition-duration: 0ms;
+  will-change: transform;
 }
 
 @media (pointer: coarse) {

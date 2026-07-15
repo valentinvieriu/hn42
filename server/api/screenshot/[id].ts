@@ -34,6 +34,7 @@ import {
   ScreenshotPolicySkipError,
   type ScreenshotCaptureDecision,
 } from '../../utils/screenshot/sourcePolicy'
+import { resolveScreenshotRuntimeConfig } from '../../utils/screenshot/runtimeConfig'
 import type {
   ScreenshotEnv,
   ScreenshotPolicyMetadata,
@@ -68,9 +69,9 @@ const DETERMINISTIC_FALLBACK_CACHE_HEADERS = {
 } as const
 
 const TRANSIENT_FALLBACK_CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=60',
-  'CDN-Cache-Control': 'public, max-age=600, stale-if-error=3600',
-  'Cloudflare-CDN-Cache-Control': 'public, max-age=600, stale-if-error=3600',
+  'Cache-Control': 'public, max-age=5',
+  'CDN-Cache-Control': 'public, max-age=15, stale-if-error=60',
+  'Cloudflare-CDN-Cache-Control': 'public, max-age=15, stale-if-error=60',
 } as const
 
 type ScreenshotCacheStatus = 'R2' | 'MISS' | 'STALE' | 'FALLBACK'
@@ -186,7 +187,7 @@ const createImageResponse = (
   const headers = new Headers({
     'Content-Type': image.contentType,
     'Content-Length': String(image.bytes.byteLength),
-    'ETag': `W/"hn42-screenshot-v7-${format}-${processor}-${sourceUrlHash.slice(0, 16)}"`,
+    'ETag': `W/"hn42-screenshot-v8-${format}-${processor}-${sourceUrlHash.slice(0, 16)}"`,
     'Accept-Ranges': 'bytes',
     'X-HN42-Screenshot-Format': format,
     ...(cacheStatus === 'STALE'
@@ -451,7 +452,10 @@ const servePreview = async (
   const failure = getR2Failure(failureResult)
   const providerPlan = getScreenshotProviderPlanId(options.runtimeConfig)
 
-  if (failure?.isFresh && failure.providerPlan === providerPlan) {
+  if (
+    failure?.isFresh
+    && (failure.providerPlan === providerPlan || failure.providerPlan === 'queue:browserless-agent')
+  ) {
     if (previewScreenshot) {
       return createImageResponse(
         previewScreenshot,
@@ -562,8 +566,11 @@ export default defineEventHandler(async (event) => {
   const fallbackKey = getFallbackKey(id, variant)
 
   try {
-    const runtimeConfig = useRuntimeConfig(event) as ScreenshotRuntimeConfig
     const env = event.context.cloudflare?.env as ScreenshotEnv | undefined
+    const runtimeConfig = resolveScreenshotRuntimeConfig(
+      useRuntimeConfig(event) as ScreenshotRuntimeConfig,
+      env,
+    )
 
     const sourceUrl = await resolveStorySourceUrl(id)
 
@@ -589,11 +596,11 @@ export default defineEventHandler(async (event) => {
       sourceUrlHash,
       runtimeConfig.screenshotPreviewWidth,
       runtimeConfig.screenshotPreviewHeight,
-      runtimeConfig.screenshotPreviewJpegQuality,
+      runtimeConfig.screenshotPreviewWebpQuality,
     )
 
     return await servePreview({
-      captureEnabled: isCaptureEnabled(runtimeConfig.screenshotCaptureEnabled),
+      captureEnabled: isCaptureEnabled(runtimeConfig.screenshotRequestCaptureEnabled),
       env,
       failureKey: getR2ScreenshotFailureKey(previewKey),
       fallbackKey,

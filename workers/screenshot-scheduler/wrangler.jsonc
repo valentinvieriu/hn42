@@ -1,0 +1,29 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "hn42-screenshot-scheduler",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "triggers": {
+    "crons": ["*/3 * * * *"]
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "SCREENSHOT_JOBS",
+        "queue": "hn42-screenshot-jobs"
+      }
+    ]
+  },
+  "r2_buckets": [
+    {
+      "binding": "SCREENSHOTS_BUCKET",
+      "bucket_name": "hn42-screenshots",
+      "remote": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

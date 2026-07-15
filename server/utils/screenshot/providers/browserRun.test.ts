@@ -6,13 +6,14 @@ import {
 } from './browserRun'
 import type { ScreenshotEnv } from '../types'
 
-const createJpegResponse = () => {
+const createWebpResponse = () => {
   const bytes = new Uint8Array(1200)
-  bytes.set([0xff, 0xd8, 0xff])
+  bytes.set([0x52, 0x49, 0x46, 0x46], 0)
+  bytes.set([0x57, 0x45, 0x42, 0x50], 8)
 
   return new Response(bytes, {
     headers: {
-      'Content-Type': 'image/jpeg',
+      'Content-Type': 'image/webp',
       'X-Browser-Ms-Used': '4321',
     },
   })
@@ -40,8 +41,8 @@ const createRateLimitBucket = () => {
 }
 
 describe('Browser Run screenshot provider', () => {
-  it('uses the bounded deep-preview profile', async () => {
-    const quickAction = vi.fn().mockResolvedValue(createJpegResponse())
+  it('uses the bounded full-page WebP profile', async () => {
+    const quickAction = vi.fn().mockResolvedValue(createWebpResponse())
     const env = { BROWSER: { quickAction } } as unknown as ScreenshotEnv
 
     const result = await captureWithBrowserRun(env, 'https://example.com/article', {
@@ -50,7 +51,7 @@ describe('Browser Run screenshot provider', () => {
 
     expect(result).toMatchObject({
       browserMsUsed: 4321,
-      contentType: 'image/jpeg',
+      contentType: 'image/webp',
       processor: 'browser-run',
       provider: 'browser-run',
     })
@@ -66,8 +67,8 @@ describe('Browser Run screenshot provider', () => {
         captureBeyondViewport: true,
         fullPage: true,
         optimizeForSpeed: true,
-        quality: 68,
-        type: 'jpeg',
+        quality: 55,
+        type: 'webp',
       },
       url: 'https://example.com/article',
       viewport: {
@@ -78,7 +79,7 @@ describe('Browser Run screenshot provider', () => {
       waitForTimeout: 200,
     }))
     expect(quickAction.mock.calls[0]?.[1]?.addScriptTag?.[0]?.content)
-      .toContain('Math.min(\n              4096')
+      .toContain('Math.min(\n              11111')
     expect(quickAction.mock.calls[0]?.[1]?.addScriptTag?.[0]?.content)
       .toContain('Math.max(900, naturalHeight)')
     expect(quickAction.mock.calls[0]?.[1]?.addScriptTag?.[0]?.content)
@@ -86,7 +87,7 @@ describe('Browser Run screenshot provider', () => {
   })
 
   it('never lets the browser viewport exceed the preview height ceiling', async () => {
-    const quickAction = vi.fn().mockResolvedValue(createJpegResponse())
+    const quickAction = vi.fn().mockResolvedValue(createWebpResponse())
     const env = { BROWSER: { quickAction } } as unknown as ScreenshotEnv
 
     await captureWithBrowserRun(env, 'https://example.com/article', {
@@ -101,8 +102,26 @@ describe('Browser Run screenshot provider', () => {
     })
   })
 
+  it('caps configured full-page geometry at 16 megapixels', async () => {
+    const quickAction = vi.fn().mockResolvedValue(createWebpResponse())
+    const env = { BROWSER: { quickAction } } as unknown as ScreenshotEnv
+
+    await captureWithBrowserRun(env, 'https://example.com/article', {
+      screenshotBrowserMinIntervalMs: 0,
+      screenshotPreviewHeight: 12000,
+      screenshotPreviewWidth: 2000,
+    })
+
+    expect(quickAction.mock.calls[0]?.[1]?.viewport).toMatchObject({
+      height: 900,
+      width: 2000,
+    })
+    expect(quickAction.mock.calls[0]?.[1]?.addScriptTag?.[0]?.content)
+      .toContain('Math.min(\n              8000')
+  })
+
   it('disposes remote Quick Action response stubs after reading them', async () => {
-    const response = createJpegResponse()
+    const response = createWebpResponse()
     const dispose = vi.fn()
     const disposeSymbol = (Symbol as unknown as { dispose: symbol }).dispose
     Object.defineProperty(response, disposeSymbol, { value: dispose })
@@ -124,7 +143,7 @@ describe('Browser Run screenshot provider', () => {
 
   it('stops reading screenshots that exceed the configured byte limit', async () => {
     const env = {
-      BROWSER: { quickAction: vi.fn().mockResolvedValue(createJpegResponse()) },
+      BROWSER: { quickAction: vi.fn().mockResolvedValue(createWebpResponse()) },
     } as unknown as ScreenshotEnv
 
     await expect(captureWithBrowserRun(env, 'https://example.com/article', {
@@ -149,7 +168,7 @@ describe('Browser Run screenshot provider', () => {
   })
 
   it('enforces the shared daily capture budget before Browser Run', async () => {
-    const quickAction = vi.fn().mockResolvedValue(createJpegResponse())
+    const quickAction = vi.fn().mockResolvedValue(createWebpResponse())
     const bucket = createRateLimitBucket()
     const env = {
       BROWSER: { quickAction },
@@ -168,7 +187,7 @@ describe('Browser Run screenshot provider', () => {
   })
 
   it('still enforces the daily budget when spacing is disabled', async () => {
-    const quickAction = vi.fn().mockResolvedValue(createJpegResponse())
+    const quickAction = vi.fn().mockResolvedValue(createWebpResponse())
     const env = {
       BROWSER: { quickAction },
       SCREENSHOTS_BUCKET: createRateLimitBucket(),
@@ -186,7 +205,7 @@ describe('Browser Run screenshot provider', () => {
   })
 
   it('fails closed when shared rate coordination is unavailable', async () => {
-    const quickAction = vi.fn().mockResolvedValue(createJpegResponse())
+    const quickAction = vi.fn().mockResolvedValue(createWebpResponse())
     const env = {
       BROWSER: { quickAction },
       SCREENSHOTS_BUCKET: {

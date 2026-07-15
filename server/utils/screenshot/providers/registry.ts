@@ -7,6 +7,11 @@ import {
   isBrowserRunCapacityError,
 } from './browserRun'
 import {
+  captureWithBrowserlessProxy,
+  classifyBrowserlessProxyError,
+  isBrowserlessProxyAvailable,
+} from './browserlessProxy'
+import {
   captureWithProviderChain,
   type ScreenshotProviderStrategy,
 } from './orchestrator'
@@ -16,6 +21,21 @@ import type {
 } from './types'
 
 const DEFAULT_PROVIDERS = ['browser-run']
+
+const browserlessProxyProvider: ScreenshotProvider = {
+  capture: async (context) => {
+    return await captureWithBrowserlessProxy(
+      context.env,
+      context.sourceUrl,
+      context.runtimeConfig,
+    )
+  },
+  classifyError: classifyBrowserlessProxyError,
+  isAvailable: (context) => {
+    return isBrowserlessProxyAvailable(context.env, context.runtimeConfig)
+  },
+  name: 'browserless-proxy',
+}
 
 const browserRunProvider: ScreenshotProvider = {
   capture: async (context) => {
@@ -44,6 +64,7 @@ const browserRunProvider: ScreenshotProvider = {
 }
 
 const providerRegistry = new Map<string, ScreenshotProvider>([
+  [browserlessProxyProvider.name, browserlessProxyProvider],
   [browserRunProvider.name, browserRunProvider],
 ])
 const reportedUnknownProviders = new Set<string>()
@@ -58,7 +79,7 @@ const parseProviderNames = (value: unknown) => {
     .map((provider) => provider.trim().toLowerCase())
     .filter(Boolean)
 
-  return providers.length > 0 ? [...new Set(providers)] : DEFAULT_PROVIDERS
+  return [...new Set(providers)]
 }
 
 export const getScreenshotProviderStrategy = (

@@ -10,12 +10,12 @@ import type {
   ScreenshotVariant,
 } from './types'
 
-const R2_PREFIX = 'screenshots/v7'
-const DEFAULT_R2_TTL_DAYS = 180
+const R2_PREFIX = 'screenshots/v8'
+const DEFAULT_R2_TTL_DAYS = 30
 const DEFAULT_FAILURE_TTL_MINUTES = 6 * 60
 const DEFAULT_PREVIEW_WIDTH = 1440
-const DEFAULT_PREVIEW_HEIGHT = 4096
-const DEFAULT_PREVIEW_QUALITY = 68
+const DEFAULT_PREVIEW_HEIGHT = 11111
+const DEFAULT_PREVIEW_QUALITY = 55
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const MS_PER_MINUTE = 60 * 1000
 const SECONDS_PER_DAY = 24 * 60 * 60
@@ -125,7 +125,7 @@ export const getR2PreviewScreenshotKey = (
   const normalizedHeight = normalizePositiveInteger(height, DEFAULT_PREVIEW_HEIGHT)
   const normalizedQuality = normalizePositiveInteger(quality, DEFAULT_PREVIEW_QUALITY)
 
-  return `${R2_PREFIX}/${sourceUrlHash}/preview-${normalizedWidth}x${normalizedHeight}-q${normalizedQuality}.jpg`
+  return `${R2_PREFIX}/${sourceUrlHash}/preview-${normalizedWidth}x${normalizedHeight}-q${normalizedQuality}.webp`
 }
 
 export const getR2ScreenshotFailureKey = (screenshotKey: string) => `${screenshotKey}.failure`
@@ -195,7 +195,7 @@ export const readR2Screenshot = async (
     }
   }
 
-  const contentType = object.httpMetadata?.contentType ?? metadata.contentType ?? 'image/jpeg'
+  const contentType = object.httpMetadata?.contentType ?? metadata.contentType ?? 'image/webp'
 
   return {
     bytes: await object.arrayBuffer(),
@@ -249,7 +249,7 @@ export const writeR2Screenshot = async (
   await bucket.put(key, result.bytes, {
     httpMetadata: {
       contentType: result.contentType,
-      cacheControl: 'public, max-age=15552000, immutable',
+      cacheControl: 'public, max-age=2592000, immutable',
     },
     customMetadata: toCustomMetadata(customMetadata),
   })

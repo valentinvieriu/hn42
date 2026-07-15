@@ -30,6 +30,14 @@
             <LucideMessageSquare class="w-4 h-4" aria-hidden="true" />
             {{ story.num_comments }}
           </span>
+          <time
+            v-if="story.created_at"
+            class="related-story-metric"
+            :datetime="story.created_at"
+          >
+            <LucideClock class="w-4 h-4" aria-hidden="true" />
+            {{ formatCompactTimeAgo(story.created_at) }}
+          </time>
           <span class="related-story-author">by {{ story.author }}</span>
         </div>
       </NuxtLink>
@@ -38,8 +46,9 @@
 </template>
 
 <script setup lang="ts">
-import { LucideTrendingUp, LucideMessageSquare } from '@lucide/vue'
+import { LucideClock, LucideTrendingUp, LucideMessageSquare } from '@lucide/vue'
 import type { RelatedStory } from '#shared/types'
+import { formatCompactTimeAgo } from '#shared/utils/date'
 import { getSeedPaletteStyle } from '~/composables/useSeedPalette'
 
 const props = defineProps<{

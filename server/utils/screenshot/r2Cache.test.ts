@@ -81,7 +81,7 @@ describe('screenshot R2 failure markers', () => {
 
     await writeR2Screenshot(env, 'preview', 'hash', {
       bytes: new Uint8Array([1, 2, 3]).buffer,
-      contentType: 'image/jpeg',
+      contentType: 'image/webp',
       processor: 'browser-run',
       provider: 'browser-run',
     }, 'original', {
@@ -91,7 +91,7 @@ describe('screenshot R2 failure markers', () => {
 
     const [, , options] = put.mock.calls[0] ?? []
     expect(options.customMetadata).toMatchObject({
-      contentType: 'image/jpeg',
+      contentType: 'image/webp',
       policy: 'capture',
       processor: 'browser-run',
       provider: 'browser-run',
@@ -116,9 +116,9 @@ describe('screenshot R2 failure markers', () => {
   it('uses one bounded preview key and a separate failure key', () => {
     const previewKey = getR2PreviewScreenshotKey('hash')
 
-    expect(previewKey).toBe('screenshots/v7/hash/preview-1440x4096-q68.jpg')
+    expect(previewKey).toBe('screenshots/v8/hash/preview-1440x11111-q55.webp')
     expect(getR2ScreenshotFailureKey(previewKey))
-      .toBe('screenshots/v7/hash/preview-1440x4096-q68.jpg.failure')
+      .toBe('screenshots/v8/hash/preview-1440x11111-q55.webp.failure')
   })
 
   it('limits edge freshness to the remaining R2 lifetime', () => {

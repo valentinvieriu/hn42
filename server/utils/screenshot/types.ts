@@ -20,6 +20,8 @@ export type ScreenshotSkipReason =
 
 export type ScreenshotEnv = {
   BROWSER?: BrowserRun
+  HN42_SCREENSHOT_AGENT_TOKEN?: string
+  SCREENSHOT_API_TOKEN?: string
   SCREENSHOTS_BUCKET?: R2Bucket
   [key: string]: unknown
 }
@@ -31,6 +33,15 @@ export type ScreenshotRuntimeConfig = {
   screenshotBrowserMinIntervalMs?: unknown
   screenshotBrowserViewportHeight?: unknown
   screenshotBrowserWaitAfterLoadMs?: unknown
+  screenshotBrowserlessProxyConcurrency?: unknown
+  screenshotBrowserlessProxyNavigationTimeoutMs?: unknown
+  screenshotBrowserlessProxyQueueDepth?: unknown
+  screenshotBrowserlessProxyQueueTimeoutMs?: unknown
+  screenshotBrowserlessProxyRequestTimeoutMs?: unknown
+  screenshotBrowserlessProxySettleMs?: unknown
+  screenshotBrowserlessProxyToken?: unknown
+  screenshotBrowserlessProxyUrl?: unknown
+  screenshotBrowserlessProxyViewportHeight?: unknown
   screenshotCaptureConcurrency?: unknown
   screenshotCaptureDailyLimit?: unknown
   screenshotCaptureEnabled?: unknown
@@ -40,11 +51,12 @@ export type ScreenshotRuntimeConfig = {
   screenshotPolicyBlockedHosts?: unknown
   screenshotPolicyProbeTimeoutMs?: unknown
   screenshotPreviewHeight?: unknown
-  screenshotPreviewJpegQuality?: unknown
+  screenshotPreviewWebpQuality?: unknown
   screenshotPreviewMaxBytes?: unknown
   screenshotPreviewWidth?: unknown
   screenshotProviders?: unknown
   screenshotProviderStrategy?: unknown
+  screenshotRequestCaptureEnabled?: unknown
   screenshotR2TtlDays?: unknown
   screenshotXCancelBaseUrl?: unknown
   [key: string]: unknown

@@ -59,12 +59,19 @@ Server/API:
 - `server/api/item/[id].ts`: fetch story details and comment tree from Algolia Items API.
 - `server/api/related/[id].ts`: build related-story candidates from title, URL, comments, and Algolia search results.
 - `server/api/screenshot/[id].ts`: screenshot proxy and cache layer.
+- `server/api/internal/screenshot-jobs/[id]/prepare.post.ts`: authenticated capture-agent eligibility, R2 reuse, cooldown, and content-probe endpoint.
+- `server/api/internal/screenshot-jobs/[id]/result.put.ts`: authenticated bounded-WebP ingestion endpoint.
+- `server/api/internal/screenshot-jobs/[id]/failure.post.ts`: authenticated terminal-failure cooldown endpoint.
 - `server/utils/screenshot/sourcePolicy.ts`: URL policy for screenshot capture targets, deterministic skips, and bounded content probing.
+- `server/utils/screenshot/runtimeConfig.ts`: request-local overlay that maps private `NUXT_SCREENSHOT_*` Cloudflare bindings, including `.dev.vars`, onto screenshot runtime config without mutating Nuxt's shared config object.
 - `server/utils/screenshot/types.ts`: shared screenshot result, environment, runtime-config, policy, and provider metadata types.
 - `server/utils/screenshot/providers/types.ts`: provider adapter contract, attempt metadata, and provider error classification.
-- `server/utils/screenshot/providers/orchestrator.ts`: ordered or balanced provider selection, sequential fallback attempts, and common JPEG validation.
+- `server/utils/screenshot/providers/orchestrator.ts`: ordered or balanced provider selection, sequential fallback attempts, and common WebP validation.
 - `server/utils/screenshot/providers/registry.ts`: registered provider adapters, configured-provider resolution, and provider-plan identity.
+- `server/utils/screenshot/providers/browserlessProxy.ts`: local Browserless screenshot-proxy adapter, bounded HTTP response handling, outcome validation, and provider-specific queueing.
 - `server/utils/screenshot/providers/browserRun.ts`: Cloudflare Browser Run adapter and its quota, cooldown, queue, and capture implementation.
+- `workers/screenshot-scheduler/`: Cron Worker that scans current HN feeds, deduplicates admissions with lightweight R2 markers, and produces Cloudflare Queue jobs.
+- `capture-agent/`: stateless Queue HTTP pull consumer and container image for the HomeLabs Browserless service.
 - `server/api/user/[username].ts`: user profile from Algolia.
 - `server/api/user/[username]/comments.ts` and `stories.ts`: paginated user activity using Algolia search-by-date.
 - `server/utils/userActivityHandler.ts`: shared validation, cache, error, and timing wrapper for user activity routes.
@@ -90,7 +97,8 @@ Primary upstreams:
 - Algolia HN Search API for story/feed data.
 - Algolia Items API for story detail and comment trees.
 - Algolia users/search-by-date endpoints for user profiles and activity.
-- Configured screenshot providers for article screenshot generation; Cloudflare Browser Run is currently the only registered provider.
+- Configured screenshot providers for article screenshot generation; the registered providers are the local Browserless screenshot proxy and Cloudflare Browser Run.
+- Cloudflare Queues for distributing background screenshot jobs across local capture-agent instances. There is intentionally no D1 coordinator.
 - XCancel as a best-effort capture target for public X/Twitter status URLs.
 
 Caching expectations:
@@ -100,17 +108,17 @@ Caching expectations:
 - Related stories use longer cache headers because they are derived and less time-sensitive.
 - User profile/activity routes cache briefly.
 - Screenshot responses use long browser/CDN cache headers and Wrangler Workers Caching, which runs before the Worker and works on the production `workers.dev` hostname. Edge TTLs must use only the remaining R2 freshness window. Do not reintroduce `caches.default`; Cache API operations have no effect on `workers.dev`.
-- Successful previews are persisted under `screenshots/v7/<source-url-hash>/preview-1440x4096-q68.jpg`. Both public variants serve this one bounded object.
+- Successful previews are persisted under `screenshots/v8/<source-url-hash>/preview-1440x11111-q55.webp`. Both public variants serve this one bounded object.
 - Direct screenshot captures hash the normalized story URL exactly as before. Transformed captures hash `hn42:<source-strategy>:<capture-url>` so alternate provider targets do not poison direct URL cache entries.
-- Feed cards, story detail pages, and story social metadata request the same profile-versioned `/api/screenshot/:id?profile=v7` URL. The profile parameter is the single intentional cache-busting dimension for capture migrations. The legacy `variant=thumbnail|original` query remains accepted, but both values serve the same bounded v7 JPEG; do not use them in first-party URLs. Responsive detail rendering mounts only the image used at the current breakpoint, and desktop detail pages can expand the preview to its 1440-pixel capture width.
+- Feed cards, story detail pages, and story social metadata request the same profile-versioned `/api/screenshot/:id?profile=v8` URL. The profile parameter is the single intentional cache-busting dimension for capture migrations. The legacy `variant=thumbnail|original` query remains accepted, but both values serve the same bounded v8 WebP; do not use them in first-party URLs. Desktop detail pages render the captured height inline beside comments and widen the preview column on large screens; compact layouts keep a scroll-safe crop, and the full-size dialog remains available.
 - The public screenshot route accepts only a numeric HN item ID. It must fetch the item from HN Firebase, require a live story, and derive the capture URL server-side; never add a caller-provided URL parameter.
-- Browser Run uses a wide desktop 1440x900 viewport and an injected script that measures the rendered page before clamping it to 4096 pixels, producing a bounded deep-preview JPEG at quality 68. Keep `fullPage: true` and `captureBeyondViewport: true` paired with that measured ceiling, keep `scrollPage: false`, use `domcontentloaded`, a short post-load wait, and keep the Quick Action response cache disabled so profile changes cannot reuse incompatible output. R2 remains the canonical shared reuse layer.
-- The `BROWSER` and `SCREENSHOTS_BUCKET` bindings use `remote = true`. Quick Actions are unavailable in the local browser runtime, and the shared production R2 bucket prevents dev/prod duplicate captures. New captures are disabled by default in local development; deliberate opt-in can mutate production screenshot objects and consume real Browser Run usage.
-- Screenshot fallbacks are transparent GIFs with short browser/edge TTLs. The client recognizes the 1x1 response and keeps the generated wireframe visible.
+- Browser Run uses a wide desktop 1440x900 viewport and an injected script that measures the rendered page before clamping it to the shared 16-megapixel geometry ceiling, producing a bounded full-page WebP at quality 55 (up to 1440x11111 with the defaults). Keep `fullPage: true` and `captureBeyondViewport: true` paired with that measured ceiling, keep `scrollPage: false`, use `domcontentloaded`, a short post-load wait, and keep the Quick Action response cache disabled so profile changes cannot reuse incompatible output. R2 remains the canonical shared reuse layer.
+- The `BROWSER` and `SCREENSHOTS_BUCKET` bindings use `remote = true`. Quick Actions are unavailable in the local browser runtime, and the shared production R2 bucket prevents dev/prod duplicate captures. Public request-time capture is disabled by default in every environment; deliberate local opt-in requires both `NUXT_SCREENSHOT_CAPTURE_ENABLED=true` and `NUXT_SCREENSHOT_REQUEST_CAPTURE_ENABLED=true`.
+- Screenshot fallbacks are transparent GIFs. Transient fallbacks cache for 5 seconds in the browser and 15 seconds at the edge; the detail page remounts the same canonical image after 16 seconds and once more after 45 seconds so a startup or capacity race can recover without adding a query dimension. Deterministic policy skips keep their longer TTLs. The client recognizes the 1x1 response and keeps the generated wireframe visible.
 - The transparent screenshot fallback exposes a shared client-rendered wireframe underneath the image. Keep it deterministic and SSR-safe, preserve the existing seed palette, and keep its five-to-eight primitive budget so feeds with many failures remain inexpensive.
 - Screenshot fallbacks are not written to R2. Stale R2 screenshots can be served briefly when the configured provider chain fails.
 - Deterministic screenshot skips return transparent fallbacks and must not invoke any provider. Current policy skips generic PDFs and a small known-blocked host list, transforms X/Twitter status URLs through XCancel, and transforms `arxiv.org/pdf/...` links to `arxiv.org/abs/...`.
-- After R2 misses, the screenshot route runs the source policy and short ranged GET probe once, then gives the verified final public HTML URL to the provider chain. Capture only confirmed `text/html` or `application/xhtml+xml`; skip direct images, PDFs, media, downloads, unknown types, unavailable content, private redirects, and failed verification.
+- After scheduler admission, the authenticated prepare endpoint runs the source policy and short ranged GET probe once, then gives the verified final public HTML URL to the capture agent. Capture only confirmed `text/html` or `application/xhtml+xml`; skip direct images, PDFs, media, downloads, unknown types, unavailable content, private redirects, and failed verification.
 - Screenshot responses expose `X-HN42-Screenshot-Cache`, `X-HN42-Screenshot-Provider`, `X-HN42-Screenshot-Policy`, `X-HN42-Screenshot-Source-Strategy`, `X-HN42-Screenshot-Skip-Reason`, and `X-HN42-Browser-Ms-Used` for debugging. Use `CF-Cache-Status` for the front-of-Worker cache; cached `X-HN42-*` headers describe the response that populated it.
 - Preserve screenshot cache behavior unless the task is specifically about invalidation or freshness.
 
@@ -160,31 +168,35 @@ Story screenshots should render from the canonical `/api/screenshot/:id` URL on 
 Screenshot generation is best-effort and follows this order:
 
 1. Let Wrangler Workers Caching satisfy the canonical request before Worker code runs.
-2. Resolve and validate the numeric HN story ID, derive the source server-side, and apply deterministic source transforms or skips.
-3. Reuse the single content-addressed R2 preview; prefer a stale preview over an avoidable cold capture during provider trouble.
-4. On a true miss, verify the final public HTML URL once, then ask the configured provider chain to capture it. `ordered` tries providers in configuration order; deterministic `balanced` filters unavailable providers, rotates the primary from the stable source hash, and retains the remaining available providers as the fallback chain.
-5. Let each adapter enforce its own quota and cooldown, validate every successful result against the common bounded JPEG contract, then persist the first success once and reuse it across feed, detail, social metadata, and legacy variant requests.
-6. After the chain is exhausted, return the transparent 1x1 GIF so the client-rendered SVG wireframe remains visible. Write a short-lived R2 failure marker only for a chain-terminal provider failure, not when every attempt was merely unavailable or capacity-limited.
+2. Every three minutes, the screenshot scheduler scans the first 100 Top, Best, New, and Show IDs. It uses seven-day `screenshot-jobs/v1/v8/<story-id>` R2 admission markers and enqueues each newly observed story once.
+3. Cloudflare Queues leases jobs independently to any number of stateless HomeLabs capture agents. Each agent calls the authenticated prepare endpoint, which resolves and validates the numeric HN story ID, applies deterministic transforms/skips, reuses R2 success/failure state, and probes the final public HTML URL.
+4. The agent sends eligible URLs to the narrow local Browserless screenshot API, then uploads only `direct` `ok`/`access_gate` bounded WebP results through the authenticated result endpoint.
+5. Ready results, deterministic skips, cooldowns, and terminal target/output failures are acknowledged per message. Temporary network, service, and capacity failures are retried with delay and eventually reach the configured DLQ; one failed message must not prevent other leases from being acknowledged.
+6. Public `/api/screenshot/:id` requests are reuse-only by default. Serve a fresh or stale R2 image when available; otherwise return the transparent 1x1 GIF so the client SVG wireframe remains visible. Never store the GIF or SVG at a canonical screenshot key.
 
 Preserve these strategic guardrails:
 
-- A bounded deep preview is the product requirement; full-page archival fidelity and 100% screenshot coverage are not.
+- A bounded full-page preview is the product requirement; archival fidelity beyond the geometry and byte ceilings and 100% screenshot coverage are not.
 - Optimize in this order: edge reuse, deterministic source policy, R2 reuse, bounded capture. Do not retry a known skip or bypass a capacity guard to improve coverage.
-- Do not remove the deep-preview height ceiling, add another stored size/format, or schedule backfills without measured evidence that the browsing experience needs it.
-- Browser Run is the only registered provider today. Adding a concrete provider requires its own adapter, registry entry, binding or secret configuration, and a provider-specific request, credit, and cost review.
-- Before increasing daily admissions, provider budgets, retention, dimensions, quality, or byte limits, recalculate the worst-case provider and R2 envelope. Review `CF-Cache-Status`, `X-HN42-Screenshot-Cache`, `X-HN42-Screenshot-Provider`, `X-HN42-Browser-Ms-Used`, capture success/skip ratios, and average/p95 object size.
+- Do not raise the 16-megapixel or 2 MB ceilings, add another stored size/format, or schedule backfills without measured evidence that the browsing experience needs it.
+- Browserless proxy and Browser Run are the registered providers. Adding another concrete provider requires its own adapter, registry entry, binding or secret configuration, and a provider-specific request, credit, and cost review.
+- Before increasing scheduler scan depth/frequency, local concurrency, retention, dimensions, quality, or byte limits, recalculate the provider, Queue, and R2 envelope. Review Queue backlog/DLQ, `CF-Cache-Status`, capture success/skip ratios, and average/p95 object size.
 - Routine local development is reuse-only. Enable cold captures deliberately and narrowly because local and production use the same remote bindings and R2 bucket.
 
 - Do not use the old `hn42.net/cdn-cgi/image/...` URL; that domain is no longer owned.
 - Do not add `provider="cloudflare"` to `NuxtImg` for screenshots.
 - Current screenshot rendering intentionally uses plain `<img>` tags to avoid Nuxt Image generating CDN proxy URLs.
-- `server/api/screenshot/[id].ts` resolves and validates a live HN story, applies `sourcePolicy.ts`, checks R2, then delegates a verified miss to the provider orchestrator. Wrangler Workers Caching handles cache hits before the route executes.
+- `server/api/screenshot/[id].ts` resolves and validates a live HN story, applies `sourcePolicy.ts`, and checks R2. With the default `screenshotRequestCaptureEnabled=false`, a miss returns the transparent fallback without invoking a provider. Wrangler Workers Caching handles cache hits before the route executes.
 - `sourcePolicy.ts` may keep the direct URL, transform the capture target, or skip capture. Keep source links in the UI pointed at the original HN story URL.
-- Successful previews are bounded JPEGs stored through `SCREENSHOTS_BUCKET` under a provider-independent v7 key and reused for both variants. Preserve the winning provider in object metadata; do not add an image transformation or second object without a measured product need and cost review.
-- `screenshotProviders` / `NUXT_SCREENSHOT_PROVIDERS` selects a comma-separated provider chain and defaults to `browser-run`. `screenshotProviderStrategy` / `NUXT_SCREENSHOT_PROVIDER_STRATEGY` accepts `ordered` by default or deterministic `balanced`; configuration must resolve only IDs registered in `providers/registry.ts`.
-- Common preview parameters remain controlled by `screenshotPreview*`. Each provider adapter owns its provider-specific quota and cooldown. The current Browser Run adapter consumes the existing `screenshotCapture*` and `screenshotBrowser*` settings; its defaults enforce one concurrent capture, a shared 10-second start interval, a bounded queue, and a 60-capture UTC-day admission limit.
+- Successful previews are bounded WebPs stored through `SCREENSHOTS_BUCKET` under a provider-independent v8 key and reused for both variants. Preserve the winning provider in object metadata; do not add an image transformation or second object without a measured product need and cost review.
+- `screenshotProviders` / `NUXT_SCREENSHOT_PROVIDERS` selects a comma-separated provider chain. `npm run dev` defaults to `browserless-proxy`; production builds default to `browser-run`. Use `browserless-proxy,browser-run` for an explicit local-first fallback chain. `screenshotProviderStrategy` / `NUXT_SCREENSHOT_PROVIDER_STRATEGY` accepts `ordered` by default or deterministic `balanced`; configuration must resolve only IDs registered in `providers/registry.ts`.
+- An explicitly present but empty `screenshotProviders` / `NUXT_SCREENSHOT_PROVIDERS` value disables cold capture. Do not treat it as permission to fall back to the registry default, because that could consume an unintended provider.
+- Common preview parameters remain controlled by `screenshotPreview*`. Provider adapters remain available for explicit request-time diagnostics, but the production background pipeline has no 60-per-day admission limit; Queue leases and the local Browserless screenshot API enforce capacity.
+- `browserless-proxy` calls only the narrow `/v1/screenshots` API with a private Bearer token; never point it at raw Browserless routes or place its token in a URL. It requests the proxy's bounded `fullPage` profile with a 1440x900 desktop viewport and WebP quality 55. HN42 and the proxy independently enforce the same 16-megapixel geometry budget, which caps the default width at 11,111 pixels tall. Keep the outer proxy request budget at 45 seconds so cold full-page encoding is not aborted prematurely. It accepts only `direct` results with `ok` or `access_gate` outcomes, streams at most `screenshotPreviewMaxBytes`, and falls through on internal Ladder routes, challenges, target errors, bad dimensions, or invalid output.
+- Browserless proxy runtime config uses `screenshotBrowserlessProxy*` / `NUXT_SCREENSHOT_BROWSERLESS_PROXY_*`. Keep its URL empty in production unless an authenticated, trusted non-local endpoint exists. Keep the token in private runtime config or a Worker secret, never source code or checked-in Wrangler `vars`. The local `.dev.localhost` certificate must be trusted through `NODE_EXTRA_CA_CERTS` before starting Nuxt; do not disable TLS verification.
+- During `nuxt dev`, `nitro-cloudflare-dev` exposes `.dev.vars` as Cloudflare bindings rather than Nuxt process environment variables. The screenshot route deliberately overlays string-valued `NUXT_SCREENSHOT_*` bindings onto its private runtime config, so the same ignored `.dev.vars` file can control capture enablement, provider order, and provider parameters. `SCREENSHOT_API_TOKEN` remains the preferred provider-specific secret binding and takes precedence over `NUXT_SCREENSHOT_BROWSERLESS_PROXY_TOKEN`.
 - Source policy runtime config includes `screenshotPolicyProbeTimeoutMs`, `screenshotXCancelBaseUrl`, and `screenshotPolicyBlockedHosts`; the host list extends the default blocked hosts.
-- Concurrent provider-chain captures for the same source URL are coalesced within an isolate. Only chain-terminal provider failures write short-lived R2 markers under separate `.failure` keys so a cross-isolate failure cannot overwrite a valid image; unavailable- or capacity-only exhaustion does not. Failure markers carry the resolved provider-plan ID so a changed chain ignores older suppression state. Policy/probe skips must use the edge-cached transparent response and must not write R2 markers outside the daily admission budget.
+- Terminal agent target/output failures write short-lived R2 markers under separate `.failure` keys so a failure can never overwrite a valid image. Infrastructure/capacity failures do not write failure markers. Policy/probe skips are acknowledged without R2 failure writes. The optional request-time provider chain retains its own provider-plan-aware failure markers.
 - Consume each Browser Run Quick Action response body and explicitly dispose the RPC result afterward; remote development otherwise reports leaked stubs. Do not add isolate-local fallback memoization before R2 reads, because it can hide a screenshot successfully written by another isolate or development process.
 - Feed cards share one Intersection Observer and mount screenshot images when they enter its preload margin; leave request scheduling and concurrency to the browser.
 - Keep long shared-cache TTLs unless there is a concrete invalidation need.
@@ -229,9 +241,9 @@ Production app URL: `https://hn42.vv42.workers.dev/`.
 - Keep Wrangler Workers Caching enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
 - R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.
 - Production and local development share the remote R2 bucket `hn42-screenshots`; do not add a separate preview bucket without reintroducing cross-environment captures.
-- R2 lifecycle should delete the active `screenshots/v7/` prefix and legacy `screenshots/v3/` through `screenshots/v6/` prefixes after 180 days.
-- At the default 60 admitted captures per UTC day, 180-day retention, and 2 MB hard object limit, steady-state v7 screenshot storage is bounded to about 21.6 GB before small coordinator and failure-marker overhead. Monitor average and p95 object size.
-- Use `npm run cf:screenshots:bootstrap` to create missing screenshot R2 buckets, add the v3 through v7 lifecycle rules, and verify their enabled state, prefix, and expiry. The script is idempotent and fails on a drifted same-ID rule.
+- R2 lifecycle should delete active `screenshots/v8/` objects after 30 days, `screenshot-jobs/v1/` admission markers after seven days, and legacy `screenshots/v3/` through `screenshots/v7/` objects after 180 days.
+- There is no fixed daily admission count. Monitor actual queue backlog, capture rate, skip/failure ratio, and average/p95 WebP size. Every screenshot remains capped at 2 MB; admission and failure markers are empty metadata objects.
+- Use `npm run cf:screenshots:bootstrap` to create the screenshot R2 bucket and verify the active, admission, and legacy lifecycle rules. Use `npm run cf:screenshots:jobs:bootstrap` once to create the Queue, DLQ, and HTTP pull consumer.
 - Use `npm run cf:screenshots:reset-cache` only when intentionally deleting old cached objects under `screenshots/v2/`.
 - Do not switch scripts back to `wrangler pages deploy` or `wrangler pages dev`.
 
@@ -239,9 +251,11 @@ For deployment config changes, verify:
 
 ```bash
 npm run cf:screenshots:bootstrap
+npm run cf:screenshots:jobs:bootstrap
 npm run build
 npm run cf-typegen
 npx wrangler deploy --dry-run
+npm run cf:screenshots:scheduler:dry-run
 ```
 
 ## Commands
@@ -250,6 +264,7 @@ npx wrangler deploy --dry-run
 npm install
 npm run dev
 npm run build
+npm run build:screenshot-agent
 npm run typecheck
 npm test
 npm run check
@@ -257,6 +272,9 @@ npm run preview
 npm run deploy
 npm run cf-typegen
 npm run cf:screenshots:bootstrap
+npm run cf:screenshots:jobs:bootstrap
+npm run cf:screenshots:scheduler:deploy
+npm run cf:screenshots:scheduler:dry-run
 npm run cf:screenshots:reset-cache
 npx wrangler deploy --dry-run
 git diff --check
@@ -264,7 +282,7 @@ git diff --check
 
 ## Known Caveats
 
-- The screenshot route can be slow on cold misses because it performs content verification and bounded sequential provider attempts.
+- The background prepare/capture path can be slow on cold misses; public screenshot requests remain bounded R2 reads and fallbacks by default.
 - Browser verification should use the in-app browser against `http://localhost:3000` or the actual Nuxt dev port.
 - The dev server may need a restart after dependency or Nuxt/Nitro preset changes; hot reload can leave the app shell blank.
 - Screenshot latency is expected and should not be treated as a UI regression unless the task is specifically about screenshots.
