@@ -12,6 +12,7 @@ on:
       - package.json
       - package-lock.json
       - tsconfig.json
+      - .dockerignore
       - .github/workflows/screenshot-agent-image.yml
   workflow_dispatch:
 
@@ -42,8 +43,10 @@ jobs:
         with:
           images: ghcr.io/valentinvieriu/hn42-screenshot-agent
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
             type=sha
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
       - uses: docker/build-push-action@v7
         with:
           context: .
