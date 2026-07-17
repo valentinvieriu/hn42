@@ -4,7 +4,6 @@ import type {
 } from './types'
 
 const SCREENSHOT_RUNTIME_CONFIG_KEYS = [
-  'screenshotPolicyBlockedHosts',
   'screenshotPolicyProbeTimeoutMs',
   'screenshotR2TtlDays',
   'screenshotXCancelBaseUrl',

@@ -114,6 +114,10 @@ const createImageResponse = (
     headers.set('X-HN42-Screenshot-Processor', image.processor)
   }
 
+  if (image.sourceRoute) {
+    headers.set('X-HN42-Screenshot-Source-Route', image.sourceRoute)
+  }
+
   return new Response(image.bytes, { headers })
 }
 

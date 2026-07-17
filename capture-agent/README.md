@@ -3,11 +3,15 @@
 This stateless service pulls screenshot jobs from Cloudflare Queues, asks the
 HN42 Worker to validate each story, captures eligible pages through the local
 Browserless screenshot API, and uploads only validated WebP results to HN42.
+The Browserless service owns publisher routing: both its direct and Ladder
+results are accepted when their outcome and bounded image metadata validate.
 
 Run multiple identical instances to increase capture capacity. Queue leases
 divide work between instances. Deterministic skips and terminal target failures
 are acknowledged individually; temporary network or capacity failures are
 retried with delay and eventually move to the configured dead-letter queue.
+Structured stdout records skipped reasons and terminal target details without
+adding Cloudflare storage writes.
 
 Required environment variables:
 

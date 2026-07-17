@@ -10,6 +10,7 @@ import {
   SCREENSHOT_PREVIEW_QUALITY,
   SCREENSHOT_PREVIEW_WIDTH,
 } from '../../../shared/utils/screenshot'
+import type { ScreenshotSourceRoute } from '../../../shared/utils/screenshot'
 
 export const R2_SCREENSHOT_PREFIX = 'screenshots/v9/items/'
 const DEFAULT_R2_TTL_DAYS = 14
@@ -21,6 +22,7 @@ type R2ScreenshotMetadata = {
   contentType?: string
   processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
+  sourceRoute?: ScreenshotSourceRoute
   storyId?: string
   variant?: ScreenshotVariant
 }
@@ -31,6 +33,7 @@ export type R2ScreenshotHead = {
   isFresh: boolean
   processor?: ScreenshotProcessorName
   provider?: ScreenshotProviderName
+  sourceRoute?: ScreenshotSourceRoute
 }
 
 export type R2Screenshot = R2ScreenshotHead & {
@@ -92,6 +95,7 @@ const parseR2Object = (
     ),
     processor: metadata.processor,
     provider: metadata.provider,
+    sourceRoute: metadata.sourceRoute,
   }
 }
 
@@ -144,6 +148,7 @@ export const writeR2Screenshot = async (
       contentType: result.contentType,
       processor: result.processor,
       provider: result.provider,
+      sourceRoute: result.sourceRoute,
       storyId,
       variant,
     }),

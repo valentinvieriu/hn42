@@ -7,6 +7,8 @@ import {
 } from 'h3'
 import { isValidHnItemId } from '#shared/utils/hn'
 import {
+  isScreenshotAcceptedOutcome,
+  isScreenshotSourceRoute,
   SCREENSHOT_PREVIEW_HEIGHT,
   SCREENSHOT_PREVIEW_MAX_BYTES,
   SCREENSHOT_PREVIEW_WIDTH,
@@ -52,6 +54,8 @@ export default defineEventHandler(async (event) => {
   }
 
   const contentLength = Number(getRequestHeader(event, 'content-length'))
+  const outcome = getRequestHeader(event, 'x-screenshot-outcome')?.toLowerCase() ?? ''
+  const sourceRoute = getRequestHeader(event, 'x-screenshot-source-route')?.toLowerCase() ?? ''
 
   if (getRequestHeader(event, 'content-type')?.split(';')[0]?.trim().toLowerCase() !== 'image/webp') {
     throw createError({ statusCode: 415, statusMessage: 'Screenshot result must be WebP' })
@@ -59,8 +63,8 @@ export default defineEventHandler(async (event) => {
 
   if (
     getRequestHeader(event, 'x-hn42-screenshot-profile') !== SCREENSHOT_PROFILE_VERSION
-    || !['ok', 'access_gate'].includes(getRequestHeader(event, 'x-screenshot-outcome')?.toLowerCase() ?? '')
-    || getRequestHeader(event, 'x-screenshot-source-route')?.toLowerCase() !== 'direct'
+    || !isScreenshotAcceptedOutcome(outcome)
+    || !isScreenshotSourceRoute(sourceRoute)
   ) {
     throw createError({ statusCode: 422, statusMessage: 'Screenshot result metadata is invalid' })
   }
@@ -90,8 +94,9 @@ export default defineEventHandler(async (event) => {
   const result: ScreenshotResult = {
     bytes,
     contentType: 'image/webp',
-    processor: 'browserless-proxy',
+    processor: `browserless-${sourceRoute}`,
     provider: 'browserless-agent',
+    sourceRoute,
   }
 
   await writeR2Screenshot(
@@ -105,6 +110,7 @@ export default defineEventHandler(async (event) => {
   console.info(JSON.stringify({
     message: 'Background screenshot stored',
     bytes: bytes.byteLength,
+    sourceRoute,
     storyId,
   }))
 

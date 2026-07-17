@@ -8,7 +8,6 @@ export default defineNuxtConfig({
     inlineStyles: true,
   },
   runtimeConfig: {
-    screenshotPolicyBlockedHosts: '',
     screenshotPolicyProbeTimeoutMs: '1200',
     screenshotR2TtlDays: '14',
     screenshotXCancelBaseUrl: 'https://xcancel.com',

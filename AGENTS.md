@@ -110,8 +110,12 @@ Caching expectations:
   Terminal page/output failures are acknowledged and the seven-day admission
   marker suppresses immediate re-admission. Infrastructure failures retry via
   Queue.
-- Source policy skips PDFs, private/non-HTML targets, and known blocked hosts;
-  it transforms X/Twitter statuses through XCancel and arXiv PDFs to abstracts.
+- Source policy skips unsafe URLs, obvious PDFs, private redirects, and content
+  confidently identified as non-HTML. It transforms X/Twitter statuses through
+  XCancel and arXiv PDFs to abstracts. It has no publisher blacklist: blocked,
+  timed-out, and otherwise inconclusive probes proceed to the trusted
+  Browserless service, whose `ruleset.yaml` owns publisher support and
+  direct-versus-Ladder routing.
 - Active v9 screenshots expire after 14 days. Keep response TTLs within the
   remaining R2 freshness window.
 - The scheduler runs every ten minutes, admits at most 1,000 jobs per UTC day,
@@ -172,8 +176,9 @@ Capture is background-only:
    10 GB v9 storage ceiling.
 4. Queue leases jobs to stateless HomeLabs agents.
 5. Prepare performs one preview HEAD, then resolves and probes only a real miss.
-6. Browserless output must be direct, `ok`/`access_gate`, WebP, at most
-   1440x11111, 16 MP, and 2 MB.
+6. Browserless output may use its server-owned `direct` or `ladder` route, but
+   must be `ok`/`access_gate`, WebP, at most 1440x11111, 16 MP, and 2 MB. The
+   selected route is preserved in R2 metadata.
 7. The public route serves R2 or the transparent GIF; it never starts capture.
 
 Preserve these guardrails:
@@ -186,6 +191,9 @@ Preserve these guardrails:
   PUT, and DELETE operations.
 - Network/service/capacity errors retry through Queue. Terminal target/output
   errors are acknowledged immediately and must not block other leases.
+- Keep publisher routing in the Browserless ruleset. Do not add an HN42 host
+  blacklist or reject trusted Ladder provenance; that would bypass rules that
+  the capture service owns.
 - Keep the public route to one bounded R2 GET and prepare to one metadata HEAD
   before source work.
 - Keep source links on the original HN URL even when capture uses XCancel or an
@@ -197,7 +205,10 @@ Preserve these guardrails:
 - Do not raise daily admissions, storage ceiling, retention, dimensions,
   quality, or byte limits without recalculating Queue and R2 free-tier usage.
 - Feed cards share one Intersection Observer.
-- Use `CF-Cache-Status` and `X-HN42-Screenshot-Cache` for diagnostics.
+- Use `CF-Cache-Status`, `X-HN42-Screenshot-Cache`, and
+  `X-HN42-Screenshot-Source-Route` for diagnostics. Agent stdout must retain
+  structured skip reasons and terminal outcome/route/hostname details; do not
+  add storage-backed failure records for observability.
 
 ## Styling, Linting, And Code Style
 

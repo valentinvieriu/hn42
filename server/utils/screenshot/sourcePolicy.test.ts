@@ -15,10 +15,11 @@ describe('screenshot source policy', () => {
     expect(normalizeSourceUrl('http://[::ffff:127.0.0.1]/private')).toBeNull()
   })
 
-  it('matches known blocked hosts with a trailing dot', () => {
-    expect(createScreenshotSourceDecision('https://amazon.com./item', {})).toMatchObject({
-      policy: 'skip',
-      skipReason: 'known-blocked-host',
+  it('leaves publisher routing to the Browserless service', () => {
+    expect(createScreenshotSourceDecision('https://www.reuters.com/article', {})).toEqual({
+      captureUrl: 'https://www.reuters.com/article',
+      policy: 'capture',
+      sourceStrategy: 'direct',
     })
   })
 
@@ -86,12 +87,33 @@ describe('screenshot source policy', () => {
     })
   })
 
-  it('fails closed when the content type cannot be verified', async () => {
+  it('lets Browserless classify blocked origin responses', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {
+      headers: { 'Content-Type': 'text/html' },
+      status: 401,
+    })))
+
+    await expect(probeCaptureUrlContent('https://example.com/article', {})).resolves.toEqual({
+      captureUrl: 'https://example.com/article',
+      policy: 'capture',
+    })
+  })
+
+  it('lets Browserless classify origins that cannot be probed', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')))
 
     await expect(probeCaptureUrlContent('https://example.com/article', {})).resolves.toEqual({
-      policy: 'skip',
-      skipReason: 'unverified-content',
+      captureUrl: 'https://example.com/article',
+      policy: 'capture',
+    })
+  })
+
+  it('captures responses without a declared content type', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null)))
+
+    await expect(probeCaptureUrlContent('https://example.com/article', {})).resolves.toEqual({
+      captureUrl: 'https://example.com/article',
+      policy: 'capture',
     })
   })
 })

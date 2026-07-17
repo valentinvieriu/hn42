@@ -164,11 +164,12 @@ Screenshots are generated only by the background pipeline:
    previous 24 hours would reach 10 GB.
 4. Cloudflare Queues leases jobs to stateless HomeLabs pull agents.
 5. Prepare performs one metadata-only R2 check. Only a missing or expired
-   preview causes HN source resolution, source-policy filtering, and the bounded
-   public-HTML probe.
+   preview causes HN source resolution, deterministic source-policy filtering,
+   and the bounded content probe.
 6. The agent captures eligible pages through the narrow local Browserless API
-   and uploads one validated WebP. Terminal page/output errors are acknowledged;
-   temporary infrastructure errors retry through Queue.
+   and uploads one validated WebP from either its direct or server-owned Ladder
+   route. Terminal page/output errors are acknowledged; temporary infrastructure
+   errors retry through Queue.
 7. The public route performs one R2 read and serves a fresh or stale image, or
    the transparent GIF that exposes the client-rendered wireframe. It never
    starts browser work.
@@ -180,7 +181,12 @@ The app uses `?profile=v9` as the only cache-busting dimension.
 
 The source policy transforms X/Twitter status URLs through XCancel, transforms
 `arxiv.org/pdf/...` to the HTML abstract, and skips obvious PDFs, private
-targets, non-HTML content, and known blocked hosts before Browserless is called.
+targets, and responses confidently identified as non-HTML. Publisher support
+and direct-versus-Ladder routing belong exclusively to the Browserless
+service's `ruleset.yaml`; HN42 has no publisher blacklist. Blocked, timed-out,
+or otherwise inconclusive probes proceed to Browserless, whose bounded capture
+contract classifies the target outcome. Successful objects preserve the chosen
+source route in R2 metadata and public diagnostic headers.
 Skipped and terminally failed stories rely on their existing admission marker;
 there is no separate R2 failure object.
 

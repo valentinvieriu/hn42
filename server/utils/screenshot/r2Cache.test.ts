@@ -45,14 +45,16 @@ describe('screenshot R2 storage', () => {
     await writeR2Screenshot(env, 'preview', '42424242', {
       bytes: new Uint8Array([1, 2, 3]).buffer,
       contentType: 'image/webp',
-      processor: 'browserless-proxy',
+      processor: 'browserless-ladder',
       provider: 'browserless-agent',
+      sourceRoute: 'ladder',
     }, 'original')
 
     const [, , options] = put.mock.calls[0] ?? []
     expect(options.customMetadata).toMatchObject({
-      processor: 'browserless-proxy',
+      processor: 'browserless-ladder',
       provider: 'browserless-agent',
+      sourceRoute: 'ladder',
       storyId: '42424242',
       variant: 'original',
     })

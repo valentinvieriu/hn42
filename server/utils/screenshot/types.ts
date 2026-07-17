@@ -1,3 +1,5 @@
+import type { ScreenshotSourceRoute } from '../../../shared/utils/screenshot'
+
 export type ScreenshotProviderName = string
 export type ScreenshotProcessorName = string
 export type ScreenshotVariant = 'original' | 'thumbnail'
@@ -6,15 +8,12 @@ export type ScreenshotSourceStrategy =
   | 'xcancel'
   | 'arxiv-abs'
   | 'skip-pdf'
-  | 'skip-known-blocked'
 export type ScreenshotSkipReason =
   | 'blocked-hostname'
   | 'invalid-url'
-  | 'known-blocked-host'
   | 'non-html-content'
   | 'pdf-content'
   | 'pdf-url'
-  | 'unavailable-content'
   | 'unverified-content'
 
 export type ScreenshotEnv = {
@@ -24,7 +23,6 @@ export type ScreenshotEnv = {
 }
 
 export type ScreenshotRuntimeConfig = {
-  screenshotPolicyBlockedHosts?: unknown
   screenshotPolicyProbeTimeoutMs?: unknown
   screenshotR2TtlDays?: unknown
   screenshotXCancelBaseUrl?: unknown
@@ -36,4 +34,5 @@ export type ScreenshotResult = {
   contentType: string
   processor?: ScreenshotProcessorName
   provider: ScreenshotProviderName
+  sourceRoute: ScreenshotSourceRoute
 }

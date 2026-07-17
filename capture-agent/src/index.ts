@@ -5,10 +5,14 @@ import {
   type ScreenshotPrepareResponse,
 } from '../../shared/utils/screenshotJobs'
 import {
+  isScreenshotAcceptedOutcome,
+  isScreenshotSourceRoute,
   SCREENSHOT_PREVIEW_HEIGHT,
   SCREENSHOT_PREVIEW_MAX_BYTES,
   SCREENSHOT_PREVIEW_QUALITY,
   SCREENSHOT_PREVIEW_WIDTH,
+  type ScreenshotAcceptedOutcome,
+  type ScreenshotSourceRoute,
 } from '../../shared/utils/screenshot'
 
 type PullMessage = {
@@ -194,8 +198,21 @@ class TerminalCaptureError extends Error {
   constructor(
     message: string,
     readonly kind: 'invalid-output' | 'target',
+    readonly details: Record<string, number | string | undefined> = {},
   ) {
     super(message)
+  }
+}
+
+const getHostname = (value: string | null | undefined) => {
+  if (!value) {
+    return undefined
+  }
+
+  try {
+    return new URL(value).hostname
+  } catch {
+    return undefined
   }
 }
 
@@ -209,17 +226,24 @@ const getErrorCode = async (response: Response) => {
   }
 }
 
-const requireCaptureMetadata = (response: Response) => {
+const requireCaptureMetadata = (response: Response, captureUrl: string) => {
   const contentType = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
-  const outcome = response.headers.get('x-screenshot-outcome')?.toLowerCase()
-  const sourceRoute = response.headers.get('x-screenshot-source-route')?.toLowerCase()
+  const outcome = response.headers.get('x-screenshot-outcome')?.toLowerCase() ?? ''
+  const sourceRoute = response.headers.get('x-screenshot-source-route')?.toLowerCase() ?? ''
   const width = Number(response.headers.get('x-screenshot-width'))
   const height = Number(response.headers.get('x-screenshot-height'))
+  const details = {
+    accessGate: response.headers.get('x-screenshot-access-gate') ?? undefined,
+    challenge: response.headers.get('x-screenshot-challenge') ?? undefined,
+    finalHostname: getHostname(response.headers.get('x-screenshot-final-url')),
+    hostname: getHostname(captureUrl),
+    outcome: outcome || undefined,
+    sourceRoute: sourceRoute || undefined,
+  }
 
   if (
     contentType !== 'image/webp'
-    || !['ok', 'access_gate'].includes(outcome ?? '')
-    || sourceRoute !== 'direct'
+    || !isScreenshotSourceRoute(sourceRoute)
     || !Number.isSafeInteger(width)
     || width < 1
     || width > SCREENSHOT_PREVIEW_WIDTH
@@ -227,11 +251,26 @@ const requireCaptureMetadata = (response: Response) => {
     || height < 1
     || height > SCREENSHOT_PREVIEW_HEIGHT
   ) {
-    throw new TerminalCaptureError('Screenshot API returned invalid metadata', 'invalid-output')
+    throw new TerminalCaptureError('Screenshot API returned invalid metadata', 'invalid-output', details)
+  }
+
+  if (!isScreenshotAcceptedOutcome(outcome)) {
+    throw new TerminalCaptureError('Screenshot target did not produce an accepted outcome', 'target', details)
+  }
+
+  return {
+    ...details,
+    height: String(height),
+    outcome: outcome as ScreenshotAcceptedOutcome,
+    sourceRoute: sourceRoute as ScreenshotSourceRoute,
+    width: String(width),
   }
 }
 
-const validateWebp = (bytes: ArrayBuffer) => {
+const validateWebp = (
+  bytes: ArrayBuffer,
+  details: Record<string, number | string | undefined> = {},
+) => {
   const view = new Uint8Array(bytes)
 
   if (
@@ -246,7 +285,7 @@ const validateWebp = (bytes: ArrayBuffer) => {
     || view[10] !== 0x42
     || view[11] !== 0x50
   ) {
-    throw new TerminalCaptureError('Screenshot API returned an invalid WebP', 'invalid-output')
+    throw new TerminalCaptureError('Screenshot API returned an invalid WebP', 'invalid-output', details)
   }
 
   return bytes
@@ -287,30 +326,36 @@ const captureScreenshot = async (config: AgentConfig, captureUrl: string) => {
       throw new TerminalCaptureError(
         `Screenshot API rejected the target (${response.status}${errorCode ? `:${errorCode}` : ''})`,
         'target',
+        {
+          hostname: getHostname(captureUrl),
+          status: response.status,
+        },
       )
     }
 
     throw new Error(`Screenshot API unavailable (${response.status}${errorCode ? `:${errorCode}` : ''})`)
   }
 
-  requireCaptureMetadata(response)
+  let metadata: ReturnType<typeof requireCaptureMetadata>
+
+  try {
+    metadata = requireCaptureMetadata(response, captureUrl)
+  } catch (error) {
+    await response.body?.cancel()
+    throw error
+  }
   const contentLength = Number(response.headers.get('content-length'))
 
   if (Number.isFinite(contentLength) && contentLength > SCREENSHOT_PREVIEW_MAX_BYTES) {
     await response.body?.cancel()
-    throw new TerminalCaptureError('Screenshot API result exceeds the byte limit', 'invalid-output')
+    throw new TerminalCaptureError('Screenshot API result exceeds the byte limit', 'invalid-output', metadata)
   }
 
-  const bytes = validateWebp(await response.arrayBuffer())
+  const bytes = validateWebp(await response.arrayBuffer(), metadata)
 
   return {
     bytes,
-    headers: {
-      outcome: response.headers.get('x-screenshot-outcome') ?? '',
-      sourceRoute: response.headers.get('x-screenshot-source-route') ?? '',
-      width: response.headers.get('x-screenshot-width') ?? '',
-      height: response.headers.get('x-screenshot-height') ?? '',
-    },
+    metadata,
   }
 }
 
@@ -328,10 +373,10 @@ const uploadResult = async (
         'Content-Length': String(capture.bytes.byteLength),
         'Content-Type': 'image/webp',
         'X-HN42-Screenshot-Profile': job.profile,
-        'X-Screenshot-Height': capture.headers.height,
-        'X-Screenshot-Outcome': capture.headers.outcome,
-        'X-Screenshot-Source-Route': capture.headers.sourceRoute,
-        'X-Screenshot-Width': capture.headers.width,
+        'X-Screenshot-Height': capture.metadata.height,
+        'X-Screenshot-Outcome': capture.metadata.outcome,
+        'X-Screenshot-Source-Route': capture.metadata.sourceRoute,
+        'X-Screenshot-Width': capture.metadata.width,
       },
       body: capture.bytes,
       signal: AbortSignal.timeout(20_000),
@@ -343,7 +388,11 @@ const uploadResult = async (
   }
 
   if ([413, 415, 422].includes(response.status)) {
-    throw new TerminalCaptureError(`HN42 rejected the screenshot (${response.status})`, 'invalid-output')
+    throw new TerminalCaptureError(
+      `HN42 rejected the screenshot (${response.status})`,
+      'invalid-output',
+      capture.metadata,
+    )
   }
 
   if (!response.ok) {
@@ -375,6 +424,7 @@ const processMessage = async (
     if (prepared.status !== 'capture') {
       console.info(JSON.stringify({
         message: 'Screenshot job completed without capture',
+        ...(prepared.status === 'skipped' ? { reason: prepared.reason } : {}),
         status: prepared.status,
         storyId: job.storyId,
       }))
@@ -387,6 +437,9 @@ const processMessage = async (
     console.info(JSON.stringify({
       message: 'Screenshot job stored',
       bytes: capture.bytes.byteLength,
+      hostname: capture.metadata.hostname,
+      outcome: capture.metadata.outcome,
+      sourceRoute: capture.metadata.sourceRoute,
       storyId: job.storyId,
     }))
 
@@ -395,6 +448,8 @@ const processMessage = async (
     if (error instanceof TerminalCaptureError) {
       console.warn(JSON.stringify({
         message: 'Terminal screenshot failure acknowledged',
+        ...error.details,
+        error: error.message,
         kind: error.kind,
         storyId: job.storyId,
       }))

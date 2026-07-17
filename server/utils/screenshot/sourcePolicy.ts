@@ -1,4 +1,5 @@
 import type {
+  ScreenshotRuntimeConfig,
   ScreenshotSkipReason,
   ScreenshotSourceStrategy,
 } from './types'
@@ -6,33 +7,6 @@ import type {
 const DEFAULT_XCANCEL_BASE_URL = 'https://xcancel.com'
 const DEFAULT_PROBE_TIMEOUT_MS = 1200
 const MAX_PROBE_REDIRECTS = 3
-const DEFAULT_BLOCKED_HOSTS = [
-  'amazon.com',
-  'bestbuy.com',
-  'bloomberg.com',
-  'careerbuilder.com',
-  'cnbc.com',
-  'costco.com',
-  'deviantart.com',
-  'economist.com',
-  'ft.com',
-  'indeed.com',
-  'medium.com',
-  'newegg.com',
-  'nytimes.com',
-  'pinterest.com',
-  'politico.com',
-  'quora.com',
-  'reddit.com',
-  'reuters.com',
-  'simplyhired.com',
-  'temu.com',
-  'theguardian.com',
-  'thehill.com',
-  'wayfair.com',
-  'washingtonpost.com',
-  'wsj.com',
-]
 const BINARY_CONTENT_TYPES = new Set([
   'application/epub+zip',
   'application/gzip',
@@ -53,7 +27,7 @@ const BINARY_CONTENT_TYPES = new Set([
 ])
 const BINARY_FILENAME_PATTERN = /\.(?:7z|avi|bz2|doc|docx|epub|gz|m4a|m4v|mkv|mov|mp3|mp4|ppt|pptx|rar|tar|tgz|wav|webm|xls|xlsx|xz|zip)(?:["']|$|;)/i
 
-type ScreenshotCaptureStrategy = Exclude<ScreenshotSourceStrategy, 'skip-pdf' | 'skip-known-blocked'>
+type ScreenshotCaptureStrategy = Exclude<ScreenshotSourceStrategy, 'skip-pdf'>
 
 export type ScreenshotCaptureDecision = {
   captureUrl: string
@@ -64,7 +38,7 @@ export type ScreenshotCaptureDecision = {
 export type ScreenshotSkipDecision = {
   policy: 'skip'
   skipReason: ScreenshotSkipReason
-  sourceStrategy: Extract<ScreenshotSourceStrategy, 'skip-pdf' | 'skip-known-blocked'>
+  sourceStrategy: Extract<ScreenshotSourceStrategy, 'skip-pdf'>
 }
 
 export type ScreenshotSourceDecision = ScreenshotCaptureDecision | ScreenshotSkipDecision
@@ -89,17 +63,6 @@ const normalizeHostname = (hostname: string) => {
     .replace(/^\[(.*)\]$/, '$1')
     .replace(/\.+$/, '')
     .replace(/^www\./, '')
-}
-
-const parseCommaSeparatedHosts = (value: unknown) => {
-  if (typeof value !== 'string') {
-    return []
-  }
-
-  return value
-    .split(',')
-    .map((host) => normalizeHostname(host.trim()))
-    .filter(Boolean)
 }
 
 export const isPrivateIpv4Address = (hostname: string) => {
@@ -176,18 +139,7 @@ const hostMatches = (hostname: string, matchHostname: string) => {
     || normalizedHostname.endsWith(`.${normalizedMatchHostname}`)
 }
 
-const getBlockedHosts = (runtimeConfig: any) => {
-  return [
-    ...DEFAULT_BLOCKED_HOSTS,
-    ...parseCommaSeparatedHosts(runtimeConfig.screenshotPolicyBlockedHosts),
-  ]
-}
-
-const isKnownBlockedHost = (url: URL, runtimeConfig: any) => {
-  return getBlockedHosts(runtimeConfig).some((host) => hostMatches(url.hostname, host))
-}
-
-const getXCancelBaseUrl = (runtimeConfig: any) => {
+const getXCancelBaseUrl = (runtimeConfig: ScreenshotRuntimeConfig) => {
   const configuredBaseUrl = normalizeSourceUrl(runtimeConfig.screenshotXCancelBaseUrl)
 
   if (!configuredBaseUrl) {
@@ -202,7 +154,7 @@ const getXCancelBaseUrl = (runtimeConfig: any) => {
   return url.toString().replace(/\/+$/, '')
 }
 
-const getXCancelStatusUrl = (url: URL, runtimeConfig: any) => {
+const getXCancelStatusUrl = (url: URL, runtimeConfig: ScreenshotRuntimeConfig) => {
   if (!['x.com', 'twitter.com', 'mobile.twitter.com'].some((host) => hostMatches(url.hostname, host))) {
     return null
   }
@@ -264,7 +216,7 @@ const isObviousPdfUrl = (url: URL) => {
 
 export const createScreenshotSourceDecision = (
   sourceUrl: string,
-  runtimeConfig: any,
+  runtimeConfig: ScreenshotRuntimeConfig,
 ): ScreenshotSourceDecision => {
   const url = new URL(sourceUrl)
   const arxivAbsUrl = getArxivAbsUrl(url)
@@ -282,14 +234,6 @@ export const createScreenshotSourceDecision = (
       policy: 'skip',
       skipReason: 'pdf-url',
       sourceStrategy: 'skip-pdf',
-    }
-  }
-
-  if (isKnownBlockedHost(url, runtimeConfig)) {
-    return {
-      policy: 'skip',
-      skipReason: 'known-blocked-host',
-      sourceStrategy: 'skip-known-blocked',
     }
   }
 
@@ -371,7 +315,7 @@ const fetchGetHeadersWithTimeout = async (url: string, timeoutMs: number) => {
 
 export const probeCaptureUrlContent = async (
   captureUrl: string,
-  runtimeConfig: any,
+  runtimeConfig: ScreenshotRuntimeConfig,
 ): Promise<ContentProbeResult> => {
   const timeoutMs = normalizePositiveInteger(
     runtimeConfig.screenshotPolicyProbeTimeoutMs,
@@ -392,11 +336,11 @@ export const probeCaptureUrlContent = async (
       }
 
       if (response.status >= 400) {
-        return { policy: 'skip', skipReason: 'unavailable-content' }
+        return { captureUrl: currentUrl, policy: 'capture' }
       }
 
       if (!isRedirectStatus(response.status)) {
-        return isHtmlResponse(response.headers)
+        return !getContentType(response.headers) || isHtmlResponse(response.headers)
           ? { captureUrl: currentUrl, policy: 'capture' }
           : { policy: 'skip', skipReason: 'non-html-content' }
       }
@@ -421,9 +365,9 @@ export const probeCaptureUrlContent = async (
 
       currentUrl = nextUrl
     } catch {
-      return { policy: 'skip', skipReason: 'unverified-content' }
+      return { captureUrl: currentUrl, policy: 'capture' }
     }
   }
 
-  return { policy: 'skip', skipReason: 'unverified-content' }
+  return { captureUrl: currentUrl, policy: 'capture' }
 }
