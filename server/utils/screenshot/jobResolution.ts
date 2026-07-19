@@ -7,7 +7,6 @@ import {
 import type {
   ScreenshotRuntimeConfig,
   ScreenshotSkipReason,
-  ScreenshotSourceStrategy,
 } from './types'
 
 const HN_FIREBASE_API_URL = 'https://hacker-news.firebaseio.com/v0'
@@ -26,7 +25,6 @@ export type ResolvedScreenshotCaptureJob = {
 
 export type ResolvedScreenshotSkipJob = {
   skipReason: ScreenshotSkipReason
-  sourceStrategy?: ScreenshotSourceStrategy
   status: 'skip'
 }
 
@@ -72,14 +70,6 @@ export const resolveScreenshotJob = async (
   }
 
   const sourceDecision = createScreenshotSourceDecision(sourceUrl, runtimeConfig)
-
-  if (sourceDecision.policy === 'skip') {
-    return {
-      skipReason: sourceDecision.skipReason,
-      sourceStrategy: sourceDecision.sourceStrategy,
-      status: 'skip',
-    }
-  }
 
   return {
     sourceDecision,

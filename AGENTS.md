@@ -121,12 +121,12 @@ Caching expectations:
   Terminal page/output failures are acknowledged and the seven-day admission
   marker suppresses immediate re-admission. Infrastructure failures retry via
   Queue.
-- Source policy skips unsafe URLs, obvious PDFs, private redirects, and content
-  confidently identified as non-HTML. It transforms X/Twitter statuses through
-  XCancel and arXiv PDFs to abstracts. It has no publisher blacklist: blocked,
-  timed-out, and otherwise inconclusive probes proceed to the trusted
-  Browserless service, whose `ruleset.yaml` owns publisher support and
-  direct-versus-Ladder routing.
+- Source policy skips unsafe URLs, private redirects, and content confidently
+  identified as unsupported non-HTML. It transforms X/Twitter statuses through
+  XCancel and sends PDFs at their original source URL to Browserless for
+  first-page capture. It has no publisher blacklist: blocked, timed-out, and
+  otherwise inconclusive probes proceed to the trusted Browserless service,
+  whose `ruleset.yaml` owns publisher support and direct-versus-Ladder routing.
 - Active v9 screenshots expire after 28 days. Keep response TTLs within the
   remaining R2 freshness window.
 - The scheduler runs every three minutes and prioritizes Top, Best, and Show
@@ -194,9 +194,10 @@ Capture is background-only:
    projected 10 GB v9 storage ceiling.
 4. Queue leases jobs to stateless HomeLabs agents.
 5. Prepare performs one preview HEAD, then resolves and probes only a real miss.
-6. Browserless output may use its server-owned `direct` or `ladder` route, but
-   must be `ok`/`access_gate`, WebP, at most 1440x11111, 16 MP, and 2 MB. The
-   selected route is preserved in R2 metadata.
+6. Browserless output may use its server-owned `direct` or `ladder` route, and
+   PDF targets render their first page. Every result must be `ok`/`access_gate`,
+   WebP, at most 1440x11111, 16 MP, and 2 MB. The selected route is preserved in
+   R2 metadata.
 7. The public route serves R2 or the transparent GIF; it never starts capture.
 
 Preserve these guardrails:
@@ -217,8 +218,8 @@ Preserve these guardrails:
   the capture service owns.
 - Keep the public route to one bounded R2 GET and prepare to one metadata HEAD
   before source work.
-- Keep source links on the original HN URL even when capture uses XCancel or an
-  arXiv abstract.
+- Keep source links on the original HN URL even when capture uses XCancel; PDF
+  capture also uses the original source URL.
 - Preserve the deterministic client wireframe and do not store fallback GIFs or
   SVGs.
 - Keep plain `<img>` rendering; do not add image transformations, the old CDN

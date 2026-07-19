@@ -7,6 +7,13 @@ import type {
 const DEFAULT_XCANCEL_BASE_URL = 'https://xcancel.com'
 const DEFAULT_PROBE_TIMEOUT_MS = 1200
 const MAX_PROBE_REDIRECTS = 3
+const PDF_CONTENT_TYPES = new Set([
+  'application/acrobat',
+  'application/pdf',
+  'application/x-pdf',
+  'text/pdf',
+  'text/x-pdf',
+])
 const BINARY_CONTENT_TYPES = new Set([
   'application/epub+zip',
   'application/gzip',
@@ -27,21 +34,13 @@ const BINARY_CONTENT_TYPES = new Set([
 ])
 const BINARY_FILENAME_PATTERN = /\.(?:7z|avi|bz2|doc|docx|epub|gz|m4a|m4v|mkv|mov|mp3|mp4|ppt|pptx|rar|tar|tgz|wav|webm|xls|xlsx|xz|zip)(?:["']|$|;)/i
 
-type ScreenshotCaptureStrategy = Exclude<ScreenshotSourceStrategy, 'skip-pdf'>
-
 export type ScreenshotCaptureDecision = {
   captureUrl: string
   policy: 'capture'
-  sourceStrategy: ScreenshotCaptureStrategy
+  sourceStrategy: ScreenshotSourceStrategy
 }
 
-export type ScreenshotSkipDecision = {
-  policy: 'skip'
-  skipReason: ScreenshotSkipReason
-  sourceStrategy: Extract<ScreenshotSourceStrategy, 'skip-pdf'>
-}
-
-export type ScreenshotSourceDecision = ScreenshotCaptureDecision | ScreenshotSkipDecision
+export type ScreenshotSourceDecision = ScreenshotCaptureDecision
 
 type ContentProbeResult =
   | { captureUrl: string, policy: 'capture' }
@@ -171,28 +170,6 @@ const getXCancelStatusUrl = (url: URL, runtimeConfig: ScreenshotRuntimeConfig) =
   return captureUrl.toString()
 }
 
-const getArxivAbsUrl = (url: URL) => {
-  if (!hostMatches(url.hostname, 'arxiv.org')) {
-    return null
-  }
-
-  const match = url.pathname.match(/^\/pdf\/(.+?)(?:\.pdf)?$/i)
-
-  if (!match) {
-    return null
-  }
-
-  const arxivId = match[1]?.replace(/^\/+|\/+$/g, '') ?? ''
-
-  if (!arxivId) {
-    return null
-  }
-
-  const captureUrl = new URL(`https://arxiv.org/abs/${arxivId}`)
-
-  return captureUrl.toString()
-}
-
 const hasPdfQueryShape = (url: URL) => {
   for (const [key, value] of url.searchParams.entries()) {
     const normalizedKey = key.toLowerCase()
@@ -219,24 +196,6 @@ export const createScreenshotSourceDecision = (
   runtimeConfig: ScreenshotRuntimeConfig,
 ): ScreenshotSourceDecision => {
   const url = new URL(sourceUrl)
-  const arxivAbsUrl = getArxivAbsUrl(url)
-
-  if (arxivAbsUrl) {
-    return {
-      captureUrl: arxivAbsUrl,
-      policy: 'capture',
-      sourceStrategy: 'arxiv-abs',
-    }
-  }
-
-  if (isObviousPdfUrl(url)) {
-    return {
-      policy: 'skip',
-      skipReason: 'pdf-url',
-      sourceStrategy: 'skip-pdf',
-    }
-  }
-
   const xcancelUrl = getXCancelStatusUrl(url, runtimeConfig)
 
   if (xcancelUrl) {
@@ -262,7 +221,7 @@ const isPdfResponse = (headers: Headers) => {
   const contentType = headers.get('Content-Type')?.toLowerCase().split(';')[0]?.trim()
   const contentDisposition = headers.get('Content-Disposition')?.toLowerCase() ?? ''
 
-  return contentType === 'application/pdf'
+  return PDF_CONTENT_TYPES.has(contentType ?? '')
     || /filename\*?=[^;]*\.pdf(?:["']|$|;)/i.test(contentDisposition)
 }
 
@@ -327,11 +286,9 @@ export const probeCaptureUrlContent = async (
     try {
       const response = await fetchGetHeadersWithTimeout(currentUrl, timeoutMs)
 
-      if (isPdfResponse(response.headers)) {
-        return { policy: 'skip', skipReason: 'pdf-content' }
-      }
+      const isPdf = isObviousPdfUrl(new URL(currentUrl)) || isPdfResponse(response.headers)
 
-      if (isNonHtmlBinaryResponse(response.headers)) {
+      if (!isPdf && isNonHtmlBinaryResponse(response.headers)) {
         return { policy: 'skip', skipReason: 'non-html-content' }
       }
 
@@ -340,7 +297,7 @@ export const probeCaptureUrlContent = async (
       }
 
       if (!isRedirectStatus(response.status)) {
-        return !getContentType(response.headers) || isHtmlResponse(response.headers)
+        return !getContentType(response.headers) || isHtmlResponse(response.headers) || isPdf
           ? { captureUrl: currentUrl, policy: 'capture' }
           : { policy: 'skip', skipReason: 'non-html-content' }
       }

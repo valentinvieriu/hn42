@@ -53,14 +53,51 @@ describe('screenshot source policy', () => {
     })
   })
 
-  it('skips obvious PDF URLs before probing', () => {
-    expect(createScreenshotSourceDecision('https://example.com/paper.pdf', {})).toMatchObject({
-      policy: 'skip',
-      skipReason: 'pdf-url',
+  it.each([
+    'https://example.com/paper.pdf',
+    'https://arxiv.org/pdf/2607.12345.pdf',
+    'https://example.com/download?format=pdf',
+  ])('captures PDF URLs directly (%s)', (sourceUrl) => {
+    expect(createScreenshotSourceDecision(sourceUrl, {})).toEqual({
+      captureUrl: sourceUrl,
+      policy: 'capture',
+      sourceStrategy: 'direct',
     })
   })
 
-  it('only sends HTML responses to the screenshot provider chain', async () => {
+  it.each([
+    {
+      captureUrl: 'https://example.com/paper',
+      headers: new Headers({ 'Content-Type': 'application/pdf' }),
+    },
+    {
+      captureUrl: 'https://example.com/paper',
+      headers: new Headers({ 'Content-Type': 'application/x-pdf' }),
+    },
+    {
+      captureUrl: 'https://example.com/paper',
+      headers: new Headers({
+        'Content-Disposition': 'attachment; filename="paper.pdf"',
+        'Content-Type': 'application/octet-stream',
+      }),
+    },
+    {
+      captureUrl: 'https://example.com/paper.pdf',
+      headers: new Headers({ 'Content-Type': 'application/octet-stream' }),
+    },
+  ])('sends PDF responses to the screenshot provider chain ($captureUrl, $headers)', async ({
+    captureUrl,
+    headers,
+  }) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { headers })))
+
+    await expect(probeCaptureUrlContent(captureUrl, {})).resolves.toEqual({
+      captureUrl,
+      policy: 'capture',
+    })
+  })
+
+  it('skips unsupported non-HTML responses', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {
       headers: { 'Content-Type': 'image/jpeg' },
     })))
@@ -105,13 +142,16 @@ describe('screenshot source policy', () => {
     })
   })
 
-  it('rejects redirects to private hosts', async () => {
+  it.each([
+    'https://example.com/redirect',
+    'https://example.com/paper.pdf',
+  ])('rejects redirects to private hosts (%s)', async (captureUrl) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, {
       headers: { Location: 'http://127.0.0.1/private' },
       status: 302,
     })))
 
-    await expect(probeCaptureUrlContent('https://example.com/redirect', {})).resolves.toEqual({
+    await expect(probeCaptureUrlContent(captureUrl, {})).resolves.toEqual({
       policy: 'skip',
       skipReason: 'blocked-hostname',
     })

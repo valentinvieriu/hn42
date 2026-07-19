@@ -6,14 +6,10 @@ export type ScreenshotVariant = 'original' | 'thumbnail'
 export type ScreenshotSourceStrategy =
   | 'direct'
   | 'xcancel'
-  | 'arxiv-abs'
-  | 'skip-pdf'
 export type ScreenshotSkipReason =
   | 'blocked-hostname'
   | 'invalid-url'
   | 'non-html-content'
-  | 'pdf-content'
-  | 'pdf-url'
   | 'unverified-content'
 
 export type ScreenshotEnv = {
