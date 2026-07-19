@@ -1,5 +1,4 @@
 import type { Story } from '#shared/types'
-import { getHnItemUrl } from '../../shared/utils/hn'
 
 type AlgoliaStoryHit = {
   objectID?: string
@@ -15,7 +14,20 @@ type AlgoliaStoryResponse = {
   hits?: AlgoliaStoryHit[]
 }
 
+type AlgoliaStoryWithSource = AlgoliaStoryHit & {
+  objectID: string
+  url: string
+}
+
 const STORY_ATTRIBUTES = 'objectID,title,author,created_at,points,num_comments,url'
+
+const hasSourceUrl = (hit: AlgoliaStoryHit): hit is AlgoliaStoryWithSource => {
+  return typeof hit.objectID === 'string'
+    && hit.objectID.length > 0
+    && typeof hit.url === 'string'
+    && hit.url.trim().length > 0
+}
+
 export const fetchStories = async (
   baseUrl: string,
   queryParams: Record<string, string>,
@@ -28,10 +40,10 @@ export const fetchStories = async (
     )
 
     return (response.hits ?? [])
-      .filter((hit): hit is AlgoliaStoryHit & { objectID: string } => Boolean(hit.objectID))
+      .filter(hasSourceUrl)
       .map((hit) => ({
         title: hit.title || 'Untitled',
-        url: hit.url || getHnItemUrl(hit.objectID),
+        url: hit.url,
         author: hit.author || 'Unknown',
         points: hit.points || 0,
         num_comments: hit.num_comments || 0,

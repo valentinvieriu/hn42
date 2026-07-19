@@ -1,0 +1,43 @@
+{
+  "rules": [
+    {
+      "id": "abort-incomplete-multipart-uploads-after-7-days",
+      "enabled": true,
+      "conditions": {
+        "prefix": ""
+      },
+      "abortMultipartUploadsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 604800
+        }
+      }
+    },
+    {
+      "id": "delete-screenshots-v9-after-28-days",
+      "enabled": true,
+      "conditions": {
+        "prefix": "screenshots/v9/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 2419200
+        }
+      }
+    },
+    {
+      "id": "delete-screenshot-jobs-v1-v9-after-7-days",
+      "enabled": true,
+      "conditions": {
+        "prefix": "screenshot-jobs/v1/v9/"
+      },
+      "deleteObjectsTransition": {
+        "condition": {
+          "type": "Age",
+          "maxAge": 604800
+        }
+      }
+    }
+  ]
+}

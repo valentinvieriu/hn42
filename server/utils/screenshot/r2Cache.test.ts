@@ -58,7 +58,7 @@ describe('screenshot R2 storage', () => {
       storyId: '42424242',
       variant: 'original',
     })
-    expect(options.httpMetadata.cacheControl).toBe('public, max-age=1209600, immutable')
+    expect(options.httpMetadata.cacheControl).toBe('public, max-age=2419200, immutable')
   })
 
   it('propagates storage errors so callers fail closed', async () => {

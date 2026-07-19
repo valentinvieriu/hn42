@@ -23,6 +23,36 @@ describe('screenshot source policy', () => {
     })
   })
 
+  it.each([
+    'https://x.com/example/status/1234567890',
+    'https://twitter.com/example/status/1234567890/photo/1',
+    'https://mobile.twitter.com/example/status/1234567890',
+  ])('captures X/Twitter statuses through XCancel (%s)', (sourceUrl) => {
+    expect(createScreenshotSourceDecision(sourceUrl, {})).toEqual({
+      captureUrl: 'https://xcancel.com/example/status/1234567890',
+      policy: 'capture',
+      sourceStrategy: 'xcancel',
+    })
+  })
+
+  it('supports a configured XCancel base URL', () => {
+    expect(createScreenshotSourceDecision('https://x.com/example/status/1234567890', {
+      screenshotXCancelBaseUrl: 'https://xcancel.example/private/',
+    })).toEqual({
+      captureUrl: 'https://xcancel.example/private/example/status/1234567890',
+      policy: 'capture',
+      sourceStrategy: 'xcancel',
+    })
+  })
+
+  it('does not rewrite X pages that are not public status URLs', () => {
+    expect(createScreenshotSourceDecision('https://x.com/example', {})).toEqual({
+      captureUrl: 'https://x.com/example',
+      policy: 'capture',
+      sourceStrategy: 'direct',
+    })
+  })
+
   it('skips obvious PDF URLs before probing', () => {
     expect(createScreenshotSourceDecision('https://example.com/paper.pdf', {})).toMatchObject({
       policy: 'skip',

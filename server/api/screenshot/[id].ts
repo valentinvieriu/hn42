@@ -7,7 +7,10 @@ import {
 } from 'h3'
 import { useRuntimeConfig } from '#imports'
 import { isValidHnItemId } from '#shared/utils/hn'
-import { SCREENSHOT_PROFILE_VERSION } from '#shared/utils/screenshot'
+import {
+  SCREENSHOT_PROFILE_VERSION,
+  SCREENSHOT_RETENTION_SECONDS,
+} from '#shared/utils/screenshot'
 import {
   getR2PreviewScreenshotKey,
   getRemainingR2TtlSeconds,
@@ -25,8 +28,8 @@ const TRANSPARENT_GIF = Uint8Array.from([
   71, 73, 70, 56, 57, 97, 1, 0, 1, 0, 128, 0, 0, 0, 0, 0, 255, 255,
   255, 44, 0, 0, 0, 0, 1, 0, 1, 0, 0, 2, 1, 76, 0, 59,
 ])
-const BROWSER_SCREENSHOT_TTL_SECONDS = 14 * 24 * 60 * 60
-const MAX_EDGE_SCREENSHOT_TTL_SECONDS = 14 * 24 * 60 * 60
+const BROWSER_SCREENSHOT_TTL_SECONDS = SCREENSHOT_RETENTION_SECONDS
+const MAX_EDGE_SCREENSHOT_TTL_SECONDS = SCREENSHOT_RETENTION_SECONDS
 
 const STALE_SCREENSHOT_CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=3600',

@@ -21,6 +21,11 @@ scan -> compare -> open the HN42 story page, open the source, or move on
 Preserve these product principles:
 
 - Screenshots are central. They are the main evaluation surface, not decorative thumbnails.
+- Discovery feeds contain only stories with an explicit, non-empty source URL
+  from HN. URL-less Ask HN, jobs, polls, and text-only submissions may remain
+  reachable through direct item or user-activity routes, but they do not belong
+  in Top, Best, New, or Show cards and must not be made eligible by synthesizing
+  an HN item permalink.
 - Hacker News metadata should orient the user without overpowering the preview.
 - The source/domain link is the explicit external escape; the card/title opens the HN42 story page.
 - Visual variety matters. Story cards should not collapse into a flat text list.
@@ -92,6 +97,12 @@ Primary upstreams are HN Firebase, Algolia HN APIs, Cloudflare Queues, the
 authenticated local Browserless API, and XCancel for best-effort public
 X/Twitter capture targets.
 
+Feed admission is deliberately narrower than HN's own feeds. `fetchStories`
+must discard Algolia story hits whose `url` is missing or blank before mapping
+them into cards. Keep the original source URL intact; do not replace a missing
+source with `https://news.ycombinator.com/item?id=...`. Direct item pages can
+still render HN-native discussions when addressed explicitly.
+
 Caching expectations:
 
 - Preserve the existing feed/item cache headers and per-isolate feed SWR cache.
@@ -116,13 +127,18 @@ Caching expectations:
   timed-out, and otherwise inconclusive probes proceed to the trusted
   Browserless service, whose `ruleset.yaml` owns publisher support and
   direct-versus-Ladder routing.
-- Active v9 screenshots expire after 14 days. Keep response TTLs within the
+- Active v9 screenshots expire after 28 days. Keep response TTLs within the
   remaining R2 freshness window.
-- The scheduler runs every ten minutes, admits at most 1,000 jobs per UTC day,
-  refreshes its v9 byte-count snapshot at most hourly, and stops admissions
-  when stored bytes plus worst-case recent reservations would reach the 10 GB
-  R2 free allowance.
-- Keep seven-day `screenshot-jobs/v1/` admission markers. They avoid repeated
+- The scheduler runs every three minutes and prioritizes Top, Best, and Show
+  before New. It checks at most 400 seven-day admission markers with bounded
+  Class B HEADs rather than repeatedly listing the marker prefix. Its 8,000-job
+  UTC-day ceiling is an emergency runaway guard for the Workers Paid Queue
+  allowance, not a pacing target; the 2 MB reservations and 10 GB storage gate
+  limit the rolling 24-hour window to at most 5,000 admissions first.
+- Keep the compact `screenshot-scheduler/v1/v9/state.json` counter and storage
+  snapshot. A missing or invalid state is rebuilt once from admission and image
+  LISTs; after that only the exact image byte count is refreshed at most hourly.
+- Keep seven-day `screenshot-jobs/v1/v9/` admission markers. They avoid repeated
   Queue and R2 work for recurring, skipped, and terminally failed stories.
 
 ## UI And Interaction Principles
@@ -170,10 +186,12 @@ Story screenshots render from the canonical `/api/screenshot/:id` URL.
 Capture is background-only:
 
 1. Wrangler Workers Caching may satisfy public requests before Worker code.
-2. Every ten minutes the scheduler scans the first 100 Top, Best, New, and Show
-   IDs and filters seven-day `screenshot-jobs/v1/v9/<story-id>` admissions.
-3. Before enqueueing, it enforces the 1,000-job UTC-day ceiling and projected
-   10 GB v9 storage ceiling.
+2. Every three minutes the scheduler scans the first 100 Top, Best, Show, and
+   New IDs in that priority order and HEADs the seven-day
+   `screenshot-jobs/v1/v9/<story-id>` admissions with at most six concurrent R2
+   operations.
+3. Before enqueueing, it enforces the 8,000-job emergency UTC-day ceiling and
+   projected 10 GB v9 storage ceiling.
 4. Queue leases jobs to stateless HomeLabs agents.
 5. Prepare performs one preview HEAD, then resolves and probes only a real miss.
 6. Browserless output may use its server-owned `direct` or `ladder` route, but
@@ -187,6 +205,9 @@ Preserve these guardrails:
   second stored variant, or D1 coordination.
 - Keep admission markers; they are the shared suppression mechanism for ready,
   skipped, and terminally failed stories.
+- Keep compact scheduler state conditional writes ahead of Queue admission so
+  overlapping runs cannot exceed daily or storage reservations. The one-time
+  marker LIST is migration/recovery behavior, not the steady-state dedupe path.
 - Do not add R2 failure markers. They duplicate admission state and add HEAD,
   PUT, and DELETE operations.
 - Network/service/capacity errors retry through Queue. Terminal target/output
@@ -247,12 +268,20 @@ Production app URL: `https://hn42.vv42.workers.dev/`.
 - Wrangler command: `wrangler deploy`
 - Keep `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml`.
 - Keep the R2 binding `SCREENSHOTS_BUCKET` in `wrangler.toml`.
-- Keep Wrangler Workers Caching enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
+- Keep Wrangler Workers Caching and cross-version cache reuse enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
 - R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.
 - Production and local development share the remote R2 bucket `hn42-screenshots`; do not add a separate preview bucket without reintroducing cross-environment captures.
-- R2 lifecycle should delete active `screenshots/v9/` objects after 14 days and `screenshot-jobs/v1/` admission markers after seven days. Legacy screenshot rules are not part of bootstrap.
-- Keep the 1,000-admission UTC-day ceiling and projected 10 GB storage gate. Every screenshot remains capped at 2 MB; admission markers are empty metadata objects.
-- Use `npm run cf:screenshots:bootstrap` to create the screenshot R2 bucket and verify only the active v9 and admission lifecycle rules. Use `npm run cf:screenshots:jobs:bootstrap` once to create the Queue, DLQ, and HTTP pull consumer.
+- R2 lifecycle should delete active `screenshots/v9/` objects after 28 days and
+  `screenshot-jobs/v1/v9/` admission markers after seven days. Bootstrap sets
+  exactly those active v9 rules plus the multipart-abort rule, removing legacy
+  lifecycle rules rather than recreating them.
+- Keep the 8,000-admission emergency UTC-day ceiling, Top/Best/Show/New
+  priority, and projected 10 GB storage gate. Every screenshot remains capped
+  at 2 MB; admission markers are empty metadata objects.
+- Use `npm run cf:screenshots:bootstrap` to create the screenshot R2 bucket and
+  enforce the exact active v9 lifecycle policy. Use
+  `npm run cf:screenshots:jobs:bootstrap` once to create the Queue, DLQ, and HTTP
+  pull consumer.
 - Do not switch scripts back to `wrangler pages deploy` or `wrangler pages dev`.
 
 For deployment config changes, verify:

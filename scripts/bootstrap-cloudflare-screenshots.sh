@@ -2,12 +2,9 @@
 set -euo pipefail
 
 PROD_BUCKET="${HN42_SCREENSHOT_BUCKET:-hn42-screenshots}"
-RULE_ID="${HN42_SCREENSHOT_LIFECYCLE_RULE:-delete-screenshots-v9-after-14-days}"
-PREFIX="${HN42_SCREENSHOT_PREFIX:-screenshots/v9/}"
-EXPIRE_DAYS="${HN42_SCREENSHOT_EXPIRE_DAYS:-14}"
-ADMISSION_RULE_ID="delete-screenshot-jobs-v1-after-7-days"
-ADMISSION_PREFIX="screenshot-jobs/v1/"
-ADMISSION_EXPIRE_DAYS="7"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+LIFECYCLE_CONFIG="${SCRIPT_DIR}/cloudflare-screenshots-lifecycle.json"
+EXPECTED_LIFECYCLE_RULES="3"
 
 WRANGLER=(npx wrangler)
 
@@ -30,63 +27,80 @@ ensure_bucket() {
 }
 
 get_lifecycle_rule() {
-  local bucket_name="$1"
+  local lifecycle_config="$1"
   local rule_id="$2"
 
-  "${WRANGLER[@]}" r2 bucket lifecycle list "$bucket_name" | awk -v rule_id="$rule_id" '
+  printf '%s\n' "$lifecycle_config" | awk -v rule_id="$rule_id" '
     BEGIN { RS = "" }
     $0 ~ ("name:[[:space:]]+" rule_id "([[:space:]]|$)") { print }
   '
 }
 
 lifecycle_rule_matches() {
-  local bucket_name="$1"
+  local lifecycle_config="$1"
   local rule_id="$2"
   local prefix="$3"
-  local expire_days="$4"
+  local action="$4"
   local rule
 
-  rule="$(get_lifecycle_rule "$bucket_name" "$rule_id")"
+  rule="$(get_lifecycle_rule "$lifecycle_config" "$rule_id")"
 
   [[ -n "$rule" ]] \
     && printf '%s\n' "$rule" | grep -Eq '^enabled:[[:space:]]+Yes$' \
     && printf '%s\n' "$rule" | grep -Fq "prefix:   ${prefix}" \
-    && printf '%s\n' "$rule" | grep -Fq "action:   Expire objects after ${expire_days} days"
+    && printf '%s\n' "$rule" | grep -Fq "action:   ${action}"
 }
 
-ensure_lifecycle_rule() {
-  local bucket_name="$1"
-  local rule_id="$2"
-  local prefix="$3"
-  local expire_days="$4"
+lifecycles_match() {
+  local lifecycle_config="$1"
+  local rule_count
 
-  if lifecycle_rule_matches "$bucket_name" "$rule_id" "$prefix" "$expire_days"; then
-    echo "Lifecycle rule already exists on ${bucket_name}: ${rule_id}"
+  rule_count="$(printf '%s\n' "$lifecycle_config" | awk '/^name:/ { count += 1 } END { print count + 0 }')"
+
+  [[ "$rule_count" == "$EXPECTED_LIFECYCLE_RULES" ]] \
+    && lifecycle_rule_matches \
+      "$lifecycle_config" \
+      "abort-incomplete-multipart-uploads-after-7-days" \
+      "(all prefixes)" \
+      "Abort incomplete multipart uploads after 7 days" \
+    && lifecycle_rule_matches \
+      "$lifecycle_config" \
+      "delete-screenshots-v9-after-28-days" \
+      "screenshots/v9/" \
+      "Expire objects after 28 days" \
+    && lifecycle_rule_matches \
+      "$lifecycle_config" \
+      "delete-screenshot-jobs-v1-v9-after-7-days" \
+      "screenshot-jobs/v1/v9/" \
+      "Expire objects after 7 days"
+}
+
+ensure_lifecycles() {
+  local bucket_name="$1"
+  local lifecycle_config
+
+  lifecycle_config="$("${WRANGLER[@]}" r2 bucket lifecycle list "$bucket_name")"
+
+  if lifecycles_match "$lifecycle_config"; then
+    echo "Active v9 lifecycle configuration already matches on ${bucket_name}."
     return
   fi
 
-  if [[ -n "$(get_lifecycle_rule "$bucket_name" "$rule_id")" ]]; then
-    echo "Lifecycle rule ${rule_id} exists but does not match prefix ${prefix} and ${expire_days}-day expiry." >&2
-    echo "Remove or repair the drifted rule before rerunning this script." >&2
-    return 1
-  fi
-
-  echo "Adding lifecycle rule to ${bucket_name}: ${prefix} expires after ${expire_days} days"
-  "${WRANGLER[@]}" r2 bucket lifecycle add \
+  echo "Replacing lifecycle configuration on ${bucket_name} with the active v9 policy."
+  "${WRANGLER[@]}" r2 bucket lifecycle set \
     "$bucket_name" \
-    "$rule_id" \
-    "$prefix" \
-    --expire-days "$expire_days" \
+    --file "$LIFECYCLE_CONFIG" \
     --force
 
-  if ! lifecycle_rule_matches "$bucket_name" "$rule_id" "$prefix" "$expire_days"; then
-    echo "Lifecycle rule verification failed for ${bucket_name}: ${rule_id}" >&2
+  lifecycle_config="$("${WRANGLER[@]}" r2 bucket lifecycle list "$bucket_name")"
+
+  if ! lifecycles_match "$lifecycle_config"; then
+    echo "Active v9 lifecycle configuration verification failed for ${bucket_name}." >&2
     return 1
   fi
 }
 
 ensure_bucket "$PROD_BUCKET"
-ensure_lifecycle_rule "$PROD_BUCKET" "$RULE_ID" "$PREFIX" "$EXPIRE_DAYS"
-ensure_lifecycle_rule "$PROD_BUCKET" "$ADMISSION_RULE_ID" "$ADMISSION_PREFIX" "$ADMISSION_EXPIRE_DAYS"
+ensure_lifecycles "$PROD_BUCKET"
 
 echo "Cloudflare screenshot storage is ready."

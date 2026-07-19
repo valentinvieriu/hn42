@@ -17,6 +17,13 @@ HN42 adds visual context before the click. Each story card includes a preview of
 
 The goal is not to replace Hacker News. It is an alternative way to consume the same public HN stories: more visual, easier to scan, and still quick.
 
+HN42's discovery feeds intentionally include only submissions with an explicit,
+non-empty source URL supplied by Hacker News. Ask HN, jobs, polls, and other
+text-only submissions without a linked page are not shown in Top, Best, New, or
+Show: without a source page there is nothing meaningful for the visual preview
+to evaluate. Their HN item pages can still be opened directly, but HN42 never
+synthesizes an HN discussion permalink to make them eligible for a feed card.
+
 ## What It Does
 
 - Shows Top, Best, New, and Show HN feeds.
@@ -130,7 +137,8 @@ The Worker entry and static asset output are configured in `wrangler.toml`:
 - Worker entry: `.output/server/index.mjs`
 - Static assets: `.output/public`
 - Screenshot R2 binding: `SCREENSHOTS_BUCKET`
-- Front-of-Worker response cache: Wrangler `[cache] enabled = true`
+- Front-of-Worker response cache: Wrangler `[cache] enabled = true` with
+  cross-version reuse
 
 Before deployment, use:
 
@@ -154,14 +162,18 @@ capture agent to `ghcr.io/valentinvieriu/hn42-screenshot-agent`.
 
 Screenshots are generated only by the background pipeline:
 
-1. Every ten minutes, the scheduler scans the first 100 Top, Best, New, and
-   Show stories.
-2. Seven-day R2 admission markers under
-   `screenshot-jobs/v1/v9/<hn-id>` stop recurring feed stories from being
-   enqueued repeatedly. No D1 database is used.
-3. The scheduler enforces at most 1,000 admissions per UTC day and stops
-   admitting work when current v9 storage plus worst-case reservations for the
-   previous 24 hours would reach 10 GB.
+1. Every three minutes, the scheduler scans the first 100 Top, Best, Show, and
+   New stories in that priority order.
+2. The scheduler checks the seven-day R2 admission markers under
+   `screenshot-jobs/v1/v9/<hn-id>` with bounded Class B HEAD operations. A
+   compact `screenshot-scheduler/v1/v9/state.json` object keeps UTC-day and
+   rolling-24-hour counters plus the hourly storage snapshot. No D1 database is
+   used.
+3. Top, Best, and Show candidates are admitted before New candidates. An 8,000
+   job UTC-day ceiling is an emergency runaway guard sized for the Workers Paid
+   Queue allowance. The normal hard gate is R2: admissions stop when current v9
+   storage plus worst-case reservations for the previous 24 hours would reach
+   10 GB.
 4. Cloudflare Queues leases jobs to stateless HomeLabs pull agents.
 5. Prepare performs one metadata-only R2 check. Only a missing or expired
    preview causes HN source resolution, deterministic source-policy filtering,
@@ -191,41 +203,52 @@ Skipped and terminally failed stories rely on their existing admission marker;
 there is no separate R2 failure object.
 
 Wrangler Workers Caching remains in front of the public Worker. Screenshot
-freshness and the active v9 lifecycle are 14 days. Missing screenshots use a
+freshness and the active v9 lifecycle are 28 days. Missing screenshots use a
 short cache window so a completed background capture becomes visible quickly.
 
-### Screenshot free-tier envelope
+### Screenshot cost envelope
 
-The guardrails target the current Cloudflare free allowances:
+The guardrails target the included usage on Workers Paid and R2 Standard:
 
-- Queue Free includes 10,000 operations per day. A normal message costs one
-  write, one read, and one delete, so 1,000 daily admissions consume at most
-  3,000 base operations and leave substantial retry headroom.
+- Workers Paid includes one million Queue operations per month. A normal
+  message costs one write, one read, and one delete, so the 8,000-job emergency
+  ceiling would consume 720,000 base operations in a 30-day month, or 744,000
+  in a 31-day month, and leave retry and DLQ headroom.
 - R2 Standard includes 10 GB-month, one million Class A operations, and ten
-  million Class B operations per month. The scheduler refreshes a v9 byte-count
-  snapshot at most hourly and reserves the 2 MB maximum for recently admitted
-  jobs before adding work.
+  million Class B operations per month. At the three-minute frequency, checking
+  all 400 feed candidates consumes at most 5,952,000 Class B HEADs in a 31-day
+  month. The scheduler keeps enough headroom for prepare retries, public GET
+  misses, and management operations.
+- The scheduler stores admission counters in one compact R2 state object and
+  refreshes the exact v9 byte-count with Class A LISTs at most hourly. The first
+  run rebuilds missing state from the admission markers once; steady-state
+  candidate filtering does not repeatedly list the marker prefix.
+- The 10 GB gate reserves the 2 MB maximum for recently admitted jobs. That
+  reservation limits admissions to at most 5,000 in a rolling 24-hour window
+  even though the separate UTC-day emergency ceiling is 8,000.
 - One admission marker PUT, one preview HEAD, and at most one screenshot PUT are
   used per normal job. Successful uploads no longer perform a failure-marker
   delete.
 - Public misses perform one R2 GET and return the generated fallback without a
   second metadata lookup.
-- The ten-minute schedule reduces repeated LIST and upstream-feed requests
-  without limiting the number of new stories discovered.
+- Each three-minute run admits at most 200 jobs, with R2 capacity and recent
+  worst-case reservations usually constraining throughput before the emergency
+  ceiling.
 
 See [R2 pricing](https://developers.cloudflare.com/r2/pricing/) and
 [Queues pricing](https://developers.cloudflare.com/queues/platform/pricing/).
 
-The storage bootstrap now manages only the active v9 image rule and the
-admission-marker rule:
+The storage bootstrap replaces the bucket lifecycle configuration with exactly
+three rules: seven-day multipart abort, 28-day active v9 screenshots, and
+seven-day active v9 admission markers:
 
 ```bash
 npm run cf:screenshots:bootstrap
 npm run cf:screenshots:jobs:bootstrap
 ```
 
-Legacy screenshot objects and lifecycle rules are not recreated. Remove the old
-v1-v8 objects and rules once during the v9 cleanup.
+Legacy screenshot objects and lifecycle rules are not recreated. Applying the
+bootstrap removes stale lifecycle rules for pre-v9 prefixes.
 
 ## Data Sources
 

@@ -6,7 +6,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
   "triggers": {
-    "crons": ["*/10 * * * *"]
+    "crons": ["*/3 * * * *"]
   },
   "queues": {
     "producers": [

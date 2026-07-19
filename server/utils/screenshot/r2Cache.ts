@@ -9,11 +9,13 @@ import {
   SCREENSHOT_PREVIEW_HEIGHT,
   SCREENSHOT_PREVIEW_QUALITY,
   SCREENSHOT_PREVIEW_WIDTH,
+  SCREENSHOT_RETENTION_DAYS,
+  SCREENSHOT_RETENTION_SECONDS,
 } from '../../../shared/utils/screenshot'
 import type { ScreenshotSourceRoute } from '../../../shared/utils/screenshot'
 
 export const R2_SCREENSHOT_PREFIX = 'screenshots/v9/items/'
-const DEFAULT_R2_TTL_DAYS = 14
+const DEFAULT_R2_TTL_DAYS = SCREENSHOT_RETENTION_DAYS
 const MS_PER_DAY = 24 * 60 * 60 * 1000
 const SECONDS_PER_DAY = 24 * 60 * 60
 
@@ -141,7 +143,7 @@ export const writeR2Screenshot = async (
   await bucket.put(key, result.bytes, {
     httpMetadata: {
       contentType: result.contentType,
-      cacheControl: 'public, max-age=1209600, immutable',
+      cacheControl: `public, max-age=${SCREENSHOT_RETENTION_SECONDS}, immutable`,
     },
     customMetadata: toCustomMetadata({
       capturedAt: new Date().toISOString(),

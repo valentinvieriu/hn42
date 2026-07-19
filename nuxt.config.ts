@@ -1,5 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { defineNuxtConfig } from 'nuxt/config'
+import { SCREENSHOT_RETENTION_DAYS } from './shared/utils/screenshot'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-07-11',
@@ -9,7 +10,7 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     screenshotPolicyProbeTimeoutMs: '1200',
-    screenshotR2TtlDays: '14',
+    screenshotR2TtlDays: String(SCREENSHOT_RETENTION_DAYS),
     screenshotXCancelBaseUrl: 'https://xcancel.com',
   },
   nitro: {
