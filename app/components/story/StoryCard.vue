@@ -39,8 +39,7 @@
             presentation="card"
           />
           <div
-            ref="imageContainerRef"
-            class="story-card-image-track relative w-full h-full transform transition-transform duration-500"
+            class="story-card-image-track relative w-full h-full"
             :class="{ scrolling: isTouchScrollAnimationActive }"
           >
             <img
@@ -69,8 +68,7 @@
     <div class="story-card-body flex flex-1 flex-col p-4">
       <div class="story-card-body-backdrop" aria-hidden="true">
         <div
-          ref="bodyImageContainerRef"
-          class="story-card-body-image-track relative w-full h-full transform transition-transform duration-500"
+          class="story-card-body-image-track relative w-full h-full"
           :class="{
             scrolling: isTouchScrollAnimationActive,
             'is-loaded': imageState === 'loaded',
@@ -181,8 +179,6 @@ const handleCardClick = () => {
 
 const cardRef = ref<HTMLElement | null>(null)
 const imageRef = ref<HTMLImageElement | null>(null)
-const imageContainerRef = ref<HTMLElement | null>(null)
-const bodyImageContainerRef = ref<HTMLElement | null>(null)
 const imageSrc = ref<string | null>(props.priority ? screenshotSrc : null)
 const imageState = ref<'queued' | 'loading' | 'loaded' | 'failed'>(props.priority ? 'loading' : 'queued')
 const isTouchDevice = ref(false)
@@ -193,6 +189,8 @@ let scrollObserver: IntersectionObserver | null = null
 let resizeTimeoutId: ReturnType<typeof setTimeout> | null = null
 let isListeningForTouchScroll = false
 let windowHeight = 0
+
+const MAX_IMAGE_TRANSLATE_PERCENT = 20
 
 const imageIsVisible = computed(() => {
   if (props.priority) {
@@ -233,16 +231,6 @@ const loadScreenshot = () => {
   imageSrc.value = screenshotSrc
 }
 
-const setImageTrackTransform = (transform: string) => {
-  if (imageContainerRef.value) {
-    imageContainerRef.value.style.transform = transform
-  }
-
-  if (bodyImageContainerRef.value) {
-    bodyImageContainerRef.value.style.transform = transform
-  }
-}
-
 const updateImageScrollTransform = () => {
   if (!isInView.value || !isTouchDevice.value || !cardRef.value) {
     return
@@ -250,8 +238,9 @@ const updateImageScrollTransform = () => {
 
   const rect = cardRef.value.getBoundingClientRect()
   const progress = Math.max(0, Math.min(1, (windowHeight - rect.top) / (rect.height + windowHeight)))
+  const offset = -MAX_IMAGE_TRANSLATE_PERCENT * progress
 
-  setImageTrackTransform(`translate3d(0, ${-50 * progress}%, 0)`)
+  cardRef.value.style.setProperty('--story-card-image-offset', `${offset}%`)
 }
 
 const scheduleImageScrollUpdate = () => {
@@ -484,8 +473,8 @@ onBeforeUnmount(() => {
 }
 
 .story-card-image-track {
+  overflow: hidden;
   backface-visibility: hidden;
-  transform-origin: center top;
 }
 
 .story-card-radial-overlay {
@@ -499,7 +488,12 @@ onBeforeUnmount(() => {
 
 .story-card-image {
   display: block;
-  min-height: 100%;
+  height: 125%;
+  min-height: 0;
+  object-fit: cover;
+  object-position: center top;
+  transform: translate3d(0, var(--story-card-image-offset, 0%), 0);
+  transition: transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .story-card-body {
@@ -563,7 +557,8 @@ onBeforeUnmount(() => {
 .story-card-body-image-track {
   min-height: 14rem;
   backface-visibility: hidden;
-  transform-origin: center top;
+  transform: translate3d(0, var(--story-card-image-offset, 0%), 0);
+  transition: transform 500ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .story-card-body-image {
@@ -807,9 +802,9 @@ onBeforeUnmount(() => {
     will-change: transform;
   }
 
-  .story-card:hover .story-card-image-track,
+  .story-card:hover .story-card-image,
   .story-card:hover .story-card-body-image-track {
-    transform: translateY(-50%);
+    transform: translate3d(0, -20%, 0);
     will-change: transform;
   }
 
@@ -821,7 +816,7 @@ onBeforeUnmount(() => {
   }
 }
 
-.story-card-image-track.scrolling,
+.story-card-image-track.scrolling .story-card-image,
 .story-card-body-image-track.scrolling {
   transition-duration: 0ms;
   will-change: transform;
@@ -845,14 +840,14 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .story-card,
-  .story-card-image-track,
+  .story-card-image,
   .story-card-body-image-track,
   .story-card-body-image {
     transition-duration: 1ms !important;
   }
 
   .story-card:hover,
-  .story-card:hover .story-card-image-track,
+  .story-card:hover .story-card-image,
   .story-card:hover .story-card-body-image-track {
     transform: none !important;
   }
