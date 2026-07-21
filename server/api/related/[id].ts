@@ -15,7 +15,7 @@ import {
 const ALGOLIA_SEARCH_URL = 'https://hn.algolia.com/api/v1/search'
 const ALGOLIA_SEARCH_BY_DATE_URL = 'https://hn.algolia.com/api/v1/search_by_date'
 const RELATED_STORY_ATTRIBUTES = 'objectID,title,created_at,created_at_i,points,num_comments,author,url'
-const SOURCE_STORY_ATTRIBUTES = 'title,url'
+const SOURCE_STORY_ATTRIBUTES = 'title,url,created_at_i'
 
 type AlgoliaCommentHit = {
   story_id?: number | string | null
@@ -50,6 +50,7 @@ const fetchStoryHits = async (
   try {
     const hits = await searchAlgolia<AlgoliaStoryHit>({
       attributesToRetrieve: RELATED_STORY_ATTRIBUTES,
+      getRankingInfo: 'true',
       ...params,
     }, order)
     return { hits, kind, weight }
@@ -141,7 +142,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const titleQuery = buildTitleQuery(story.title)
-    const optionalTitleWords = titleQuery.split(' ').join(',')
+    const optionalTitleWords = titleQuery
     const urlQuery = getUrlTerms(story.url).join(' ')
 
     if (!titleQuery && !urlQuery) {

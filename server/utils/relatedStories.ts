@@ -1,10 +1,21 @@
 import type { RelatedStory } from '../../shared/types'
 
 const MAX_RELATED_STORIES = 10
+const MAX_STORIES_PER_HOST = 3
+const TITLE_SIMILARITY_THRESHOLD = 0.82
+const RELATED_TOKEN_LIMIT = 24
 
 export type RelatedSourceStory = {
   title?: string | null
   url?: string | null
+  created_at_i?: number | null
+}
+
+export type AlgoliaRankingInfo = {
+  nbExactWords?: number | null
+  nbTypos?: number | null
+  proximityDistance?: number | null
+  words?: number | null
 }
 
 export type AlgoliaStoryHit = {
@@ -16,6 +27,7 @@ export type AlgoliaStoryHit = {
   num_comments?: number | null
   author?: string | null
   url?: string | null
+  _rankingInfo?: AlgoliaRankingInfo | null
 }
 
 type RelatedStoryCandidate = RelatedStory & {
@@ -33,7 +45,16 @@ export type SearchResult = {
 
 type CandidateEvidence = RelatedStoryCandidate & {
   evidence: Set<RelatedSearchKind>
-  retrievalScores: Map<RelatedSearchKind, number>
+  ranks: Map<RelatedSearchKind, number>
+  rankingInfo: Map<RelatedSearchKind, AlgoliaRankingInfo>
+}
+
+type ScoredCandidate = {
+  candidate: CandidateEvidence
+  canonicalUrl: string
+  exactSourceUrl: boolean
+  score: number
+  tokens: Set<string>
 }
 
 const STOPWORDS = new Set([
@@ -52,13 +73,6 @@ const SHORT_TECH_TERMS = new Set([
   'os', 'ts', 'ui', 'ux', 'vm', 'vr'
 ])
 
-const GENERIC_TOPIC_TERMS = new Set([
-  'amazon', 'api', 'apis', 'app', 'apps', 'apple', 'benchmark',
-  'benchmarked', 'data', 'google', 'launch', 'launched', 'meta',
-  'microsoft', 'openai', 'release', 'released', 'software', 'system',
-  'tool', 'tools', 'update', 'updated'
-])
-
 const GENERIC_HOST_TERMS = new Set([
   'github', 'gitlab', 'medium', 'substack', 'youtube', 'youtu',
   'twitter', 'x', 'reddit', 'wikipedia', 'arxiv', 'archive',
@@ -71,6 +85,10 @@ const HOST_NOISE_TERMS = new Set([
   'dev', 'app', 'co', 'ai', 'edu', 'gov'
 ])
 
+const GENERIC_COMPOUND_TERMS = new Set([
+  'open-source', 'real-time', 'self-hosted', 'state-of-the-art',
+])
+
 const stripHtml = (value: string) => value.replace(/<[^>]*>/g, ' ')
 
 const cleanTitle = (title: string) => title
@@ -80,35 +98,82 @@ const cleanTitle = (title: string) => title
   .replace(/\s+/g, ' ')
   .trim()
 
-const tokenize = (value: string, maxTokens = 12): string[] => {
-  const words = stripHtml(value)
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .replace(/&[#a-z0-9]+;/g, ' ')
-    .match(/[a-z0-9][a-z0-9+#.-]*/g) ?? []
+const normalizeToken = (value: string) => {
+  const token = value
+    .normalize('NFKC')
+    .toLocaleLowerCase('en-US')
+    .replace(/^[._-]+|[._-]+$/gu, '')
 
+  if (token.length > 4 && token.endsWith('ies')) {
+    return `${token.slice(0, -3)}y`
+  }
+
+  if (token.length > 4 && token.endsWith('s') && !token.endsWith('ss')) {
+    return token.slice(0, -1)
+  }
+
+  return token
+}
+
+const isUsefulToken = (token: string) => {
+  if (!token || STOPWORDS.has(token)) return false
+  if (/\d/u.test(token)) return true
+  if (/[^\x00-\x7F]/u.test(token)) return true
+  if (token.length >= 3) return true
+  return SHORT_TECH_TERMS.has(token)
+}
+
+const addToken = (tokens: string[], seen: Set<string>, value: string, maxTokens: number) => {
+  const token = normalizeToken(value)
+
+  if (!isUsefulToken(token) || seen.has(token) || tokens.length >= maxTokens) return
+
+  seen.add(token)
+  tokens.push(token)
+}
+
+const tokenize = (value: string, maxTokens = RELATED_TOKEN_LIMIT): string[] => {
+  const words = stripHtml(value)
+    .replace(/&[#\p{L}\p{N}]+;/gu, ' ')
+    .match(/[\p{L}\p{N}][\p{L}\p{N}+#._-]*/gu) ?? []
   const tokens: string[] = []
   const seen = new Set<string>()
 
   for (const word of words) {
-    const token = word.replace(/^[.-]+|[.-]+$/g, '')
+    addToken(tokens, seen, word, maxTokens)
 
-    if (!token) continue
-    if (STOPWORDS.has(token)) continue
-    if (token.length < 3 && !SHORT_TECH_TERMS.has(token)) continue
-    if (seen.has(token)) continue
+    const styledParts = word
+      .replace(/([\p{Ll}\p{N}])([\p{Lu}])/gu, '$1 $2')
+      .split(/\s+/u)
+    const compoundParts = styledParts.flatMap(part => part.split(/[-_]+/u))
 
-    seen.add(token)
-    tokens.push(token)
+    for (const part of compoundParts) {
+      addToken(tokens, seen, part, maxTokens)
+    }
 
-    if (tokens.length === maxTokens) break
+    for (const part of compoundParts) {
+      if (part.includes('.') && !/^\d+(?:\.\d+)+$/u.test(part)) {
+        for (const dotPart of part.split('.')) {
+          addToken(tokens, seen, dotPart, maxTokens)
+        }
+      }
+
+      const alphaPrefix = part.match(/^[\p{L}]{2,}(?=\d)/u)?.[0]
+      if (alphaPrefix) {
+        addToken(tokens, seen, alphaPrefix, maxTokens)
+      }
+    }
+
+    if (tokens.length >= maxTokens) break
   }
 
   return tokens
 }
 
 export const buildTitleQuery = (title: string) => {
-  const tokens = tokenize(cleanTitle(title), 6)
+  const tokens = tokenize(cleanTitle(title), 10)
+    .slice(0, 8)
+
   return tokens.length > 0 ? tokens.join(' ') : cleanTitle(title)
 }
 
@@ -119,6 +184,22 @@ const normalizeHost = (url?: string | null) => {
     return new URL(url).hostname.toLowerCase().replace(/^www\./, '')
   } catch {
     return ''
+  }
+}
+
+const getHostTerms = (value?: string | null) => {
+  if (!value) return []
+
+  try {
+    return new URL(value).hostname
+      .toLowerCase()
+      .replace(/^www\./, '')
+      .split('.')
+      .map(normalizeToken)
+      .filter(term => term && !HOST_NOISE_TERMS.has(term) && !GENERIC_HOST_TERMS.has(term))
+      .slice(0, 2)
+  } catch {
+    return []
   }
 }
 
@@ -135,6 +216,8 @@ const canonicalizeUrl = (value?: string | null) => {
       }
     }
 
+    url.searchParams.sort()
+
     const host = url.hostname.toLowerCase().replace(/^www\./, '')
     const pathname = url.pathname.replace(/\/+$/, '')
     const search = url.searchParams.toString()
@@ -150,50 +233,124 @@ export const getUrlTerms = (value?: string | null) => {
 
   try {
     const url = new URL(value)
-    const hostTerms = url.hostname
-      .toLowerCase()
-      .replace(/^www\./, '')
-      .split('.')
-      .filter(term => term && !HOST_NOISE_TERMS.has(term))
+    const hostTerms = getHostTerms(value)
+    if (hostTerms.length > 0) return hostTerms
 
-    const specificHostTerms = hostTerms.filter(term => !GENERIC_HOST_TERMS.has(term))
-    if (specificHostTerms.length > 0) {
-      return specificHostTerms.slice(0, 2)
-    }
+    const pathTerms = tokenize(
+      `${url.pathname.replace(/[/-]/g, ' ')} ${Array.from(url.searchParams.values()).join(' ')}`,
+      6,
+    )
 
-    return tokenize(url.pathname.replace(/[/-]/g, ' '), 5)
+    return pathTerms
   } catch {
     return []
   }
 }
 
-const getTitleOverlap = (sourceTokens: string[], candidateTitle: string) => {
-  const candidateTokens = new Set(tokenize(candidateTitle, 12))
-  return sourceTokens.filter(token => candidateTokens.has(token)).length
+const getAnchorTokens = (sourceTitle: string, sourceUrl?: string | null) => {
+  const titleTokens = new Set(tokenize(sourceTitle))
+  const anchors = new Set(
+    getHostTerms(sourceUrl).filter(term => titleTokens.has(term)),
+  )
+
+  for (const token of titleTokens) {
+    if (
+      (/\d/u.test(token) && /\p{L}/u.test(token))
+      || /[+#]/u.test(token)
+      || (/[-_]/u.test(token) && !GENERIC_COMPOUND_TERMS.has(token))
+    ) {
+      anchors.add(token)
+    }
+  }
+
+  return anchors
 }
 
-const getSpecificTitleOverlap = (sourceTokens: string[], candidateTitle: string) => {
-  const candidateTokens = new Set(tokenize(candidateTitle, 12))
-  return sourceTokens.filter(token => (
-    !GENERIC_TOPIC_TERMS.has(token) && candidateTokens.has(token)
-  )).length
-}
+const getBigrams = (tokens: string[]) => {
+  const bigrams = new Set<string>()
 
-const getEvidenceFamily = (kind: RelatedSearchKind) => kind === 'recent-title' ? 'title' : kind
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    bigrams.add(`${tokens[index]}\u0000${tokens[index + 1]}`)
+  }
 
-const getOverlapScore = (sourceTokens: string[], candidateTitle: string) => {
-  const overlap = getTitleOverlap(sourceTokens, candidateTitle)
-
-  if (overlap === 0) return 0
-
-  return overlap * 8 + (overlap > 1 ? 10 : 0)
+  return bigrams
 }
 
 const getPopularityScore = (hit: AlgoliaStoryHit) => {
   const points = Math.max(hit.points ?? 0, 0)
   const comments = Math.max(hit.num_comments ?? 0, 0)
 
-  return Math.min(16, Math.log10(points + 1) * 6) + Math.min(8, Math.log10(comments + 1) * 4)
+  return Math.min(5, Math.log10(points + 1) * 2)
+    + Math.min(3, Math.log10(comments + 1) * 1.5)
+}
+
+const getRecencyScore = (candidateTimestamp: number, sourceTimestamp: number) => {
+  if (!candidateTimestamp || !sourceTimestamp) return 0
+
+  const fiveYearsInSeconds = 5 * 365.25 * 24 * 60 * 60
+  const distance = Math.abs(candidateTimestamp - sourceTimestamp)
+
+  return Math.exp(-distance / fiveYearsInSeconds) * 6
+}
+
+const getRankScore = (rank?: number) => {
+  if (rank === undefined) return 0
+  return 21 / (21 + rank)
+}
+
+const getRetrievalScore = (candidate: CandidateEvidence, queryTokenCount: number) => {
+  const titleRank = Math.max(
+    getRankScore(candidate.ranks.get('title')),
+    getRankScore(candidate.ranks.get('recent-title')),
+  )
+  const titleRankingInfo = [
+    candidate.rankingInfo.get('title'),
+    candidate.rankingInfo.get('recent-title'),
+  ].filter((info): info is AlgoliaRankingInfo => Boolean(info))
+  const exactCoverage = titleRankingInfo.reduce((best, info) => (
+    Math.max(best, Math.min(1, Math.max(info.nbExactWords ?? 0, 0) / Math.max(queryTokenCount, 1)))
+  ), 0)
+  const typoPenalty = titleRankingInfo.reduce((best, info) => (
+    Math.min(best, Math.max(info.nbTypos ?? 0, 0))
+  ), Number.POSITIVE_INFINITY)
+  const exactScore = exactCoverage * 10 / (1 + (Number.isFinite(typoPenalty) ? typoPenalty : 0))
+
+  return titleRank * 12
+    + getRankScore(candidate.ranks.get('full-text')) * 4
+    + getRankScore(candidate.ranks.get('comment')) * 3
+    + getRankScore(candidate.ranks.get('url')) * 2
+    + exactScore
+}
+
+const getTokenSimilarity = (
+  sourceTokens: string[],
+  candidateTokens: Set<string>,
+  tokenWeights: Map<string, number>,
+) => {
+  const matchedTokens = sourceTokens.filter(token => candidateTokens.has(token))
+  const sourceWeight = sourceTokens.reduce((total, token) => total + (tokenWeights.get(token) ?? 1), 0)
+  const matchedWeight = matchedTokens.reduce((total, token) => total + (tokenWeights.get(token) ?? 1), 0)
+  const sourceCoverage = sourceWeight > 0 ? matchedWeight / sourceWeight : 0
+  const candidatePrecision = matchedTokens.length / Math.max(
+    1,
+    Math.min(candidateTokens.size, sourceTokens.length),
+  )
+
+  return {
+    matchedTokens,
+    similarity: sourceCoverage * 0.75 + candidatePrecision * 0.25,
+  }
+}
+
+const getSetSimilarity = (first: Set<string>, second: Set<string>) => {
+  if (first.size === 0 || second.size === 0) return 0
+
+  let intersection = 0
+  for (const token of first) {
+    if (second.has(token)) intersection += 1
+  }
+
+  return intersection / (first.size + second.size - intersection)
 }
 
 const toRelatedStory = (hit: AlgoliaStoryHit): RelatedStoryCandidate | null => {
@@ -211,91 +368,145 @@ const toRelatedStory = (hit: AlgoliaStoryHit): RelatedStoryCandidate | null => {
   }
 }
 
-const compareNewestFirst = (a: RelatedStoryCandidate, b: RelatedStoryCandidate) => {
-  if (a.created_at_i !== b.created_at_i) {
-    return b.created_at_i - a.created_at_i
+const selectDiverseStories = (scoredCandidates: ScoredCandidate[]) => {
+  const selected: ScoredCandidate[] = []
+  const seenUrls = new Set<string>()
+  const hostCounts = new Map<string, number>()
+
+  for (const scored of scoredCandidates) {
+    const host = normalizeHost(scored.candidate.url)
+
+    if (scored.canonicalUrl && seenUrls.has(scored.canonicalUrl)) continue
+    if (host && (hostCounts.get(host) ?? 0) >= MAX_STORIES_PER_HOST) continue
+    if (selected.some(existing => (
+      !scored.exactSourceUrl
+      && !existing.exactSourceUrl
+      && getSetSimilarity(scored.tokens, existing.tokens) >= TITLE_SIMILARITY_THRESHOLD
+    ))) continue
+
+    selected.push(scored)
+
+    if (scored.canonicalUrl) seenUrls.add(scored.canonicalUrl)
+    if (host) hostCounts.set(host, (hostCounts.get(host) ?? 0) + 1)
+    if (selected.length === MAX_RELATED_STORIES) break
   }
 
-  return Number(b.objectID) - Number(a.objectID)
+  return selected
 }
 
 export const rankRelatedStories = (results: SearchResult[], source: RelatedSourceStory, excludeId: string) => {
-  const sourceTokens = tokenize(cleanTitle(source.title ?? ''), 12)
+  const sourceTitle = cleanTitle(source.title ?? '')
+  const sourceTokens = tokenize(sourceTitle)
+  const sourceBigrams = getBigrams(sourceTokens)
+  const sourceAnchors = getAnchorTokens(sourceTitle, source.url)
   const sourceHost = normalizeHost(source.url)
   const sourceUrl = canonicalizeUrl(source.url)
-  const requiredOverlap = sourceTokens.length >= 6
-    ? 3
-    : sourceTokens.length >= 4 ? 2 : 1
   const candidates = new Map<string, CandidateEvidence>()
 
   for (const result of results) {
     result.hits.forEach((hit, index) => {
       const story = toRelatedStory(hit)
 
-      if (!story) return
-      if (story.objectID === excludeId) return
-      if (sourceUrl && canonicalizeUrl(story.url) === sourceUrl) return
+      if (!story || story.objectID === excludeId) return
 
       const existing = candidates.get(story.objectID)
-      const retrievalScore = Math.max(1, result.weight - index)
 
       if (existing) {
-        if (!existing.evidence.has(result.kind)) {
-          existing.evidence.add(result.kind)
-          existing.retrievalScores.set(result.kind, retrievalScore)
-        }
+        existing.evidence.add(result.kind)
+        existing.ranks.set(result.kind, Math.min(existing.ranks.get(result.kind) ?? index, index))
+        if (hit._rankingInfo) existing.rankingInfo.set(result.kind, hit._rankingInfo)
       } else {
         candidates.set(story.objectID, {
           ...story,
           evidence: new Set([result.kind]),
-          retrievalScores: new Map([[result.kind, retrievalScore]]),
+          ranks: new Map([[result.kind, index]]),
+          rankingInfo: hit._rankingInfo
+            ? new Map([[result.kind, hit._rankingInfo]])
+            : new Map(),
         })
       }
     })
   }
 
-  const seenUrls = new Set<string>()
+  if (sourceTokens.length === 0) return []
 
-  return Array.from(candidates.values())
-    .map((candidate) => {
-      const overlap = getTitleOverlap(sourceTokens, candidate.title)
-      const specificOverlap = getSpecificTitleOverlap(sourceTokens, candidate.title)
-      const sameHost = Boolean(sourceHost && normalizeHost(candidate.url) === sourceHost)
-      const evidenceFamilies = new Set(Array.from(candidate.evidence, getEvidenceFamily))
-      const titleRetrievalScore = Math.max(
-        candidate.retrievalScores.get('title') ?? 0,
-        candidate.retrievalScores.get('recent-title') ?? 0,
+  const candidateTokens = new Map<string, Set<string>>()
+  const documentFrequency = new Map<string, number>()
+
+  for (const candidate of candidates.values()) {
+    const tokens = new Set(tokenize(cleanTitle(candidate.title)))
+    candidateTokens.set(candidate.objectID, tokens)
+
+    for (const sourceToken of sourceTokens) {
+      if (tokens.has(sourceToken)) {
+        documentFrequency.set(sourceToken, (documentFrequency.get(sourceToken) ?? 0) + 1)
+      }
+    }
+  }
+
+  const tokenWeights = new Map(sourceTokens.map(token => [
+    token,
+    1 + Math.log((candidates.size + 1) / ((documentFrequency.get(token) ?? 0) + 1)),
+  ]))
+  const queryTokenCount = buildTitleQuery(sourceTitle).split(' ').filter(Boolean).length
+  const scoredCandidates: ScoredCandidate[] = []
+
+  for (const candidate of candidates.values()) {
+    const tokens = candidateTokens.get(candidate.objectID) ?? new Set<string>()
+    const { matchedTokens, similarity } = getTokenSimilarity(sourceTokens, tokens, tokenWeights)
+    const candidateBigrams = getBigrams(Array.from(tokens))
+    const bigramMatches = Array.from(sourceBigrams).filter(bigram => candidateBigrams.has(bigram)).length
+    const anchorMatch = matchedTokens.some(token => sourceAnchors.has(token))
+    const sameHost = Boolean(sourceHost && normalizeHost(candidate.url) === sourceHost)
+    const canonicalUrl = canonicalizeUrl(candidate.url)
+    const exactSourceUrl = Boolean(sourceUrl && canonicalUrl === sourceUrl)
+    const strongTitleMatch = matchedTokens.length >= 2
+      && (similarity >= 0.28 || bigramMatches > 0)
+      && (
+        sourceAnchors.size === 0
+        || anchorMatch
+        || (matchedTokens.length >= 3 && similarity >= 0.4)
       )
-      const retrievalScore = titleRetrievalScore
-        + (candidate.retrievalScores.get('full-text') ?? 0)
-        + (candidate.retrievalScores.get('comment') ?? 0)
-        + (candidate.retrievalScores.get('url') ?? 0)
-      const consensusScore = Math.max(0, evidenceFamilies.size - 1) * 12
-      const score = retrievalScore
-        + getOverlapScore(sourceTokens, candidate.title)
-        + (sameHost ? 16 : 0)
-        + getPopularityScore(candidate)
-        + consensusScore
+    const anchoredRelation = anchorMatch && (sameHost || matchedTokens.length >= 2)
+    const hasRelevantSignal = exactSourceUrl || strongTitleMatch || anchoredRelation
 
-      const hasRelevantSignal = (overlap >= requiredOverlap && specificOverlap > 0)
-        || (sameHost && candidate.evidence.has('url'))
-        || evidenceFamilies.size > 1
+    if (!hasRelevantSignal) continue
 
-      return { candidate, hasRelevantSignal, score }
+    const score = (exactSourceUrl ? 140 : 0)
+      + similarity * 100
+      + Math.min(2, bigramMatches) * 8
+      + (anchorMatch ? 12 : 0)
+      + (sameHost ? 4 : 0)
+      + getRetrievalScore(candidate, queryTokenCount)
+      + getPopularityScore(candidate)
+      + getRecencyScore(candidate.created_at_i, source.created_at_i ?? 0)
+
+    scoredCandidates.push({
+      candidate,
+      canonicalUrl,
+      exactSourceUrl,
+      score,
+      tokens,
     })
-    .filter(result => result.hasRelevantSignal)
-    .sort((a, b) => b.score - a.score)
-    .filter(({ candidate }) => {
-      const url = canonicalizeUrl(candidate.url)
+  }
 
-      if (!url) return true
-      if (seenUrls.has(url)) return false
+  return selectDiverseStories(scoredCandidates.sort((first, second) => {
+    if (
+      first.exactSourceUrl
+      && second.exactSourceUrl
+      && first.canonicalUrl === second.canonicalUrl
+    ) {
+      const engagementDifference = (second.candidate.points + second.candidate.num_comments)
+        - (first.candidate.points + first.candidate.num_comments)
 
-      seenUrls.add(url)
-      return true
-    })
-    .slice(0, MAX_RELATED_STORIES)
+      if (engagementDifference !== 0) return engagementDifference
+    }
+
+    return second.score - first.score
+      || second.candidate.points - first.candidate.points
+      || second.candidate.created_at_i - first.candidate.created_at_i
+      || Number(second.candidate.objectID) - Number(first.candidate.objectID)
+  }))
     .map(({ candidate }) => candidate)
-    .sort(compareNewestFirst)
-    .map(({ url: _url, created_at_i: _createdAt, evidence: _evidence, retrievalScores: _retrievalScores, ...story }) => story)
+    .map(({ url: _url, created_at_i: _createdAt, evidence: _evidence, ranks: _ranks, rankingInfo: _rankingInfo, ...story }) => story)
 }
