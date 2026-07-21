@@ -124,8 +124,11 @@ Caching expectations:
 - Source policy skips unsafe URLs, private redirects, and content confidently
   identified as unsupported non-HTML. It transforms X/Twitter statuses through
   XCancel and sends PDFs at their original source URL to Browserless for
-  first-page capture. It has no publisher blacklist: blocked, timed-out, and
-  otherwise inconclusive probes proceed to the trusted Browserless service,
+  first-page capture. Redirects are followed only to validate their safety and
+  content; the probe must return the requested capture URL rather than a
+  redirect target, because probe-specific anti-bot redirects can differ from
+  Browserless navigation. It has no publisher blacklist: blocked, timed-out,
+  and otherwise inconclusive probes proceed to the trusted Browserless service,
   whose `ruleset.yaml` owns publisher support and direct-versus-Ladder routing.
 - Active v9 screenshots expire after 28 days. Keep response TTLs within the
   remaining R2 freshness window.
@@ -219,7 +222,8 @@ Preserve these guardrails:
 - Keep the public route to one bounded R2 GET and prepare to one metadata HEAD
   before source work.
 - Keep source links on the original HN URL even when capture uses XCancel; PDF
-  capture also uses the original source URL.
+  capture also uses the original source URL. Content-probe redirects are for
+  validation only and must not replace the requested capture URL.
 - Preserve the deterministic client wireframe and do not store fallback GIFs or
   SVGs.
 - Keep plain `<img>` rendering; do not add image transformations, the old CDN

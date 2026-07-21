@@ -280,6 +280,13 @@ export const probeCaptureUrlContent = async (
     runtimeConfig.screenshotPolicyProbeTimeoutMs,
     DEFAULT_PROBE_TIMEOUT_MS,
   )
+
+  // The probe may follow redirects to validate their destinations, but the
+  // resulting redirect URL must not replace the requested screenshot URL.
+  //
+  // Explicit transformations such as XCancel remain intact because their
+  // transformed URL is passed into this function as captureUrl.
+  const requestedCaptureUrl = captureUrl
   let currentUrl = captureUrl
 
   for (let redirectCount = 0; redirectCount <= MAX_PROBE_REDIRECTS; redirectCount += 1) {
@@ -289,42 +296,71 @@ export const probeCaptureUrlContent = async (
       const isPdf = isObviousPdfUrl(new URL(currentUrl)) || isPdfResponse(response.headers)
 
       if (!isPdf && isNonHtmlBinaryResponse(response.headers)) {
-        return { policy: 'skip', skipReason: 'non-html-content' }
+        return {
+          policy: 'skip',
+          skipReason: 'non-html-content',
+        }
       }
 
       if (response.status >= 400) {
-        return { captureUrl: currentUrl, policy: 'capture' }
+        return {
+          captureUrl: requestedCaptureUrl,
+          policy: 'capture',
+        }
       }
 
       if (!isRedirectStatus(response.status)) {
         return !getContentType(response.headers) || isHtmlResponse(response.headers) || isPdf
-          ? { captureUrl: currentUrl, policy: 'capture' }
-          : { policy: 'skip', skipReason: 'non-html-content' }
+          ? {
+              captureUrl: requestedCaptureUrl,
+              policy: 'capture',
+            }
+          : {
+              policy: 'skip',
+              skipReason: 'non-html-content',
+            }
       }
 
       const location = response.headers.get('Location')
 
       if (!location) {
-        return { policy: 'skip', skipReason: 'unverified-content' }
+        return {
+          policy: 'skip',
+          skipReason: 'unverified-content',
+        }
       }
 
-      let nextUrl: string | null = null
+      let nextUrl: string | null
 
       try {
         nextUrl = normalizeSourceUrl(new URL(location, currentUrl).toString())
       } catch {
-        return { policy: 'skip', skipReason: 'unverified-content' }
+        return {
+          policy: 'skip',
+          skipReason: 'unverified-content',
+        }
       }
 
       if (!nextUrl) {
-        return { policy: 'skip', skipReason: 'blocked-hostname' }
+        return {
+          policy: 'skip',
+          skipReason: 'blocked-hostname',
+        }
       }
 
       currentUrl = nextUrl
     } catch {
-      return { captureUrl: currentUrl, policy: 'capture' }
+      // A failed probe should not prevent Browserless from trying the original
+      // capture target.
+      return {
+        captureUrl: requestedCaptureUrl,
+        policy: 'capture',
+      }
     }
   }
 
-  return { captureUrl: currentUrl, policy: 'capture' }
+  return {
+    captureUrl: requestedCaptureUrl,
+    policy: 'capture',
+  }
 }

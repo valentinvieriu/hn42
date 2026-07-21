@@ -194,12 +194,15 @@ The app uses `?profile=v9` as the only cache-busting dimension.
 The source policy transforms X/Twitter status URLs through XCancel, sends PDFs
 to Browserless at their original source URL for first-page capture, and skips
 private targets and responses confidently identified as unsupported non-HTML
-content. Publisher support and direct-versus-Ladder routing belong exclusively
-to the Browserless service's `ruleset.yaml`; HN42 has no publisher blacklist.
-Blocked, timed-out, or otherwise inconclusive probes proceed to Browserless,
-whose bounded capture contract classifies the target outcome. Successful
-objects preserve the chosen source route in R2 metadata and public diagnostic
-headers.
+content. Redirects discovered by the bounded content probe are validated but do
+not replace the requested capture URL; Browserless performs the actual page
+navigation. This prevents probe-only anti-bot redirects, such as YouTube being
+sent to Google Sorry, from becoming the screenshot target. Publisher support
+and direct-versus-Ladder routing belong exclusively to the Browserless
+service's `ruleset.yaml`; HN42 has no publisher blacklist. Blocked, timed-out,
+or otherwise inconclusive probes proceed to Browserless, whose bounded capture
+contract classifies the target outcome. Successful objects preserve the chosen
+source route in R2 metadata and public diagnostic headers.
 Skipped and terminally failed stories rely on their existing admission marker;
 there is no separate R2 failure object.
 

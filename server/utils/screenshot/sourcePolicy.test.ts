@@ -125,7 +125,7 @@ describe('screenshot source policy', () => {
     }))
   })
 
-  it('returns the verified public redirect target for capture', async () => {
+  it('verifies public redirects without replacing the requested capture URL', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(null, {
         headers: { Location: 'https://www.example.org/final' },
@@ -137,9 +137,39 @@ describe('screenshot source policy', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(probeCaptureUrlContent('https://example.com/redirect', {})).resolves.toEqual({
-      captureUrl: 'https://www.example.org/final',
+      captureUrl: 'https://example.com/redirect',
       policy: 'capture',
     })
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://www.example.org/final',
+      expect.objectContaining({ redirect: 'manual' }),
+    )
+  })
+
+  it('keeps the YouTube watch URL when its probe is redirected to Google Sorry', async () => {
+    const sourceUrl = 'https://www.youtube.com/watch?v=FiPSZ_eaRPo'
+    const googleSorryUrl = 'https://www.google.com/sorry/index?continue=youtube'
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, {
+        headers: { Location: googleSorryUrl },
+        status: 302,
+      }))
+      .mockResolvedValueOnce(new Response('<html></html>', {
+        headers: { 'Content-Type': 'text/html' },
+        status: 429,
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(probeCaptureUrlContent(sourceUrl, {})).resolves.toEqual({
+      captureUrl: sourceUrl,
+      policy: 'capture',
+    })
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      googleSorryUrl,
+      expect.objectContaining({ redirect: 'manual' }),
+    )
   })
 
   it.each([
