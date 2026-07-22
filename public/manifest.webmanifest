@@ -1,6 +1,6 @@
 {
-  "name": "HN42",
-  "short_name": "HN42",
+  "name": "HN Glance",
+  "short_name": "HN Glance",
   "description": "A visual way to read Hacker News",
   "start_url": "/",
   "display": "standalone",

@@ -408,6 +408,7 @@ const timeAgo = computed(() => {
 const requestUrl = useRequestURL()
 const siteOrigin = requestUrl.origin
 const title = computed(() => story.value?.title ?? 'Loading...')
+const seoTitle = computed(() => `${title.value} — HN Glance`)
 const socialImage = computed(() => {
   const path = storyId.value
     ? getScreenshotPath(storyId.value)
@@ -429,9 +430,9 @@ useHead(() => ({
 }))
 
 useSeoMeta({
-  title,
+  title: seoTitle,
   description: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
-  ogTitle: title,
+  ogTitle: seoTitle,
   ogDescription: () => story.value ? `Read the story titled "${story.value.title}" by ${story.value.author}.` : 'Loading story...',
   ogImage: socialImage,
   twitterCard: 'summary_large_image',

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROD_BUCKET="${HN42_SCREENSHOT_BUCKET:-hn42-screenshots}"
+PROD_BUCKET="${HN42_SCREENSHOT_BUCKET:-hn-glance-screenshots}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 LIFECYCLE_CONFIG="${SCRIPT_DIR}/cloudflare-screenshots-lifecycle.json"
 EXPECTED_LIFECYCLE_RULES="3"

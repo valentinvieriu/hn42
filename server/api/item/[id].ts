@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
       {
         name: 'normalize',
         duration: normalizeDuration,
-        description: 'HN42 story normalization',
+        description: 'HN Glance story normalization',
       },
     ]))
 

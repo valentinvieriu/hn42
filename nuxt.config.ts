@@ -52,7 +52,7 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: 'HN42 - your favorite Hacker News reader',
+      title: 'HN Glance — a visual Hacker News reader',
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover' },
         { name: 'mobile-web-app-capable', content: 'yes' },

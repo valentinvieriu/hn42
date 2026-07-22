@@ -1,9 +1,9 @@
-# HN42 screenshot capture agent
+# HN Glance screenshot capture agent
 
 This stateless service pulls screenshot jobs from Cloudflare Queues, asks the
-HN42 Worker to validate each story, captures eligible HTML pages or the first
+HN Glance Worker to validate each story, captures eligible HTML pages or the first
 page of PDF documents through the local Browserless screenshot API, and uploads
-only validated WebP results to HN42.
+only validated WebP results to HN Glance.
 The Browserless service owns publisher routing: both its direct and Ladder
 results are accepted when their outcome and bounded image metadata validate.
 

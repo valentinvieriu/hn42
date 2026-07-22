@@ -1,5 +1,5 @@
 {
-  "name": "hn42",
+  "name": "hn-glance",
   "private": true,
   "type": "module",
   "scripts": {

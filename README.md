@@ -1,14 +1,14 @@
-# HN42
+# HN Glance
 
-HN42 is a visual Hacker News reader. It keeps Hacker News as the source of truth, but gives readers a more visual way to scan stories, judge links, and read discussions.
+HN Glance is a visual Hacker News reader. It keeps Hacker News as the source of truth, but gives readers a more visual way to scan stories, judge links, and read discussions.
 
-Live app: https://hn42.vv42.workers.dev/
+Configured Worker URL after the renamed Worker is deployed: https://hn-glance.vv42.workers.dev/
 
-## Why HN42 Exists
+## Why HN Glance Exists
 
 Hacker News is fast and information-dense, but it is also heavily text-based. A title, score, and comment count do not always tell you what you are about to open. Some links are thoughtful essays, papers, or useful technical writeups. Others are thin product pages, ad-heavy landing pages, paywalls, modals, or low-signal posts.
 
-HN42 adds visual context before the click. Each story card includes a preview of the linked page so you can quickly ask:
+HN Glance adds visual context before the click. Each story card includes a preview of the linked page so you can quickly ask:
 
 - Does this look like a real article, paper, announcement, or discussion starter?
 - Is the page readable, substantial, and worth opening?
@@ -17,18 +17,18 @@ HN42 adds visual context before the click. Each story card includes a preview of
 
 The goal is not to replace Hacker News. It is an alternative way to consume the same public HN stories: more visual, easier to scan, and still quick.
 
-HN42's discovery feeds intentionally include only submissions with an explicit,
+HN Glance's discovery feeds intentionally include only submissions with an explicit,
 non-empty source URL supplied by Hacker News. Ask HN, jobs, polls, and other
 text-only submissions without a linked page are not shown in Top, Best, New, or
 Show: without a source page there is nothing meaningful for the visual preview
-to evaluate. Their HN item pages can still be opened directly, but HN42 never
+to evaluate. Their HN item pages can still be opened directly, but HN Glance never
 synthesizes an HN discussion permalink to make them eligible for a feed card.
 
 ## What It Does
 
 - Shows Top, Best, New, and Show HN feeds.
 - Presents each story with a visual page preview, title, source, freshness, author, points, and comment count.
-- Opens an HN42 story page for the card, with metadata, comments, screenshot, and related stories.
+- Opens an HN Glance story page for the card, with metadata, comments, screenshot, and related stories.
 - Opens the original source from the source/domain link.
 - Renders HN comments with safer rich text, nested threads, quote handling, reference links, and expand controls.
 - Includes user activity pages for posts and comments.
@@ -37,7 +37,7 @@ synthesizes an HN discussion permalink to make them eligible for a feed card.
 
 ## Product Philosophy
 
-HN42 treats each story as something to evaluate visually before reading. The screenshot is not decoration; it is the main browsing affordance.
+HN Glance treats each story as something to evaluate visually before reading. The screenshot is not decoration; it is the main browsing affordance.
 
 The card model is intentionally simple:
 
@@ -45,7 +45,7 @@ The card model is intentionally simple:
 - The title confirms what the story is.
 - The source and timestamp orient you.
 - The score and comments provide HN context.
-- The card opens the HN42 story page.
+- The card opens the HN Glance story page.
 - The source link opens the external article.
 
 This keeps the browsing flow direct: scan, compare, open, or move on.
@@ -124,13 +124,20 @@ Use `npm run check` as the baseline check before shipping changes.
 
 ## Deployment
 
-HN42 deploys to Cloudflare Workers, not Cloudflare Pages.
+HN Glance deploys to Cloudflare Workers, not Cloudflare Pages.
 
-Production is hosted at:
+The renamed Worker is configured to deploy at:
 
 ```text
-https://hn42.vv42.workers.dev/
+https://hn-glance.vv42.workers.dev/
 ```
+
+The app and scheduler Workers are named `hn-glance` and
+`hn-glance-screenshot-scheduler`, and both use the shared
+`hn-glance-screenshots` R2 bucket. The Queue and DLQ are named
+`hn-glance-screenshot-jobs` and `hn-glance-screenshot-jobs-dlq`. The `HN42_*`
+environment variables and `X-HN42-*` diagnostic headers remain stable internal
+contracts.
 
 The Worker entry and static asset output are configured in `wrangler.toml`:
 
@@ -152,11 +159,11 @@ npm run cf:screenshots:scheduler:dry-run
 ```
 
 Initial background-capture setup also requires a shared random agent secret on
-the HN42 Worker, a Queue read/write API token for the HomeLabs agents, and the
-queue ID reported by Cloudflare. Deploy the HN42 Worker after adding
+the HN Glance Worker, a Queue read/write API token for the HomeLabs agents, and the
+queue ID reported by Cloudflare. Deploy the HN Glance Worker after adding
 `HN42_SCREENSHOT_AGENT_TOKEN`, then run
 `npm run cf:screenshots:scheduler:deploy`. The image workflow publishes the
-capture agent to `ghcr.io/valentinvieriu/hn42-screenshot-agent`.
+capture agent to `ghcr.io/valentinvieriu/hn-glance-screenshot-agent`.
 
 ### Screenshot generation strategy
 
@@ -199,7 +206,7 @@ not replace the requested capture URL; Browserless performs the actual page
 navigation. This prevents probe-only anti-bot redirects, such as YouTube being
 sent to Google Sorry, from becoming the screenshot target. Publisher support
 and direct-versus-Ladder routing belong exclusively to the Browserless
-service's `ruleset.yaml`; HN42 has no publisher blacklist. Blocked, timed-out,
+service's `ruleset.yaml`; HN Glance has no publisher blacklist. Blocked, timed-out,
 or otherwise inconclusive probes proceed to Browserless, whose bounded capture
 contract classifies the target outcome. Successful objects preserve the chosen
 source route in R2 metadata and public diagnostic headers.
@@ -256,6 +263,6 @@ bootstrap removes stale lifecycle rules for pre-v9 prefixes.
 
 ## Data Sources
 
-HN42 reads public Hacker News and Algolia-powered HN APIs. Article screenshots are requested from public story URLs and served through the app's screenshot route so they can be cached and reused.
+HN Glance reads public Hacker News and Algolia-powered HN APIs. Article screenshots are requested from public story URLs and served through the app's screenshot route so they can be cached and reused.
 
 There is no HN login, voting, posting, or private account integration.

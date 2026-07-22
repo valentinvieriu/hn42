@@ -512,9 +512,9 @@ const joinedDate = computed(() => {
 })
 
 useSeoMeta({
-  title: () => `${displayUsername.value} on HN42`,
+  title: () => `${displayUsername.value} on HN Glance`,
   description: () => `Posts and comments by ${displayUsername.value} on Hacker News.`,
-  ogTitle: () => `${displayUsername.value} on HN42`,
+  ogTitle: () => `${displayUsername.value} on HN Glance`,
   ogDescription: () => `Posts and comments by ${displayUsername.value} on Hacker News.`,
 })
 </script>

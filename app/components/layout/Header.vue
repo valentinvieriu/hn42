@@ -4,10 +4,10 @@
     :style="currentFeed ? getFeedThemeStyle(currentFeed) : undefined"
   >
     <div class="max-w-7xl mx-auto flex h-14 items-center justify-between gap-3 px-3 sm:h-16 sm:gap-5 sm:px-5 lg:px-6">
-      <NuxtLink to="/top" class="flex shrink-0 items-center space-x-2">
+      <NuxtLink to="/top" class="flex shrink-0 items-center space-x-2" aria-label="HN Glance home">
         <h1 class="mb-0 text-[1.3rem] font-display font-semibold leading-none sm:text-2xl">
           <span class="text-slate-900 dark:text-slate-100">HN</span>
-          <span class="text-orange-500">42</span>
+          <span class="text-orange-500">Glance</span>
         </h1>
       </NuxtLink>
       <div class="flex min-w-0 flex-1 items-center justify-end">

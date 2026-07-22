@@ -2,18 +2,18 @@
   <div class="max-w-3xl mx-auto py-16 px-4 sm:px-6 lg:px-8">
     <h1 class="text-3xl font-display font-semibold mb-8">Privacy Policy</h1>
     <p class="mb-8 leading-7 text-slate-600 dark:text-slate-400">
-      Last updated: April 30, 2026
+      Last updated: July 22, 2026
     </p>
 
     <p class="mb-5 leading-7">
-      HN42 is a read-only visual Hacker News reader. It does not provide user
+      HN Glance is a read-only visual Hacker News reader. It does not provide user
       accounts, comment posting, submissions, payments, newsletters, or forms
       that ask visitors to submit personal information.
     </p>
 
-    <h2 class="text-2xl font-display font-semibold mt-8 mb-4">Information HN42 Handles</h2>
+    <h2 class="text-2xl font-display font-semibold mt-8 mb-4">Information HN Glance Handles</h2>
     <p class="mb-5 leading-7">
-      When you use HN42, routine request information may be processed to serve
+      When you use HN Glance, routine request information may be processed to serve
       the site, protect it from abuse, cache responses, and troubleshoot errors.
       This can include your IP address, browser and device metadata, requested
       URLs, timestamps, and similar operational log data handled by the hosting
@@ -21,7 +21,7 @@
     </p>
 
     <p class="mb-5 leading-7">
-      HN42 does not keep a visitor account database. It uses browser storage
+      HN Glance does not keep a visitor account database. It uses browser storage
       only for app preferences and performance: your color theme may be stored in
       localStorage, and recently loaded feed data may be stored temporarily in
       sessionStorage. These values stay in your browser and can be cleared in
@@ -30,18 +30,18 @@
 
     <h2 class="text-2xl font-display font-semibold mt-8 mb-4">Cookies, Analytics, and Tracking</h2>
     <p class="mb-5 leading-7">
-      HN42 does not intentionally set marketing cookies, run analytics tools, use
+      HN Glance does not intentionally set marketing cookies, run analytics tools, use
       ad tracking, sell visitor data, or share visitor data for advertising.
     </p>
 
     <h2 class="text-2xl font-display font-semibold mt-8 mb-4">External Data Sources</h2>
     <p class="mb-5 leading-7">
-      HN42 displays public Hacker News data and public article metadata from
-      external APIs. To show screenshot previews, HN42 server routes may request
+      HN Glance displays public Hacker News data and public article metadata from
+      external APIs. To show screenshot previews, HN Glance server routes may request
       the linked article URL from a screenshot service. These upstream requests
-      are used to render and cache HN42 pages; HN42 does not use them to build
+      are used to render and cache HN Glance pages; HN Glance does not use them to build
       visitor profiles. When you click out to an external article, Hacker News
-      page, or other third-party website, you leave HN42 and that site may
+      page, or other third-party website, you leave HN Glance and that site may
       process your visit under its own privacy policy.
     </p>
 
@@ -63,14 +63,14 @@
 
     <h2 class="text-2xl font-display font-semibold mt-8 mb-4">Your Choices</h2>
     <ul class="list-disc pl-6 mb-5 space-y-2 leading-7">
-      <li>You can clear HN42 localStorage and sessionStorage in your browser.</li>
+      <li>You can clear HN Glance localStorage and sessionStorage in your browser.</li>
       <li>You can block browser storage, although some preferences or caching may stop working.</li>
       <li>You can choose not to open external story links or author profile links.</li>
     </ul>
 
     <h2 class="text-2xl font-display font-semibold mt-8 mb-4">Changes to This Policy</h2>
     <p class="mb-5 leading-7">
-      This policy may be updated when HN42 changes how it works or how it is
+      This policy may be updated when HN Glance changes how it works or how it is
       hosted. Updates will be posted on this page with a new revision date.
     </p>
 

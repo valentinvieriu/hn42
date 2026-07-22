@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-QUEUE="${HN42_SCREENSHOT_QUEUE:-hn42-screenshot-jobs}"
-DLQ="${HN42_SCREENSHOT_DLQ:-hn42-screenshot-jobs-dlq}"
+QUEUE="${HN42_SCREENSHOT_QUEUE:-hn-glance-screenshot-jobs}"
+DLQ="${HN42_SCREENSHOT_DLQ:-hn-glance-screenshot-jobs-dlq}"
 WRANGLER=(npx wrangler)
 
 queue_exists() {

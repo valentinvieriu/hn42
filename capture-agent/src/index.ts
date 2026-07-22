@@ -389,7 +389,7 @@ const uploadResult = async (
 
   if ([413, 415, 422].includes(response.status)) {
     throw new TerminalCaptureError(
-      `HN42 rejected the screenshot (${response.status})`,
+      `HN Glance rejected the screenshot (${response.status})`,
       'invalid-output',
       capture.metadata,
     )

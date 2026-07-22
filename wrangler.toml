@@ -1,5 +1,5 @@
 #:schema node_modules/wrangler/config-schema.json
-name = "hn42"
+name = "hn-glance"
 account_id = "b704c2550c9082fb06e9796e7c042412"
 compatibility_date = "2026-07-11"
 compatibility_flags = ["nodejs_compat"]
@@ -8,7 +8,7 @@ assets = { directory = "./.output/public", binding = "ASSETS" }
 
 [[r2_buckets]]
 binding = "SCREENSHOTS_BUCKET"
-bucket_name = "hn42-screenshots"
+bucket_name = "hn-glance-screenshots"
 remote = true
 
 [cache]

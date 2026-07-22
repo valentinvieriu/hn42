@@ -112,6 +112,7 @@ const priorityScreenshotHref = computed(() => {
 const feedTheme = computed(() => getFeedTheme(props.endpoint));
 const feedThemeStyle = computed(() => getFeedThemeStyle(props.endpoint));
 const title = computed(() => feedTheme.value.title);
+const seoTitle = computed(() => `${title.value} — HN Glance`);
 const requestUrl = useRequestURL();
 const feedSocialImage = new URL('/icon_x512.png', requestUrl.origin).href;
 const skeletonTitleWidths = ['82%', '68%', '76%', '58%', '88%'];
@@ -132,9 +133,9 @@ useHead(() => ({
 }));
 
 useSeoMeta({
-  title,
+  title: seoTitle,
   description: () => feedTheme.value.description,
-  ogTitle: title,
+  ogTitle: seoTitle,
   ogDescription: () => feedTheme.value.description,
   ogImage: feedSocialImage,
   twitterCard: 'summary_large_image',

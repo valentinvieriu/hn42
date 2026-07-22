@@ -1,21 +1,21 @@
-# HN42 Agent Guide
+# HN Glance Agent Guide
 
 ## App Overview
 
-HN42 is a Nuxt 4 Hacker News reader focused on visual article discovery. It renders top, best, new, and show story feeds, story detail pages with comments and related-story suggestions, user activity pages, and per-story article screenshots.
+HN Glance is a Nuxt 4 Hacker News reader focused on visual article discovery. It renders top, best, new, and show story feeds, story detail pages with comments and related-story suggestions, user activity pages, and per-story article screenshots.
 
 The app is an older codebase that has been upgraded to Nuxt 4 and now uses the Nuxt 4 `app/` source directory. Keep changes conservative and preserve the existing project shape unless a migration explicitly requires moving files.
 
 ## Product Philosophy
 
-HN42 is an alternative way to browse Hacker News, not a dense text-first clone of Hacker News.
+HN Glance is an alternative way to browse Hacker News, not a dense text-first clone of Hacker News.
 
-The core product idea is that a story can be evaluated before opening it. HN titles often hide the shape and quality of the linked page: it might be a substantial essay, a paper, a useful announcement, an ad-heavy landing page, a modal wall, or a thin product page. HN42 exposes that context by giving each story a visual article preview.
+The core product idea is that a story can be evaluated before opening it. HN titles often hide the shape and quality of the linked page: it might be a substantial essay, a paper, a useful announcement, an ad-heavy landing page, a modal wall, or a thin product page. HN Glance exposes that context by giving each story a visual article preview.
 
 The desired browsing loop is:
 
 ```text
-scan -> compare -> open the HN42 story page, open the source, or move on
+scan -> compare -> open the HN Glance story page, open the source, or move on
 ```
 
 Preserve these product principles:
@@ -27,14 +27,14 @@ Preserve these product principles:
   in Top, Best, New, or Show cards and must not be made eligible by synthesizing
   an HN item permalink.
 - Hacker News metadata should orient the user without overpowering the preview.
-- The source/domain link is the explicit external escape; the card/title opens the HN42 story page.
+- The source/domain link is the explicit external escape; the card/title opens the HN Glance story page.
 - Visual variety matters. Story cards should not collapse into a flat text list.
 - Comments are a major part of the HN value. Keep nested discussion, quotes, references, and code readable.
 - Avoid heavy CTAs or duplicate buttons when they do not represent genuinely different destinations.
 
 ## Architecture
 
-HN42 uses Nuxt pages for the main routes and Nitro server routes for Hacker News, Algolia, related-story, user, and screenshot APIs.
+HN Glance uses Nuxt pages for the main routes and Nitro server routes for Hacker News, Algolia, related-story, user, and screenshot APIs.
 
 Frontend:
 
@@ -90,7 +90,7 @@ Types and global styling:
 
 ## Data Sources And Caching
 
-HN42 reads public data only. There is no HN login, voting, posting, or private
+HN Glance reads public data only. There is no HN login, voting, posting, or private
 account integration.
 
 Primary upstreams are HN Firebase, Algolia HN APIs, Cloudflare Queues, the
@@ -164,7 +164,7 @@ For visual work:
 - Preserve the colorful seeded card/feed palette system.
 - Use existing Tailwind utilities, scoped component CSS, and CSS custom properties before adding new styling systems.
 - Keep UI text compact and functional.
-- Avoid turning HN42 into a marketing page or a text-only HN clone.
+- Avoid turning HN Glance into a marketing page or a text-only HN clone.
 
 ## Comment Rendering
 
@@ -216,7 +216,7 @@ Preserve these guardrails:
   PUT, and DELETE operations.
 - Network/service/capacity errors retry through Queue. Terminal target/output
   errors are acknowledged immediately and must not block other leases.
-- Keep publisher routing in the Browserless ruleset. Do not add an HN42 host
+- Keep publisher routing in the Browserless ruleset. Do not add an HN Glance host
   blacklist or reject trusted Ladder provenance; that would bypass rules that
   the capture service owns.
 - Keep the public route to one bounded R2 GET and prepare to one metadata HEAD
@@ -265,7 +265,7 @@ Code conventions:
 
 This app deploys to Cloudflare Workers, not Cloudflare Pages.
 
-Production app URL: `https://hn42.vv42.workers.dev/`.
+Configured production app URL after the renamed Worker is deployed: `https://hn-glance.vv42.workers.dev/`.
 
 - Nuxt/Nitro preset: `cloudflare-module`
 - Worker entry: `.output/server/index.mjs`
@@ -273,9 +273,14 @@ Production app URL: `https://hn42.vv42.workers.dev/`.
 - Wrangler command: `wrangler deploy`
 - Keep `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml`.
 - Keep the R2 binding `SCREENSHOTS_BUCKET` in `wrangler.toml`.
+- Keep the `hn-glance-screenshots` R2 bucket, the
+  `hn-glance-screenshot-scheduler` Worker, `hn-glance-screenshot-jobs` Queue,
+  `hn-glance-screenshot-jobs-dlq` DLQ, `HN42_*` environment variables, and
+  `X-HN42-*` diagnostic headers stable; they are infrastructure contracts
+  retained after the migration.
 - Keep Wrangler Workers Caching and cross-version cache reuse enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
 - R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.
-- Production and local development share the remote R2 bucket `hn42-screenshots`; do not add a separate preview bucket without reintroducing cross-environment captures.
+- Production and local development share the remote R2 bucket `hn-glance-screenshots`; do not add a separate preview bucket without reintroducing cross-environment captures.
 - R2 lifecycle should delete active `screenshots/v9/` objects after 28 days and
   `screenshot-jobs/v1/v9/` admission markers after seven days. Bootstrap sets
   exactly those active v9 rules plus the multipart-abort rule, removing legacy

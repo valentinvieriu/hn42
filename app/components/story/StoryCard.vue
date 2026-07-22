@@ -29,7 +29,7 @@
       <NuxtLink
         :to="`/item/${story.objectID}`"
         class="block h-full"
-        :aria-label="`Open ${story.title} on HN42`"
+        :aria-label="`Open ${story.title} on HN Glance`"
       >
         <div class="story-card-image-layer absolute inset-0 overflow-hidden">
           <StoryPlaceholderVisual

@@ -5,7 +5,7 @@ import {
 } from './item'
 
 describe('item normalization', () => {
-  it('recursively keeps only the comment fields rendered by HN42', () => {
+  it('recursively keeps only the comment fields rendered by HN Glance', () => {
     const item = {
       id: 123,
       author: 'alice',

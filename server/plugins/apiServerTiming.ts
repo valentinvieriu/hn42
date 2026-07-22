@@ -27,7 +27,7 @@ export default defineNitroPlugin((nitroApp) => {
       [{
         name: 'api-total',
         duration: performance.now() - startedAt,
-        description: 'HN42 API processing',
+        description: 'HN Glance API processing',
       }],
     ))
   })

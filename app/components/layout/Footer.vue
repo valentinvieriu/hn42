@@ -4,10 +4,10 @@
       <div class="mb-8 md:mb-0">
         <h2 class="text-2xl font-display font-semibold mb-2">
           <span class="text-slate-900 dark:text-slate-100">HN</span>
-          <span class="text-orange-500">42</span>
+          <span class="text-orange-500">Glance</span>
         </h2>
         <p class="meta-text text-slate-600 dark:text-slate-400">
-          © {{ copyrightYears }} HN42. Story content belongs to its original sources.
+          © {{ copyrightYears }} HN Glance. Story content belongs to its original sources.
         </p>
       </div>
       <nav>
