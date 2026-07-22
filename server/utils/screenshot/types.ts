@@ -13,7 +13,7 @@ export type ScreenshotSkipReason =
   | 'unverified-content'
 
 export type ScreenshotEnv = {
-  HN42_SCREENSHOT_AGENT_TOKEN?: string
+  HN_GLANCE_SCREENSHOT_AGENT_TOKEN?: string
   SCREENSHOTS_BUCKET?: R2Bucket
   [key: string]: unknown
 }

@@ -20,7 +20,7 @@ Required environment variables:
 - `CF_QUEUE_ID`
 - `CF_QUEUES_API_TOKEN` with read and write access to the queue
 - `HN42_BASE_URL`
-- `HN42_SCREENSHOT_AGENT_TOKEN`
+- `HN_GLANCE_SCREENSHOT_AGENT_TOKEN`
 - `SCREENSHOT_API_URL`
 - `SCREENSHOT_API_TOKEN`
 

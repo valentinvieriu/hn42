@@ -275,9 +275,10 @@ Configured production app URL after the renamed Worker is deployed: `https://hn-
 - Keep the R2 binding `SCREENSHOTS_BUCKET` in `wrangler.toml`.
 - Keep the `hn-glance-screenshots` R2 bucket, the
   `hn-glance-screenshot-scheduler` Worker, `hn-glance-screenshot-jobs` Queue,
-  `hn-glance-screenshot-jobs-dlq` DLQ, `HN42_*` environment variables, and
-  `X-HN42-*` diagnostic headers stable; they are infrastructure contracts
-  retained after the migration.
+  `hn-glance-screenshot-jobs-dlq` DLQ, the
+  `HN_GLANCE_SCREENSHOT_AGENT_TOKEN` secret, remaining `HN42_*` environment
+  variables, and `X-HN42-*` diagnostic headers stable; they are infrastructure
+  contracts retained after the migration.
 - Keep Wrangler Workers Caching and cross-version cache reuse enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
 - R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.
 - Production and local development share the remote R2 bucket `hn-glance-screenshots`; do not add a separate preview bucket without reintroducing cross-environment captures.

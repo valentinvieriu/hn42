@@ -16,7 +16,7 @@ enabled = true
 cross_version_cache = true
 
 [secrets]
-required = ["HN42_SCREENSHOT_AGENT_TOKEN"]
+required = ["HN_GLANCE_SCREENSHOT_AGENT_TOKEN"]
 
 [observability]
 enabled = true

@@ -135,9 +135,9 @@ https://hn-glance.vv42.workers.dev/
 The app and scheduler Workers are named `hn-glance` and
 `hn-glance-screenshot-scheduler`, and both use the shared
 `hn-glance-screenshots` R2 bucket. The Queue and DLQ are named
-`hn-glance-screenshot-jobs` and `hn-glance-screenshot-jobs-dlq`. The `HN42_*`
-environment variables and `X-HN42-*` diagnostic headers remain stable internal
-contracts.
+`hn-glance-screenshot-jobs` and `hn-glance-screenshot-jobs-dlq`. The
+`HN_GLANCE_SCREENSHOT_AGENT_TOKEN` secret, remaining `HN42_*` environment
+variables, and `X-HN42-*` diagnostic headers are stable internal contracts.
 
 The Worker entry and static asset output are configured in `wrangler.toml`:
 
@@ -161,7 +161,7 @@ npm run cf:screenshots:scheduler:dry-run
 Initial background-capture setup also requires a shared random agent secret on
 the HN Glance Worker, a Queue read/write API token for the HomeLabs agents, and the
 queue ID reported by Cloudflare. Deploy the HN Glance Worker after adding
-`HN42_SCREENSHOT_AGENT_TOKEN`, then run
+`HN_GLANCE_SCREENSHOT_AGENT_TOKEN`, then run
 `npm run cf:screenshots:scheduler:deploy`. The image workflow publishes the
 capture agent to `ghcr.io/valentinvieriu/hn-glance-screenshot-agent`.
 

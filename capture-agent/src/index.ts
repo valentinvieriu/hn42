@@ -73,7 +73,7 @@ export const loadConfig = (): AgentConfig => {
 
   return {
     accountId: getRequiredEnv('CF_ACCOUNT_ID'),
-    agentToken: getRequiredEnv('HN42_SCREENSHOT_AGENT_TOKEN'),
+    agentToken: getRequiredEnv('HN_GLANCE_SCREENSHOT_AGENT_TOKEN'),
     batchSize: Math.min(100, getPositiveIntegerEnv('QUEUE_BATCH_SIZE', captureConcurrency)),
     captureConcurrency,
     hn42BaseUrl: getRequiredEnv('HN42_BASE_URL').replace(/\/$/, ''),
