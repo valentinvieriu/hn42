@@ -76,7 +76,7 @@ export const loadConfig = (): AgentConfig => {
     agentToken: getRequiredEnv('HN_GLANCE_SCREENSHOT_AGENT_TOKEN'),
     batchSize: Math.min(100, getPositiveIntegerEnv('QUEUE_BATCH_SIZE', captureConcurrency)),
     captureConcurrency,
-    hn42BaseUrl: getRequiredEnv('HN42_BASE_URL').replace(/\/$/, ''),
+    hn42BaseUrl: getRequiredEnv('HN_GLANCE_BASE_URL').replace(/\/$/, ''),
     idlePollMs: getPositiveIntegerEnv('QUEUE_IDLE_POLL_MS', 30_000),
     port: getPositiveIntegerEnv('PORT', 3002),
     queueId: getRequiredEnv('CF_QUEUE_ID'),

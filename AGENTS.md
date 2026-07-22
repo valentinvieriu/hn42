@@ -276,7 +276,7 @@ Configured production app URL after the renamed Worker is deployed: `https://hn-
 - Keep the `hn-glance-screenshots` R2 bucket, the
   `hn-glance-screenshot-scheduler` Worker, `hn-glance-screenshot-jobs` Queue,
   `hn-glance-screenshot-jobs-dlq` DLQ, the
-  `HN_GLANCE_SCREENSHOT_AGENT_TOKEN` secret, remaining `HN42_*` environment
+  `HN_GLANCE_SCREENSHOT_AGENT_TOKEN` secret, remaining `HN_GLANCE_*` environment
   variables, and `X-HN42-*` diagnostic headers stable; they are infrastructure
   contracts retained after the migration.
 - Keep Wrangler Workers Caching and cross-version cache reuse enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
