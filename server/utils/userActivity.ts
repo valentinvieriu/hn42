@@ -115,6 +115,7 @@ const fetchUserActivity = async <THit extends ActivityHit, TItem>(
   const searchParams = buildActivitySearchParams(username, activityType, options)
   const response = await $fetch<AlgoliaSearchResponse<THit>>(
     `${ALGOLIA_SEARCH_BY_DATE_URL}?${searchParams.toString()}`,
+    { retry: 0 },
   )
 
   const items: TItem[] = []

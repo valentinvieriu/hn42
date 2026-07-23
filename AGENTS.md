@@ -76,6 +76,11 @@ Server/API:
 - `server/api/user/[username].ts`: user profile from Algolia.
 - `server/api/user/[username]/comments.ts` and `stories.ts`: paginated user activity using Algolia search-by-date.
 - `server/utils/userActivityHandler.ts`: shared validation, cache, error, and timing wrapper for user activity routes.
+- `server/utils/dataCache.ts`: bounded per-isolate Nitro cache freshness and
+  cache-status helpers for item and user data.
+- `server/utils/upstream.ts`: structured Algolia availability classification
+  and logging; expected upstream rejections are warnings rather than repeated
+  error-stack logs.
 - `server/utils/fetchStories.ts`: common Algolia story normalization.
 - `server/utils/feed.ts`: fetch ordered story IDs from HN Firebase, hydrate them from Algolia, preserve source order, cache the four feed payloads briefly inside each Nitro isolate, and set feed cache headers.
 - `server/plugins/removeInlinedStylesheets.ts`: strip duplicate generated stylesheet links from SSR HTML after Nuxt inlines the same critical CSS, while leaving the client manifest intact.
@@ -106,6 +111,18 @@ still render HN-native discussions when addressed explicitly.
 Caching expectations:
 
 - Preserve the existing feed/item cache headers and per-isolate feed SWR cache.
+- Item details, user profiles, and user activity use bounded per-isolate Nitro
+  SWR caches. Always pass the request event as the first cached-function
+  argument so Nitro can keep edge-worker cache updates alive.
+- Keep automatic `ofetch` retries disabled on Algolia calls and on SSR/client
+  calls to the item and user APIs. Upstream 403, 429, and availability failures
+  must not be multiplied into immediate duplicate requests.
+- Keep ClaudeBot blocked in both `public/robots.txt` and
+  `server/middleware/crawlerPolicy.ts`. Other compliant crawlers are disallowed
+  from `/user/`, whose SSR render fans out to profile, story, and comment data.
+- Log expected Algolia availability failures once as structured warnings and
+  return `503` with a bounded `Retry-After`; reserve `console.error` for
+  unexpected application failures.
 - Keep `features.inlineStyles` paired with
   `removeInlinedStylesheets.ts`.
 - Wrangler Workers Caching is the front-of-Worker screenshot cache. Do not

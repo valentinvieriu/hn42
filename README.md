@@ -113,7 +113,13 @@ Use `npm run check` as the baseline check before shipping changes.
 - `workers/screenshot-scheduler/`: Cron Worker that admits current feed stories to Cloudflare Queues.
 - `capture-agent/`: stateless Queue pull consumer and container image.
 - `server/utils/feed.ts`: shared ordered-feed handler and short Nitro SWR data cache for the four HN feeds.
-- `server/utils/userActivityHandler.ts`: shared wrapper for paginated user activity routes.
+- `server/utils/userActivityHandler.ts`: shared validation, timing, and per-isolate
+  Nitro SWR cache for paginated user activity routes.
+- `server/utils/dataCache.ts`: bounded freshness and cache-status helpers shared
+  by item, user profile, and user activity lookups.
+- `server/middleware/crawlerPolicy.ts`: immediate ClaudeBot rejection before SSR
+  or API handlers; `public/robots.txt` also blocks ClaudeBot and keeps all
+  compliant crawlers away from expensive user activity pages.
 - `server/plugins/removeInlinedStylesheets.ts`: removes duplicate Nuxt stylesheet links after SSR has inlined the same critical CSS.
 - `app/composables/`: shared client logic such as story loading and sanitization.
 - `app/utils/storyScreenshotObserver.ts`: shared feed-card screenshot preload observer.
@@ -266,3 +272,10 @@ bootstrap removes stale lifecycle rules for pre-v9 prefixes.
 HN Glance reads public Hacker News and Algolia-powered HN APIs. Article screenshots are requested from public story URLs and served through the app's screenshot route so they can be cached and reused.
 
 There is no HN login, voting, posting, or private account integration.
+
+Item details, user profiles, and user activity use short per-isolate Nitro SWR
+caches because Nuxt calls relative API routes directly during SSR, bypassing
+the front-of-Worker response cache. These calls disable `ofetch`'s automatic
+GET retries so one upstream rejection cannot immediately double the Algolia
+load. Expected Algolia availability failures are emitted once as structured
+warnings and returned as retryable `503` responses.

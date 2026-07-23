@@ -235,7 +235,9 @@ const { data: storyData, pending, error: fetchError } = useAsyncData<StoryDetail
     }
 
     const storyDataStartedAt = performance.now()
-    const response = await $fetch.raw<StoryDetail>(`/api/item/${id}`)
+    const response = await $fetch.raw<StoryDetail>(`/api/item/${id}`, {
+      retry: 0,
+    })
 
     if (import.meta.server) {
       serverTimingHeader.value = appendServerTiming(response.headers.get('server-timing'), [

@@ -257,7 +257,9 @@ const [
         return null
       }
 
-      return await $fetch<HNUserProfile>(`/api/user/${encodedUsername.value}`)
+      return await $fetch<HNUserProfile>(`/api/user/${encodedUsername.value}`, {
+        retry: 0,
+      })
     },
     {
       default: () => null,
@@ -276,6 +278,7 @@ const [
           hitsPerPage: PAGE_SIZE,
           page: 0,
         },
+        retry: 0,
       })
     },
     {
@@ -295,6 +298,7 @@ const [
           hitsPerPage: PAGE_SIZE,
           page: 0,
         },
+        retry: 0,
       })
     },
     {
@@ -391,6 +395,7 @@ const fetchActivityPage = async <T,>(
 
   return await $fetch<UserActivityPage<T>>(`/api/user/${encodedUsername.value}/${endpoint}`, {
     query,
+    retry: 0,
   })
 }
 

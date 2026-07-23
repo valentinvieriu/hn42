@@ -37,7 +37,10 @@ const setRelatedCacheHeaders = (event: H3Event) => {
 
 const searchAlgolia = async <T>(params: Record<string, string>, order: 'relevance' | 'date' = 'relevance') => {
   const endpoint = order === 'date' ? ALGOLIA_SEARCH_BY_DATE_URL : ALGOLIA_SEARCH_URL
-  const response = await $fetch<AlgoliaSearchResponse<T>>(`${endpoint}?${new URLSearchParams(params)}`)
+  const response = await $fetch<AlgoliaSearchResponse<T>>(
+    `${endpoint}?${new URLSearchParams(params)}`,
+    { retry: 0 },
+  )
   return response.hits ?? []
 }
 

@@ -37,6 +37,7 @@ describe('feed story mapping', () => {
     const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string)
     expect(requestUrl.searchParams.get('attributesToRetrieve'))
       .toBe('objectID,title,author,created_at,points,num_comments,url')
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual({ retry: 0 })
   })
 
   it('excludes HN-native stories without an explicit source URL', async () => {

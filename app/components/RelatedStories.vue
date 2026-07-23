@@ -67,6 +67,7 @@ const { data: stories, status, error, execute, clear } = useLazyFetch<RelatedSto
   {
     default: () => [],
     immediate: false,
+    retry: 0,
     server: false,
     watch: false,
   },

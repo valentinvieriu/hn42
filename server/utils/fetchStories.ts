@@ -37,6 +37,7 @@ export const fetchStories = async (
     searchParams.set('attributesToRetrieve', STORY_ATTRIBUTES)
     const response = await $fetch<AlgoliaStoryResponse>(
       `${baseUrl}?${searchParams}`,
+      { retry: 0 },
     )
 
     return (response.hits ?? [])

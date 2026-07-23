@@ -50,6 +50,7 @@ describe('user activity mapping', () => {
     const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string)
     expect(requestUrl.searchParams.get('attributesToRetrieve'))
       .toBe('objectID,title,url,points,num_comments,created_at,created_at_i')
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual({ retry: 0 })
   })
 
   it('returns only comment fields consumed by the activity UI', async () => {
@@ -97,5 +98,6 @@ describe('user activity mapping', () => {
     const requestUrl = new URL(fetchMock.mock.calls[0]?.[0] as string)
     expect(requestUrl.searchParams.get('attributesToRetrieve'))
       .toBe('objectID,points,created_at,created_at_i,comment_text,story_id,story_title,story_url')
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual({ retry: 0 })
   })
 })
