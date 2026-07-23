@@ -231,8 +231,8 @@ Preserve these guardrails:
 - Do not raise daily admissions, storage ceiling, retention, dimensions,
   quality, or byte limits without recalculating Queue and R2 free-tier usage.
 - Feed cards share one Intersection Observer.
-- Use `CF-Cache-Status`, `X-HN42-Screenshot-Cache`, and
-  `X-HN42-Screenshot-Source-Route` for diagnostics. Agent stdout must retain
+- Use `CF-Cache-Status`, `X-HN-Screenshot-Cache`, and
+  `X-HN-Screenshot-Source-Route` for diagnostics. Agent stdout must retain
   structured skip reasons and terminal outcome/route/hostname details; do not
   add storage-backed failure records for observability.
 
@@ -277,7 +277,7 @@ Configured production app URL after the renamed Worker is deployed: `https://hn-
   `hn-glance-screenshot-scheduler` Worker, `hn-glance-screenshot-jobs` Queue,
   `hn-glance-screenshot-jobs-dlq` DLQ, the
   `HN_GLANCE_SCREENSHOT_AGENT_TOKEN` secret, remaining `HN_GLANCE_*` environment
-  variables, and `X-HN42-*` diagnostic headers stable; they are infrastructure
+  variables, and `X-HN-*` diagnostic headers stable; they are infrastructure
   contracts retained after the migration.
 - Keep Wrangler Workers Caching and cross-version cache reuse enabled, and keep SSR page routes explicitly `no-store`; uncategorized successful responses otherwise receive the platform's default cache TTL.
 - R2 must be enabled on the Cloudflare account before bucket creation or deployment verification can succeed.

@@ -1,7 +1,7 @@
 type SeedPaletteStyle = Record<string, string>
 
-const DEFAULT_SEED = 'hn42'
-const DEFAULT_CONTEXT_SEED = 'hn42-visual-palette'
+const DEFAULT_SEED = 'hn'
+const DEFAULT_CONTEXT_SEED = 'hn-visual-palette'
 const HARMONY_OFFSETS = [0, 28, -28, 58, -58, 88, -88, 118, -118, 148, -148, 180]
 
 const normalizeHue = (hue: number) => ((hue % 360) + 360) % 360

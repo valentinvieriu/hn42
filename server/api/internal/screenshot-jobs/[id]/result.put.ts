@@ -62,7 +62,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (
-    getRequestHeader(event, 'x-hn42-screenshot-profile') !== SCREENSHOT_PROFILE_VERSION
+    getRequestHeader(event, 'x-hn-screenshot-profile') !== SCREENSHOT_PROFILE_VERSION
     || !isScreenshotAcceptedOutcome(outcome)
     || !isScreenshotSourceRoute(sourceRoute)
   ) {

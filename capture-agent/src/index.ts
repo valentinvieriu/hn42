@@ -39,7 +39,7 @@ type AgentConfig = {
   agentToken: string
   batchSize: number
   captureConcurrency: number
-  hn42BaseUrl: string
+  appBaseUrl: string
   idlePollMs: number
   port: number
   queueId: string
@@ -76,7 +76,7 @@ export const loadConfig = (): AgentConfig => {
     agentToken: getRequiredEnv('HN_GLANCE_SCREENSHOT_AGENT_TOKEN'),
     batchSize: Math.min(100, getPositiveIntegerEnv('QUEUE_BATCH_SIZE', captureConcurrency)),
     captureConcurrency,
-    hn42BaseUrl: getRequiredEnv('HN_GLANCE_BASE_URL').replace(/\/$/, ''),
+    appBaseUrl: getRequiredEnv('HN_GLANCE_BASE_URL').replace(/\/$/, ''),
     idlePollMs: getPositiveIntegerEnv('QUEUE_IDLE_POLL_MS', 30_000),
     port: getPositiveIntegerEnv('PORT', 3002),
     queueId: getRequiredEnv('CF_QUEUE_ID'),
@@ -179,7 +179,7 @@ const agentHeaders = (config: AgentConfig) => ({
 
 const prepareJob = async (config: AgentConfig, job: ScreenshotJobMessage) => {
   const response = await fetch(
-    `${config.hn42BaseUrl}/api/internal/screenshot-jobs/${encodeURIComponent(job.storyId)}/prepare`,
+    `${config.appBaseUrl}/api/internal/screenshot-jobs/${encodeURIComponent(job.storyId)}/prepare`,
     {
       method: 'POST',
       headers: agentHeaders(config),
@@ -365,14 +365,14 @@ const uploadResult = async (
   capture: Awaited<ReturnType<typeof captureScreenshot>>,
 ) => {
   const response = await fetch(
-    `${config.hn42BaseUrl}/api/internal/screenshot-jobs/${encodeURIComponent(job.storyId)}/result`,
+    `${config.appBaseUrl}/api/internal/screenshot-jobs/${encodeURIComponent(job.storyId)}/result`,
     {
       method: 'PUT',
       headers: {
         ...agentHeaders(config),
         'Content-Length': String(capture.bytes.byteLength),
         'Content-Type': 'image/webp',
-        'X-HN42-Screenshot-Profile': job.profile,
+        'X-HN-Screenshot-Profile': job.profile,
         'X-Screenshot-Height': capture.metadata.height,
         'X-Screenshot-Outcome': capture.metadata.outcome,
         'X-Screenshot-Source-Route': capture.metadata.sourceRoute,

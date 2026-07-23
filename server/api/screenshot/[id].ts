@@ -101,24 +101,24 @@ const createImageResponse = (
   const headers = new Headers({
     'Content-Type': image.contentType,
     'Content-Length': String(image.bytes.byteLength),
-    'ETag': `W/"hn42-screenshot-${SCREENSHOT_PROFILE_VERSION}-${storyId}-${processor}"`,
+    'ETag': `W/"hn-screenshot-${SCREENSHOT_PROFILE_VERSION}-${storyId}-${processor}"`,
     'Accept-Ranges': 'bytes',
-    'X-HN42-Screenshot-Cache': cacheStatus,
-    'X-HN42-Screenshot-Format': format,
-    'X-HN42-Screenshot-Variant': variant,
+    'X-HN-Screenshot-Cache': cacheStatus,
+    'X-HN-Screenshot-Format': format,
+    'X-HN-Screenshot-Variant': variant,
     ...(image.isFresh ? getScreenshotCacheHeaders(image, ttlDays) : STALE_SCREENSHOT_CACHE_HEADERS),
   })
 
   if (image.provider) {
-    headers.set('X-HN42-Screenshot-Provider', image.provider)
+    headers.set('X-HN-Screenshot-Provider', image.provider)
   }
 
   if (image.processor) {
-    headers.set('X-HN42-Screenshot-Processor', image.processor)
+    headers.set('X-HN-Screenshot-Processor', image.processor)
   }
 
   if (image.sourceRoute) {
-    headers.set('X-HN42-Screenshot-Source-Route', image.sourceRoute)
+    headers.set('X-HN-Screenshot-Source-Route', image.sourceRoute)
   }
 
   return new Response(image.bytes, { headers })
@@ -131,12 +131,12 @@ const createFallbackResponse = (
   const headers = new Headers({
     'Content-Type': 'image/gif',
     'Content-Length': String(TRANSPARENT_GIF.byteLength),
-    'ETag': `W/"hn42-screenshot-fallback-${SCREENSHOT_PROFILE_VERSION}-${storyId}-${variant}"`,
+    'ETag': `W/"hn-screenshot-fallback-${SCREENSHOT_PROFILE_VERSION}-${storyId}-${variant}"`,
     'Accept-Ranges': 'bytes',
-    'X-HN42-Screenshot-Cache': 'FALLBACK',
-    'X-HN42-Screenshot-Fallback': '1',
-    'X-HN42-Screenshot-Format': 'gif',
-    'X-HN42-Screenshot-Variant': variant,
+    'X-HN-Screenshot-Cache': 'FALLBACK',
+    'X-HN-Screenshot-Fallback': '1',
+    'X-HN-Screenshot-Format': 'gif',
+    'X-HN-Screenshot-Variant': variant,
     ...TRANSIENT_FALLBACK_CACHE_HEADERS,
   })
 

@@ -3,7 +3,7 @@ import { onNuxtReady, useFetch, useNuxtApp } from 'nuxt/app';
 import type { Story } from '#shared/types';
 import type { FeedEndpoint } from './useFeedTheme';
 
-const FEED_CACHE_PREFIX = 'hn42:stories:';
+const FEED_CACHE_PREFIX = 'hn:stories:';
 const FEED_CACHE_MAX_AGE = 30 * 60 * 1000;
 
 type FeedCachePayload = {

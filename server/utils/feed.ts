@@ -61,7 +61,7 @@ const createCachedFeedLoader = (feed: FeedName) => defineCachedFunction(
   },
   {
     getKey: () => feed,
-    group: 'hn42/feed',
+    group: 'hn/feed',
     maxAge: FEED_CACHE_MAX_AGE_SECONDS,
     name: feed,
     staleMaxAge: FEED_CACHE_STALE_MAX_AGE_SECONDS,

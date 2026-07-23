@@ -455,7 +455,7 @@ const enqueueBatch = async (
       return env.SCREENSHOTS_BUCKET.put(getAdmissionKey(message.storyId), new Uint8Array(), {
         httpMetadata: {
           cacheControl: 'no-store',
-          contentType: 'application/vnd.hn42.screenshot-job',
+          contentType: 'application/vnd.hn.screenshot-job',
         },
         customMetadata: {
           discoveredAt,

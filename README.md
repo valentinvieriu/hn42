@@ -69,8 +69,8 @@ Requirements:
 Install dependencies:
 
 ```bash
-git clone https://github.com/valentinvieriu/hn42.git
-cd hn42
+git clone https://github.com/valentinvieriu/hn-glance.git
+cd hn-glance
 npm install
 ```
 
@@ -137,7 +137,7 @@ The app and scheduler Workers are named `hn-glance` and
 `hn-glance-screenshots` R2 bucket. The Queue and DLQ are named
 `hn-glance-screenshot-jobs` and `hn-glance-screenshot-jobs-dlq`. The
 `HN_GLANCE_SCREENSHOT_AGENT_TOKEN` secret, remaining `HN_GLANCE_*` environment
-variables, and `X-HN42-*` diagnostic headers are stable internal contracts.
+variables, and `X-HN-*` diagnostic headers are stable internal contracts.
 
 The Worker entry and static asset output are configured in `wrangler.toml`:
 
