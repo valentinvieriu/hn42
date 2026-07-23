@@ -114,6 +114,8 @@ Use `npm run check` as the baseline check before shipping changes.
 - `capture-agent/`: stateless Queue pull consumer and container image.
 - `server/utils/feed.ts`: shared ordered-feed handler and short Nitro SWR data cache for the four HN feeds.
 - `server/utils/userActivityHandler.ts`: shared wrapper for paginated user activity routes.
+- `server/plugins/earlyHints.ts`: promotes the small set of explicit SSR
+  preload/preconnect tags to an HTTP `Link` header for Cloudflare Early Hints.
 - `server/plugins/removeInlinedStylesheets.ts`: removes duplicate Nuxt stylesheet links after SSR has inlined the same critical CSS.
 - `app/composables/`: shared client logic such as story loading and sanitization.
 - `app/utils/storyScreenshotObserver.ts`: shared feed-card screenshot preload observer.
@@ -146,6 +148,12 @@ The Worker entry and static asset output are configured in `wrangler.toml`:
 - Screenshot R2 binding: `SCREENSHOTS_BUCKET`
 - Front-of-Worker response cache: Wrangler `[cache] enabled = true` with
   cross-version reuse
+
+Cloudflare Early Hints must also be enabled for `hnglance.com` under
+**Speed > Settings > Content Optimization**. The app keeps SSR HTML `no-store`
+and emits an HTTP `Link` header for up to four explicit preload/preconnect tags.
+Cloudflare can cache those hints per page URI and send them as a `103` response
+before the Worker finishes rendering the final HTML.
 
 Before deployment, use:
 
