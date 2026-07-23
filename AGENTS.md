@@ -125,6 +125,10 @@ Caching expectations:
   unexpected application failures.
 - Keep `features.inlineStyles` paired with
   `removeInlinedStylesheets.ts`.
+- Keep `earlyHints.ts` paired with Cloudflare Early Hints on the production
+  zone. It may promote only explicit SSR `preload` and `preconnect` tags to the
+  response `Link` header, with a small bounded hint budget; do not turn Nuxt's
+  route-prefetch or modulepreload list into Early Hints.
 - Wrangler Workers Caching is the front-of-Worker screenshot cache. Do not
   reintroduce `caches.default` on `workers.dev`.
 - The only active preview key is
@@ -289,6 +293,9 @@ Configured production app URL after the renamed Worker is deployed: `https://hn-
 - Static assets: `.output/public`
 - Wrangler command: `wrangler deploy`
 - Keep `compatibility_flags = ["nodejs_compat"]` in `wrangler.toml`.
+- Enable Cloudflare Early Hints for `hnglance.com` under
+  **Speed > Settings > Content Optimization** so the SSR `Link` response header
+  can be served as a cached `103` response.
 - Keep the R2 binding `SCREENSHOTS_BUCKET` in `wrangler.toml`.
 - Keep the `hn-glance-screenshots` R2 bucket, the
   `hn-glance-screenshot-scheduler` Worker, `hn-glance-screenshot-jobs` Queue,
