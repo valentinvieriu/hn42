@@ -3,7 +3,6 @@ import { defineCachedFunction } from 'nitropack/runtime'
 import { formatServerTiming } from '#shared/utils/serverTiming'
 import { fetchStories } from './fetchStories'
 
-const ALGOLIA_SEARCH_URL = 'https://hn.algolia.com/api/v1/search'
 const FIREBASE_API_URL = 'https://hacker-news.firebaseio.com/v0'
 const MAX_ITEMS = 100
 const FEED_CACHE_MAX_AGE_SECONDS = 120
@@ -36,7 +35,7 @@ const createCachedFeedLoader = (feed: FeedName) => defineCachedFunction(
     const storyIds = storyIdsResponse.slice(0, MAX_ITEMS)
     const order = new Map(storyIds.map((id, index) => [String(id), index]))
     const algoliaStoriesStartedAt = performance.now()
-    const stories = await fetchStories(ALGOLIA_SEARCH_URL, {
+    const stories = await fetchStories({
       tags: feed === 'show' ? 'show_hn,story' : 'story',
       filters: storyIds.map((id) => `objectID:${id}`).join(' OR '),
       hitsPerPage: String(MAX_ITEMS),

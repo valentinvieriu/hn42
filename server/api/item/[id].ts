@@ -1,6 +1,7 @@
 import { defineEventHandler, getRouterParams, createError, setHeader } from 'h3'
 import { isValidHnItemId } from '#shared/utils/hn'
 import { formatServerTiming } from '#shared/utils/serverTiming'
+import { fetchAlgoliaItem } from '../../utils/algolia'
 import {
   normalizeStoryDetail,
   type AlgoliaItemResponse,
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const algoliaStartedAt = performance.now()
-    const hnResponse = await $fetch<AlgoliaItemResponse>(`https://hn.algolia.com/api/v1/items/${id}`)
+    const hnResponse = await fetchAlgoliaItem<AlgoliaItemResponse>(id)
     const algoliaDuration = performance.now() - algoliaStartedAt
 
     if (!hnResponse?.id) {

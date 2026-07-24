@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { AlgoliaStoryHit } from '../../utils/algolia'
 import {
   buildTitleQuery,
   rankRelatedStories,
-  type AlgoliaStoryHit,
   type RelatedSearchKind,
   type SearchResult,
 } from '../../utils/relatedStories'

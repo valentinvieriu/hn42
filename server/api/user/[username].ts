@@ -2,6 +2,7 @@ import { createError, defineEventHandler, getRouterParams, setHeader } from 'h3'
 import type { HNUserProfile } from '#shared/types'
 import { isValidHnUsername } from '#shared/utils/hn'
 import { formatServerTiming } from '#shared/utils/serverTiming'
+import { fetchAlgoliaUser } from '../../utils/algolia'
 import { getErrorStatusCode } from '../../utils/error'
 
 type AlgoliaUserProfile = {
@@ -23,9 +24,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const algoliaUserStartedAt = performance.now()
-    const profile = await $fetch<AlgoliaUserProfile>(
-      `https://hn.algolia.com/api/v1/users/${encodeURIComponent(username)}`,
-    )
+    const profile = await fetchAlgoliaUser<AlgoliaUserProfile>(username)
     const algoliaUserDuration = performance.now() - algoliaUserStartedAt
 
     if (!profile?.username) {

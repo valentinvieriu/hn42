@@ -1,4 +1,5 @@
 import type { RelatedStory } from '../../shared/types'
+import type { AlgoliaRankingInfo, AlgoliaStoryHit } from './algolia'
 
 const MAX_RELATED_STORIES = 10
 const MAX_STORIES_PER_HOST = 3
@@ -9,25 +10,6 @@ export type RelatedSourceStory = {
   title?: string | null
   url?: string | null
   created_at_i?: number | null
-}
-
-export type AlgoliaRankingInfo = {
-  nbExactWords?: number | null
-  nbTypos?: number | null
-  proximityDistance?: number | null
-  words?: number | null
-}
-
-export type AlgoliaStoryHit = {
-  objectID?: string
-  title?: string | null
-  created_at?: string | null
-  created_at_i?: number | null
-  points?: number | null
-  num_comments?: number | null
-  author?: string | null
-  url?: string | null
-  _rankingInfo?: AlgoliaRankingInfo | null
 }
 
 type RelatedStoryCandidate = RelatedStory & {

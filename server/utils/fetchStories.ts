@@ -1,18 +1,5 @@
 import type { Story } from '#shared/types'
-
-type AlgoliaStoryHit = {
-  objectID?: string
-  title?: string | null
-  author?: string | null
-  created_at?: string | null
-  points?: number | null
-  num_comments?: number | null
-  url?: string | null
-}
-
-type AlgoliaStoryResponse = {
-  hits?: AlgoliaStoryHit[]
-}
+import { searchAlgoliaHits, type AlgoliaStoryHit } from './algolia'
 
 type AlgoliaStoryWithSource = AlgoliaStoryHit & {
   objectID: string
@@ -29,17 +16,15 @@ const hasSourceUrl = (hit: AlgoliaStoryHit): hit is AlgoliaStoryWithSource => {
 }
 
 export const fetchStories = async (
-  baseUrl: string,
   queryParams: Record<string, string>,
 ): Promise<Story[]> => {
   try {
-    const searchParams = new URLSearchParams(queryParams)
-    searchParams.set('attributesToRetrieve', STORY_ATTRIBUTES)
-    const response = await $fetch<AlgoliaStoryResponse>(
-      `${baseUrl}?${searchParams}`,
-    )
+    const hits = await searchAlgoliaHits<AlgoliaStoryHit>({
+      ...queryParams,
+      attributesToRetrieve: STORY_ATTRIBUTES,
+    })
 
-    return (response.hits ?? [])
+    return hits
       .filter(hasSourceUrl)
       .map((hit) => ({
         title: hit.title || 'Untitled',

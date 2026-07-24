@@ -1,30 +1,24 @@
 import { createError, defineEventHandler, getRouterParams, setHeader, setHeaders, type H3Event } from 'h3'
 import { isValidHnItemId } from '#shared/utils/hn'
 import { formatServerTiming, type ServerTimingMetric } from '#shared/utils/serverTiming'
+import {
+  searchAlgoliaHits,
+  type AlgoliaCommentHit,
+  type AlgoliaSearchOrder,
+  type AlgoliaStoryHit,
+} from '../../utils/algolia'
 import { getErrorStatusCode } from '../../utils/error'
 import {
   buildTitleQuery,
   getUrlTerms,
   rankRelatedStories,
-  type AlgoliaStoryHit,
   type RelatedSearchKind,
   type RelatedSourceStory,
   type SearchResult,
 } from '../../utils/relatedStories'
 
-const ALGOLIA_SEARCH_URL = 'https://hn.algolia.com/api/v1/search'
-const ALGOLIA_SEARCH_BY_DATE_URL = 'https://hn.algolia.com/api/v1/search_by_date'
 const RELATED_STORY_ATTRIBUTES = 'objectID,title,created_at,created_at_i,points,num_comments,author,url'
 const SOURCE_STORY_ATTRIBUTES = 'title,url,created_at_i'
-
-type AlgoliaCommentHit = {
-  story_id?: number | string | null
-}
-
-type AlgoliaSearchResponse<T> = {
-  hits?: T[]
-}
-
 
 const setRelatedCacheHeaders = (event: H3Event) => {
   setHeaders(event, {
@@ -35,20 +29,14 @@ const setRelatedCacheHeaders = (event: H3Event) => {
   })
 }
 
-const searchAlgolia = async <T>(params: Record<string, string>, order: 'relevance' | 'date' = 'relevance') => {
-  const endpoint = order === 'date' ? ALGOLIA_SEARCH_BY_DATE_URL : ALGOLIA_SEARCH_URL
-  const response = await $fetch<AlgoliaSearchResponse<T>>(`${endpoint}?${new URLSearchParams(params)}`)
-  return response.hits ?? []
-}
-
 const fetchStoryHits = async (
   params: Record<string, string>,
   weight: number,
   kind: RelatedSearchKind,
-  order: 'relevance' | 'date' = 'relevance',
+  order: AlgoliaSearchOrder = 'relevance',
 ): Promise<SearchResult> => {
   try {
-    const hits = await searchAlgolia<AlgoliaStoryHit>({
+    const hits = await searchAlgoliaHits<AlgoliaStoryHit>({
       attributesToRetrieve: RELATED_STORY_ATTRIBUTES,
       getRankingInfo: 'true',
       ...params,
@@ -62,7 +50,7 @@ const fetchStoryHits = async (
 
 const fetchCommentLinkedStories = async (query: string, excludeId: string): Promise<SearchResult> => {
   try {
-    const comments = await searchAlgolia<AlgoliaCommentHit>({
+    const comments = await searchAlgoliaHits<AlgoliaCommentHit>({
       attributesToRetrieve: 'story_id',
       query,
       tags: 'comment',
@@ -89,7 +77,7 @@ const fetchCommentLinkedStories = async (query: string, excludeId: string): Prom
 
     const order = new Map(rankedStoryIds.map((storyId, index) => [storyId, index]))
     const filters = rankedStoryIds.map(storyId => `objectID:${storyId}`).join(' OR ')
-    const hits = await searchAlgolia<AlgoliaStoryHit>({
+    const hits = await searchAlgoliaHits<AlgoliaStoryHit>({
       attributesToRetrieve: RELATED_STORY_ATTRIBUTES,
       tags: 'story',
       filters,
@@ -108,7 +96,7 @@ const fetchCommentLinkedStories = async (query: string, excludeId: string): Prom
 }
 
 const fetchSourceStory = async (id: string) => {
-  const stories = await searchAlgolia<RelatedSourceStory>({
+  const stories = await searchAlgoliaHits<RelatedSourceStory>({
     attributesToRetrieve: SOURCE_STORY_ATTRIBUTES,
     filters: `objectID:${id}`,
     hitsPerPage: '1',

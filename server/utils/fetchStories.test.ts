@@ -21,7 +21,7 @@ describe('feed story mapping', () => {
     })
     vi.stubGlobal('$fetch', fetchMock)
 
-    await expect(fetchStories('https://hn.algolia.com/api/v1/search', {
+    await expect(fetchStories({
       hitsPerPage: '100',
       tags: 'story',
     })).resolves.toEqual([{
@@ -65,7 +65,7 @@ describe('feed story mapping', () => {
     })
     vi.stubGlobal('$fetch', fetchMock)
 
-    await expect(fetchStories('https://hn.algolia.com/api/v1/search', {
+    await expect(fetchStories({
       hitsPerPage: '100',
       tags: 'story',
     })).resolves.toEqual([{
